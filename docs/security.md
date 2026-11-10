@@ -7,10 +7,12 @@ Flow Motion reads other people's code, so security is a core feature. Owned by t
 ## 1. Never read secret files
 Path policy runs **before** any fetch. Order: deny list, then extension allowlist, then size cap.
 
-**Deny (never fetch, never open):** `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*`, `id_ed25519*`, `*.ppk`, `.npmrc`, `.pypirc`, `.netrc`, `.git-credentials`, `.aws/`, `.ssh/`, `.gcloud/`, `.kube/`, `.docker/config.json`, `*credentials*`, `*secret*`, `*secrets*`, `service-account*.json`, `*.tfstate`, `*.tfstate.backup`, `terraform.tfvars`, `*.tfvars`, `*.sqlite`, `*.db`, `*.dump`, `.git/`, `node_modules/`, lockfile bodies, build output, binaries, archives, images, media.
-**Allow (examples):** source code, `package.json`, framework configs, route/handler files, CI workflow files, schema files, README. `.env.example` is allowed because it holds names only, but it still goes through the scanner.
+**Deny (never fetch, never open):** `.env`, `.env.*` (except the single exact basename `.env.example`, see below), `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*`, `id_ed25519*`, `*.ppk`, `.npmrc`, `.pypirc`, `.netrc`, `.git-credentials`, `.aws/`, `.ssh/`, `.gcloud/`, `.kube/`, `.docker/config.json`, `*credentials*`, `*secret*`, `*secrets*`, `service-account*.json`, `*.tfstate`, `*.tfstate.backup`, `terraform.tfvars`, `*.tfvars`, `*.sqlite`, `*.db`, `*.dump`, `.git/`, `node_modules/`, lockfile bodies, build output, binaries, archives, images, media.
+**Allow (examples):** source code, `package.json`, framework configs, route/handler files, CI workflow files, schema files, README.
+**Explicit exception — `.env.example`:** the deny glob `.env.*` has exactly one exception: a file whose basename is exactly `.env.example` (case-sensitive, any directory) passes the path policy because it holds variable names only. It is still fetched through the normal pipeline and **still goes through the secret scanner**; any match there becomes a finding like any other file. Every other `.env.*` name stays denied: `.env.local`, `.env.production`, `.env.example.bak`, `.env.sample`, `.env.example.local`, `env.example` (no leading dot is not an env file but is also not the exception), `.ENV.EXAMPLE`.
+**Broad globs block ordinary files:** `*secret*`, `*credentials*`, `*secrets*` will also deny ordinary source such as `secrets-manager-client.ts` or `credentialsForm.tsx`. This is intended (deny first, no exceptions beyond `.env.example`), but the analysis must stay honest about it: blocked files are counted by reason (`denied`, `extension`, `size`) and files dropped by the token budget as `budget`, and the analysis UI shows these counts grouped by reason (`contract.md` section 6, `GET /api/analyses/:id` counts).
 **If a denied file exists:** report only its existence ("an env file is committed") with a masked finding. Do not open it.
-Path policy needs tests for every pattern and for tricky paths (`./.env`, `a/../.env`, uppercase, `.env.local`, Windows separators).
+**Required path-policy tests** (every pattern above plus): `./.env`, `a/../.env`, uppercase variants, `.env.local`, Windows separators (`sub\.env`), `.env.example` allowed at root and in a subdirectory, `.env.example.bak` and `.env.sample` denied, `.ENV.EXAMPLE` denied, and a test that `.env.example` content is passed to the secret scanner.
 
 ## 2. Secret scanner (content level)
 Runs on every file that was fetched. Patterns include: AWS keys, GitHub tokens, Slack tokens and webhook URLs, Stripe keys, Google API keys, private key blocks, JWTs, database URLs with passwords, generic high-entropy strings next to words like key, token, secret, password.
@@ -38,6 +40,7 @@ Runs on every file that was fetched. Patterns include: AWS keys, GitHub tokens, 
 - Service role key only in server code. Never in `NEXT_PUBLIC_*`.
 - Zod validation on every API input and on env at startup.
 - Postgres-based rate limits per user and per IP on analyze, generate, test, and auth-related routes.
+- Per-user daily caps as abuse protection, not billing: 10 analyses and 30 generations per user per UTC day, enforced server-side through the `rate_limits` table before a job is queued, error code `DAILY_CAP_REACHED` (`contract.md` section 6). Not a plan limit; `subscription.md` is NOT READY.
 - Verify the GitHub webhook signature with a constant-time compare.
 - CSRF protection for state-changing routes; secure, httpOnly, sameSite cookies.
 - Security headers: CSP, HSTS, X-Content-Type-Options, frame-ancestors none, strict referrer policy.

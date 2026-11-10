@@ -8,7 +8,7 @@ Flow Motion may only use node types listed here. The catalog exists so exports a
 - `scripts/generate-node-catalog` reads the node definitions from **one pinned n8n version** and writes `src/lib/n8n-catalog/catalog.generated.json` (type, typeVersion, parameters, outputs). **Never hand-edit it.**
 - `src/lib/n8n-catalog/allowlist.ts` holds the allowed type names below. The build fails if an allowed type is missing from the pinned version, or if the catalog and allowlist disagree.
 - Each exported flow records `catalog_version` and `n8n_version`. The UI shows "Compatible with n8n x.y".
-- Upgrading n8n: bump the pin, regenerate, run the compiler/validator/simulator tests, and (when ready, see `n8n.md`) re-run the import test. Never upgrade silently.
+- Upgrading n8n: bump the pin, regenerate, run the compiler/validator/simulator tests, and re-run the dev/CI import test (`n8n.md`, D-9); exports are "unverified import" until it passes for the new pin. Never upgrade silently.
 - Per-node Zod parameter schemas are derived from the generated catalog. FlowSpec params must pass them.
 - The type names below were checked against n8n's core node reference. The generator is the final authority. If a name differs, fix this list.
 - OQ-5 (license) must be settled before depending on n8n packages. Until then, extraction is a dev-time step and the generated JSON is the only artifact the app uses at runtime.

@@ -41,14 +41,14 @@ Rules:
 - Branch coverage must be 100% for Simulated. Show a coverage report.
 - Empty or trivial `expect` blocks are rejected.
 - Fixtures use fake data only (`example.com`, made-up names). Never real-looking secrets or emails.
-- The AI may draft the TestSpec, but the code validates and runs it. Failures are shown to the user, never hidden. A flow that fails its own tests is not shown as Simulated, and generation is retried at most twice.
+- The AI may draft the TestSpec, but the code validates and runs it. Failures are shown to the user, never hidden. A flow that fails its own tests is not shown as Simulated, and generation is retried at most twice (3 model calls per flow in total, `contract.md` section 4; after that the flow is `failed` with `GENERATION_EXHAUSTED`).
 
 ## Simulator engine (`src/lib/simulator`)
 - Executes the FlowSpec graph with n8n item semantics: arrays of `{ json }` items passed along connections.
 - Tier 1 nodes: implemented in-house following the documented n8n behavior. Tier 2 nodes: return the matching `mocks` entry, or the catalog's default fixture. No network access at all. `wait` skips time. `scheduleTrigger` runs one tick.
 - Expression subset: `{{ $json.field }}`, `{{ $json["field"] }}`, `{{ $node["Name"].json.field }}`, string and number literals, basic comparisons. Anything else makes the flow Valid only.
 - Deterministic: same input gives same output. Limits: 5 s time, 1000 items, 2 MB output, no recursion beyond catalog loops.
-- The simulator is our reimplementation, so it can differ from real n8n. That is why the badge says "Simulated". Keep a fixtures folder (`tests/conformance/`) so the same cases can be replayed in real n8n later (`n8n.md`).
+- The simulator is our reimplementation, so it can differ from real n8n. That is why the badge says "Simulated". Keep a fixtures folder (`tests/conformance/`) holding golden exports: from Phase 3 they are imported into a pinned n8n by the dev/CI import test (`n8n.md`, D-9), and later the same cases can be replayed there (user-facing live testing stays NOT READY).
 
 ## Required automated tests (backend)
 Validator: one failing test per rule above. Compiler: golden-file tests per node type. Simulator: per-node behavior tests and branch coverage test. Secret scanner and path policy: see `security.md`.

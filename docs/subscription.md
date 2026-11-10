@@ -7,6 +7,9 @@
 - Log token usage to `usage_events` for later analysis. No limits, no deduction, no blocking.
 - A "Plans coming soon" section on the landing page. No prices, no checkout buttons.
 
+## Not part of this file: daily abuse caps
+The per-user daily caps in `contract.md` section 6 and `security.md` section 5 (10 analyses and 30 generations per user per UTC day, error `DAILY_CAP_REACHED`) are **abuse protection, not a plan limit**. They are built now, with the rate limiter, and must never be worded in the UI as a plan, quota, credit, or upgrade prompt. Nothing here authorises plans, billing, or credit enforcement.
+
 ## Ideas to revisit later (not decisions)
 - Plans with a monthly credit allowance. Flow generation costs credits; analysis may be included or metered.
 - Show the estimated credit cost of each recommendation before the user selects it (`recommendations.estimated_tokens` already stores an estimate).

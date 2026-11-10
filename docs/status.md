@@ -14,7 +14,7 @@ Everyone appends one line per finished piece of work: `[role] [date] done / next
 | 4 Simulation | not started |
 | 5 Hardening | not started |
 | Subscription | NOT READY |
-| n8n live testing | NOT READY |
+| n8n live testing (user-facing) | NOT READY — dev/CI import test allowed from Phase 3 (D-9) |
 
 ## Readiness of pieces (backend updates, frontend reads)
 | Piece | Ready for frontend? |
@@ -31,3 +31,4 @@ Until a piece says yes, the frontend uses mock data that matches `contract.md`.
 
 ## Log
 (append below)
+[architect] 2026-11-10 done: pre-phase gap pass / next: Phase 0 / blockers: owner to confirm OQ-5, OQ-12

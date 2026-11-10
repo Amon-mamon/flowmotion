@@ -24,12 +24,12 @@ Only light red, black, and white (plus these neutral greys for depth). No other 
 - Use shadcn/ui components themed through CSS variables. Do not hardcode colors in components.
 
 ## Landing page (`/`)
-Hero (clear promise, one primary button) · how it works as a scroll story · feature highlights (repo scan, node flows, simulation, n8n export) · security section · "Plans coming soon" (no prices, no checkout; subscription is NOT READY) · FAQ · footer.
+Hero (clear promise, one primary button) · how it works as a scroll story · feature highlights (repo scan, node flows, simulation, n8n export) · security section · "Plans coming soon" (no prices, no checkout; subscription is NOT READY) · FAQ · footer with links to `/privacy` and `/terms` (plain static pages, same tokens, no animation).
 **Scroll animation:** Motion `useScroll` and `useTransform` with CSS perspective and 3D transforms (tilting, depth, stacking cards). Respect `prefers-reduced-motion` (replace with fades). No Three.js unless the owner asks (OQ-1). Keep it smooth on mobile.
 
 ## App
 - Dashboard: sidebar, projects grid, empty state with a "Connect GitHub" call to action, recent flows.
-- Project page: validity badge, Analyze button, progress, findings (masked), recommendations as selectable cards (title, trigger type, confidence, required credentials, risk).
+- Project page: validity badge, Analyze button, progress, a "files skipped" summary grouped by reason (denied, extension, size, budget) from the analysis counts, findings (masked), recommendations as selectable cards (title, trigger type, confidence, required credentials, risk). A `DAILY_CAP_REACHED` error is shown as a plain notice with the reset time, never as a plan or upgrade prompt.
 - Flow page: React Flow canvas (dark, grid dots, accent edges), node cards with icon and label, click a node to open an inspector drawer showing type, parameters (read-only in v1), required credential, source file, and notes. Right-hand or bottom test panel (see `testing.md`). Export button with the setup checklist.
 - Every list has loading, empty, and error states.
 
