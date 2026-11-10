@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+# next.js
+.next/
+out/
+# env and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# supabase local
+supabase/.temp/
+supabase/.branches/
+# misc
+.DS_Store
+*.log
+coverage/
+.vercel
