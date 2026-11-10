@@ -23,6 +23,7 @@ Runs on every file that was fetched. Patterns include: AWS keys, GitHub tokens, 
 ## 3. Data handling
 - Fetch files with the GitHub API using a read-only GitHub App (Contents: read, Metadata: read). No write permissions, no OAuth user tokens with broad scope.
 - Installation tokens are short-lived and created on demand from the app private key. Store only `installation_id`.
+- Installation ownership: the install link carries a signed `state` bound to the session; the callback exchanges the GitHub `code` for a user token (GitHub App "request user authorization", no extra scopes), checks the `installation_id` appears in `GET /user/installations`, and discards the token at once. User tokens are never stored. This stops one user from claiming another account's installation id (`contract.md` section 6).
 - **Do not store source code.** Keep only derived results: recommendations, masked findings, flows. Delete temporary text when the analysis ends.
 - Never log file contents, model prompts, or model outputs containing repo text. Log ids, counts, and error codes only.
 - Tell users plainly (privacy page) that redacted snippets are sent to the AI provider. Check the provider's retention terms before launch.
@@ -39,7 +40,7 @@ Runs on every file that was fetched. Patterns include: AWS keys, GitHub tokens, 
 - Supabase RLS on every table; tests that user A cannot read or write user B's rows.
 - Service role key only in server code. Never in `NEXT_PUBLIC_*`.
 - Zod validation on every API input and on env at startup.
-- Postgres-based rate limits per user and per IP on analyze, generate, test, and auth-related routes.
+- Postgres-based rate limits (`rate_limits` table, fixed 1-minute windows, keys `rl:<route>:<user_id|ip>:<window>`), error `RATE_LIMITED` 429. Defaults until Phase 5 tunes them: 120/min per user on all `/api/*`; 10/min per user on analyze, generate, test, export; 20/min per IP on `/api/auth/*`, `/api/github/install`, and the installations callback; 60/min per IP on the webhook.
 - Per-user daily caps as abuse protection, not billing: 10 analyses and 30 generations per user per UTC day, enforced server-side through the `rate_limits` table before a job is queued, error code `DAILY_CAP_REACHED` (`contract.md` section 6). Not a plan limit; `subscription.md` is NOT READY.
 - Verify the GitHub webhook signature with a constant-time compare.
 - CSRF protection for state-changing routes; secure, httpOnly, sameSite cookies.

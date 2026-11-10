@@ -24,7 +24,7 @@ Flow Motion may only use node types listed here. The catalog exists so exports a
 | `switch` | Multi-way branch |
 | `filter` | Keep matching items |
 | `set` | Add or edit fields |
-| `merge` | Combine branches |
+| `merge` | Combine branches (two inputs, 0 and 1; FlowSpec edges set `input`) |
 | `splitInBatches` | Loop over items in batches |
 | `splitOut` | Turn an array field into items |
 | `aggregate` | Combine items into one |
@@ -66,4 +66,4 @@ Flow Motion may only use node types listed here. The catalog exists so exports a
 - Calls to the project's own API → `httpRequest` with a `YOUR_APP_URL` placeholder
 
 ## Per-node simulation support
-Each catalog entry has `simulation: "full" | "stubbed"`. Tier 1 is `full`. Tier 2 is `stubbed` (returns mock data, never calls out). A flow can reach the Simulated level only if every node is `full` or `stubbed` and every expression is in the supported subset (`testing.md`).
+Each catalog entry has `simulation: "full" | "stubbed"`, `inputs` (count, 2 for `merge`, else 1, 0 for triggers), `outputs` (count, 2 for `if`, N for `switch`, 2 for `splitInBatches`, else 1), and a default fixture for `stubbed` nodes. Tier 1 is `full`. Tier 2 is `stubbed` (returns mock data, never calls out). Every listed node is simulatable and the validator rejects expressions outside the supported subset, so every Valid flow can run in the simulator (`testing.md`).

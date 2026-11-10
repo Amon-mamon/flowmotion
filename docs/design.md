@@ -30,8 +30,17 @@ Hero (clear promise, one primary button) · how it works as a scroll story · fe
 ## App
 - Dashboard: sidebar, projects grid, empty state with a "Connect GitHub" call to action, recent flows.
 - Project page: validity badge, Analyze button, progress, a "files skipped" summary grouped by reason (denied, extension, size, budget) from the analysis counts, findings (masked), recommendations as selectable cards (title, trigger type, confidence, required credentials, risk). A `DAILY_CAP_REACHED` error is shown as a plain notice with the reset time, never as a plan or upgrade prompt.
-- Flow page: React Flow canvas (dark, grid dots, accent edges), node cards with icon and label, click a node to open an inspector drawer showing type, parameters (read-only in v1), required credential, source file, and notes. Right-hand or bottom test panel (see `testing.md`). Export button with the setup checklist.
+- Flow page: React Flow canvas (dark, grid dots, accent edges), node cards with icon and label, click a node to open an inspector drawer showing type, parameters (read-only in v1), required credential, source file, and notes. Right-hand or bottom test panel (see `testing.md`). Export button with the setup checklist and, when `importVerified` is false, the plain notice "Import into n8n x.y not yet verified".
+- Settings page: display name form, connected GitHub installations with a disconnect action, nothing about plans.
 - Every list has loading, empty, and error states.
+
+**Status to UI mapping** (enums from `contract.md` section 5):
+- Project `pending` → "Not analyzed yet" with Analyze button; `valid` → validity badge with kind (website / app); `invalid` → outlined badge plus `invalid_reason`, Analyze still offered; `stale = true` → notice "New commits since the last analysis" with Re-analyze; `installation_id = null` → notice "Reconnect GitHub to analyze".
+- Analysis `queued` / `validating` / `scanning` / `analyzing` → progress bar with the status as label, polling; `done` → counts, findings, recommendations (empty state "No automations found" when there are none); `rejected` → the validation reason, no findings or recommendations; `failed` → error state with a generic message per `error_code` and a Retry (Analyze) button.
+- Recommendation `new` → selectable card; `selected` → card disabled with "Generating"; `generated` → card with a link to the flow.
+- Flow `generating` → skeleton canvas with "Generating" and polling; `ready` → canvas, inspector, test panel, export; `failed` → error state ("Could not generate a valid flow after 3 attempts" for `GENERATION_EXHAUSTED`) with a link back to the project.
+- Test run `level = valid` → badge "Valid" (plus the failing cases if `passed = false`); `level = simulated` → badge "Simulated" with the required wording from `testing.md`.
+- `DAILY_CAP_REACHED` → plain notice with reset time; `PROJECT_STALE_ANALYSIS` → dialog with "Generate anyway" and "Re-analyze"; `RATE_LIMITED` → "Too many requests, try again in a minute".
 
 ## Accessibility
 Visible focus rings (accent), full keyboard navigation including the canvas where possible, labels on all form fields (react-hook-form + Zod messages), sufficient contrast, reduced motion support, semantic headings.

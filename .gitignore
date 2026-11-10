@@ -17,3 +17,13 @@ supabase/.branches/
 *.log
 coverage/
 .vercel
+# build and tooling
+build/
+*.tsbuildinfo
+next-env.d.ts
+.pnp
+.pnp.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
