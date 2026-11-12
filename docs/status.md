@@ -8,7 +8,7 @@ Everyone appends one line per finished piece of work: `[role] [date] done / next
 | Phase | State |
 |---|---|
 | 0 Foundation | done 2026-11-10 (R0-7 migration unverified locally: no Docker) |
-| 1 Auth and shell | scope confirmed 2026-11-10 (contract.md section 11 "Phase 1 scope"); not started |
+| 1 Auth and shell | done 2026-11-12 (R1-8 open: migration and RLS suite unrun, no Supabase) |
 | 2 Analysis | not started |
 | 3 Flows | not started |
 | 4 Simulation | not started |
