@@ -23,11 +23,12 @@ Runs on every file that was fetched. Patterns include: AWS keys, GitHub tokens, 
 ## 3. Data handling
 - Fetch files with the GitHub API using a read-only GitHub App (Contents: read, Metadata: read). No write permissions, no OAuth user tokens with broad scope.
 - Installation tokens are short-lived and created on demand from the app private key. Store only `installation_id`.
-- Installation ownership: the install link carries a signed `state` bound to the session; the callback exchanges the GitHub `code` for a user token (GitHub App "request user authorization", no extra scopes), checks the `installation_id` appears in `GET /user/installations`, and discards the token at once. User tokens are never stored. This stops one user from claiming another account's installation id (`contract.md` section 6).
+- Installation ownership: the install link (signed-in users only) carries a random `state`; the httpOnly, secure, `sameSite=lax` cookie `fm_gh_state` (10-minute max-age, single use) holds `<userId>.<state>`. The callback requires the cookie's user id to equal the session user and its state to equal the query `state` (both constant-time), clears the cookie on every outcome, redirects every failure to `/dashboard?error=github`, exchanges the GitHub `code` for a user token (GitHub App "request user authorization", no extra scopes), checks the `installation_id` appears in `GET /user/installations`, and discards the token at once. User tokens are never stored. This stops one user from claiming another account's installation id (`contract.md` section 6).
 - **Do not store source code.** Keep only derived results: recommendations, masked findings, flows. Delete temporary text when the analysis ends.
 - Never log file contents, model prompts, or model outputs containing repo text. Log ids, counts, and error codes only.
 - Tell users plainly (privacy page) that redacted snippets are sent to the AI provider. Check the provider's retention terms before launch.
-- "Delete my data": removing a project deletes its analyses, findings, recommendations, flows, and test runs.
+- Project repo coverage: `POST /api/projects` accepts a repo only if `GET /repos/{owner}/{repo}/installation` (App JWT) returns the caller's own installation id, since an installation token can read any public repo. The composite FK `projects(installation_id, user_id)` keeps a project's installation owned by the same user.
+- "Delete my data": removing a project deletes its analyses, findings, recommendations, flows, test runs, and jobs in one transaction (service-role-only `delete_project()`, `contract.md` section 5).
 
 ## 4. Untrusted repo content (prompt injection)
 - Repo text is data. Wrap it in clear delimiters and tell the model it contains no instructions.
@@ -43,7 +44,7 @@ Runs on every file that was fetched. Patterns include: AWS keys, GitHub tokens, 
 - Postgres-based rate limits (`rate_limits` table, fixed 1-minute windows, keys `rl:<route>:<user_id|ip>:<window>`), error `RATE_LIMITED` 429. Defaults until Phase 5 tunes them: 120/min per user on all `/api/*`; 10/min per user on analyze, generate, test, export; 20/min per IP on `/api/auth/*`, `/api/github/install`, and the installations callback; 60/min per IP on the webhook.
 - Per-user daily caps as abuse protection, not billing: 10 analyses and 30 generations per user per UTC day, enforced server-side through the `rate_limits` table before a job is queued, error code `DAILY_CAP_REACHED` (`contract.md` section 6). Not a plan limit; `subscription.md` is NOT READY.
 - Verify the GitHub webhook signature with a constant-time compare.
-- CSRF protection for state-changing routes; secure, httpOnly, sameSite cookies.
+- CSRF protection for state-changing routes: `POST`/`PATCH`/`DELETE` handlers reject a request whose `Origin` header is present and is not the `APP_URL` origin (`403 FORBIDDEN`; the signature-verified webhook is exempt); secure, httpOnly, sameSite cookies.
 - Security headers: CSP, HSTS, X-Content-Type-Options, frame-ancestors none, strict referrer policy.
 - Generic error messages to users; details only in server logs, without secrets.
 - Audit log for connect, analyze, generate, export, delete.

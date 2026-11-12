@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import Home from "@/app/page";
+import Home from "@/app/(marketing)/page";
 
 describe("test runner", () => {
-  it("renders the placeholder page", () => {
+  it("renders the landing page", () => {
     render(<Home />);
-    expect(screen.getByText("Flow Motion")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
   });
 });

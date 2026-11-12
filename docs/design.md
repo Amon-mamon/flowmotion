@@ -24,14 +24,17 @@ Only light red, black, and white (plus these neutral greys for depth). No other 
 - Use shadcn/ui components themed through CSS variables. Do not hardcode colors in components.
 
 ## Landing page (`/`)
-Hero (clear promise, one primary button) · how it works as a scroll story · feature highlights (repo scan, node flows, simulation, n8n export) · security section · "Plans coming soon" (no prices, no checkout; subscription is NOT READY) · FAQ · footer with links to `/privacy` and `/terms` (plain static pages, same tokens, no animation).
+Hero (clear promise, one primary button "Get started" → `/signup`) · how it works as a scroll story · feature highlights (repo scan, node flows, simulation, n8n export) · security section · "Plans coming soon" (no prices, no checkout, no button; subscription is NOT READY) · FAQ · footer with links to `/privacy` and `/terms` (plain static pages, same tokens, no animation). Header: wordmark, "Log in" (`/login`), "Sign up" (`/signup`).
+**Exact "Plans coming soon" copy (do not change without the architect):** heading "Plans coming soon"; body "Flow Motion is in early testing. There are no paid plans, prices, or credits yet. Pricing will be announced here before anything changes." Nothing else in that section.
 **Scroll animation:** Motion `useScroll` and `useTransform` with CSS perspective and 3D transforms (tilting, depth, stacking cards). Respect `prefers-reduced-motion` (replace with fades). No Three.js unless the owner asks (OQ-1). Keep it smooth on mobile.
 
 ## App
-- Dashboard: sidebar, projects grid, empty state with a "Connect GitHub" call to action, recent flows.
+- Shell: left sidebar with wordmark, "Dashboard" (`/dashboard`), "Settings" (`/settings`), and at the bottom the user's display name or email with "Sign out"; collapses to a sheet on small screens.
+- Dashboard: projects grid (card: repo full name, default branch, status badge, created date; links to the project page), "Add repository" button opening the repo picker (installation select, repo list with "Load more", confirm), empty state "No projects yet" with a "Connect GitHub" call to action, recent flows (empty state "No flows yet" until Phase 3). After the GitHub callback: `?connected=1` → notice "GitHub connected", `?error=github` → notice "Could not connect GitHub. Try again."
+- Auth pages: one centered card (`--surface`), form fields with labels, primary button with black text on the accent, link to the other page ("Already have an account? Log in" / "No account? Sign up").
 - Project page: validity badge, Analyze button, progress, a "files skipped" summary grouped by reason (denied, extension, size, budget) from the analysis counts, findings (masked), recommendations as selectable cards (title, trigger type, confidence, required credentials, risk). A `DAILY_CAP_REACHED` error is shown as a plain notice with the reset time, never as a plan or upgrade prompt.
 - Flow page: React Flow canvas (dark, grid dots, accent edges), node cards with icon and label, click a node to open an inspector drawer showing type, parameters (read-only in v1), required credential, source file, and notes. Right-hand or bottom test panel (see `testing.md`). Export button with the setup checklist and, when `importVerified` is false, the plain notice "Import into n8n x.y not yet verified".
-- Settings page: display name form, connected GitHub installations with a disconnect action, nothing about plans.
+- Settings page: display name form, connected GitHub installations (account login, connected date) with a Disconnect action (confirm dialog, explains that projects keep their results but need a reconnect to analyze) and a "Manage on GitHub" link, nothing about plans.
 - Every list has loading, empty, and error states.
 
 **Status to UI mapping** (enums from `contract.md` section 5):
