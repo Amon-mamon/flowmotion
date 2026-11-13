@@ -45,7 +45,10 @@ const CONTRACT_NAMES = [
   "ANTHROPIC_API_KEY",
   "ANALYSIS_MODEL",
   "APP_URL",
+  "WORKER_TOKEN",
 ];
+
+const AI_NAMES = ["ANTHROPIC_API_KEY", "ANALYSIS_MODEL", "WORKER_TOKEN"];
 
 function envExampleKeys(): string[] {
   // vitest runs with the project root as cwd.
@@ -139,9 +142,11 @@ describe("env schema", () => {
     }
     expect(caught).toBeInstanceOf(EnvValidationError);
     const err = caught as EnvValidationError;
-    expect(err.missing).toEqual([...CONTRACT_NAMES].sort());
+    // The AI names are optional: a missing ANALYSIS_MODEL means disabled (D-16).
+    const required = CONTRACT_NAMES.filter((name) => !AI_NAMES.includes(name));
+    expect(err.missing).toEqual([...required].sort());
     expect(err.invalid).toEqual([]);
-    for (const name of CONTRACT_NAMES) {
+    for (const name of required) {
       expect(err.message).toContain(name);
     }
   });
@@ -157,6 +162,53 @@ describe("env schema", () => {
     expect(err).toBeInstanceOf(EnvValidationError);
     expect(err.missing).toEqual(["ANTHROPIC_API_KEY"]);
     expect(err.invalid).toEqual(["APP_URL"]);
+  });
+
+  it("AI kill switch: ANALYSIS_MODEL=disabled does not require ANTHROPIC_API_KEY", () => {
+    const { ANTHROPIC_API_KEY: _key, ...rest } = validServer;
+    void _key;
+    const env = parseServerEnv({ ...rest, ANALYSIS_MODEL: "disabled" });
+    expect(env.ANALYSIS_MODEL).toBe("disabled");
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(parseServerEnv({ ...rest, ANALYSIS_MODEL: "DISABLED", ANTHROPIC_API_KEY: "" }).ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
+  it("AI kill switch: a missing ANALYSIS_MODEL means disabled", () => {
+    const { ANTHROPIC_API_KEY: _key, ANALYSIS_MODEL: _model, ...rest } = validServer;
+    void _key;
+    void _model;
+    expect(parseServerEnv(rest).ANALYSIS_MODEL).toBe("disabled");
+  });
+
+  it("AI kill switch: a model id requires ANTHROPIC_API_KEY (name only in the error)", () => {
+    let caught: unknown;
+    try {
+      parseServerEnv({ ...validServer, ANTHROPIC_API_KEY: "" });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(EnvValidationError);
+    expect((caught as EnvValidationError).missing).toEqual(["ANTHROPIC_API_KEY"]);
+  });
+
+  it(".env.example ships with AI disabled", () => {
+    const text = readFileSync(resolve(process.cwd(), ".env.example"), "utf8");
+    expect(text).toMatch(/^ANALYSIS_MODEL=disabled$/m);
+    expect(text).toMatch(/^ANTHROPIC_API_KEY=$/m);
+  });
+
+  it("WORKER_TOKEN: optional outside production, required (min 64) in production", () => {
+    expect(parseServerEnv(validServer).WORKER_TOKEN).toBeUndefined();
+    let caught: unknown;
+    try {
+      parseServerEnv({ ...validServer, NODE_ENV: "production" });
+    } catch (error) {
+      caught = error;
+    }
+    expect((caught as EnvValidationError).missing).toEqual(["WORKER_TOKEN"]);
+    expect(() => parseServerEnv({ ...validServer, NODE_ENV: "production", WORKER_TOKEN: "short" })).toThrow(EnvValidationError);
+    const token = "a1".repeat(32);
+    expect(parseServerEnv({ ...validServer, NODE_ENV: "production", WORKER_TOKEN: token }).WORKER_TOKEN).toBe(token);
   });
 
   it("never includes values in the error message", () => {

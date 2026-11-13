@@ -5,7 +5,7 @@ import { extractMessaging } from "@/lib/analysis/extractors/messaging";
 import { extractQueueConsumers } from "@/lib/analysis/extractors/queue-consumer";
 import { extractRoutes } from "@/lib/analysis/extractors/route";
 import { extractSchedules } from "@/lib/analysis/extractors/schedule";
-import type { Extractor, ExtractorFile } from "@/lib/analysis/extractors/util";
+import { MAX_MATCHES_PER_EXTRACTOR, type Extractor, type ExtractorFile } from "@/lib/analysis/extractors/util";
 import { extractWebhooks } from "@/lib/analysis/extractors/webhook";
 import { MAX_SIGNALS, type Signal } from "@/schemas/analysis";
 
@@ -50,5 +50,5 @@ export function dedupeSignals(signals: readonly Signal[], max: number = MAX_SIGN
 
 /** All signals of one file, deduped within the file. */
 export function extractSignals(file: ExtractorFile): Signal[] {
-  return dedupeSignals(EXTRACTORS.flatMap((extract) => extract(file)));
+  return dedupeSignals(EXTRACTORS.flatMap((extract) => extract(file).slice(0, MAX_MATCHES_PER_EXTRACTOR)));
 }

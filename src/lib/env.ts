@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { DISABLED_MODEL_VALUE, isAnalysisModelDisabled } from "@/lib/analysis/model/config";
+
 /**
  * Environment variable schemas (names from docs/contract.md section 10).
  *
@@ -34,9 +36,24 @@ export const serverEnvSchema = clientEnvSchema.extend({
   GITHUB_APP_CLIENT_SECRET: nonEmpty("GITHUB_APP_CLIENT_SECRET"),
   GITHUB_APP_PRIVATE_KEY: nonEmpty("GITHUB_APP_PRIVATE_KEY"),
   GITHUB_WEBHOOK_SECRET: nonEmpty("GITHUB_WEBHOOK_SECRET"),
-  ANTHROPIC_API_KEY: nonEmpty("ANTHROPIC_API_KEY"),
-  ANALYSIS_MODEL: nonEmpty("ANALYSIS_MODEL"),
+  /** Required only when ANALYSIS_MODEL is a model id (AI kill switch, D-16). */
+  ANTHROPIC_API_KEY: z.string().trim().min(1).optional(),
+  /** Model id, or "disabled" (the documented off value; missing = disabled). */
+  ANALYSIS_MODEL: z.string().trim().min(1).default(DISABLED_MODEL_VALUE),
   APP_URL: httpUrl("APP_URL"),
+  /**
+   * Bearer for the worker Edge Function (D-30): random, at least 64 chars.
+   * Required only when NODE_ENV=production (next dev runs the worker in-process).
+   */
+  WORKER_TOKEN: z.string().trim().min(64, "WORKER_TOKEN must be at least 64 characters").optional(),
+}).superRefine((env, ctx) => {
+  if (!isAnalysisModelDisabled(env.ANALYSIS_MODEL) && env.ANTHROPIC_API_KEY === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["ANTHROPIC_API_KEY"],
+      message: "ANTHROPIC_API_KEY is required unless ANALYSIS_MODEL=disabled",
+    });
+  }
 });
 
 export type ClientEnv = z.infer<typeof clientEnvSchema>;
@@ -98,7 +115,11 @@ export function parseClientEnv(source: EnvSource): ClientEnv {
 
 /** Pure parser for the server schema. Do not call from client code. */
 export function parseServerEnv(source: EnvSource): ServerEnv {
-  return parseWith("server", serverEnvSchema, source);
+  const env = parseWith("server", serverEnvSchema, source);
+  if (source.NODE_ENV === "production" && env.WORKER_TOKEN === undefined) {
+    throw new EnvValidationError("server", ["WORKER_TOKEN"], []);
+  }
+  return env;
 }
 
 let cachedClientEnv: ClientEnv | undefined;

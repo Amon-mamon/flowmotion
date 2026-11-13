@@ -43,6 +43,8 @@ export const JOB_ERROR_CODES = [
   "BRANCH_NOT_FOUND",
   "MODEL_OUTPUT_INVALID",
   "GENERATION_EXHAUSTED",
+  /** D-29: the job made no progress for 1 hour and was expired. */
+  "JOB_EXPIRED",
   "INTERNAL",
 ] as const;
 export const jobErrorCodeSchema = z.enum(JOB_ERROR_CODES);

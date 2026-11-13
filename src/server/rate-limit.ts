@@ -52,7 +52,7 @@ export function retryAfterSeconds(nowMs: number): number {
   return Math.max(1, Math.ceil((windowStart(nowMs) + WINDOW_MS - nowMs) / 1000));
 }
 
-async function hitViaDatabase(key: string, limit: number): Promise<boolean> {
+export async function hitViaDatabase(key: string, limit: number): Promise<boolean> {
   const supabase = createAdminClient();
   const { data, error } = await supabase.rpc("rate_limit_hit", { p_key: key, p_limit: limit });
   if (error !== null) throw new Error(`rate_limit_hit failed: ${error.code ?? "unknown"}`);

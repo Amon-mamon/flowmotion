@@ -138,6 +138,8 @@ interface RawMatch {
 interface Detector {
   name: string;
   regexp: RegExp;
+  /** Limits the detector to some files (e.g. config files for unquoted values). */
+  appliesTo?: (path: string) => boolean;
   build(match: RegExpExecArray): RawMatch | null;
 }
 
@@ -151,9 +153,120 @@ function spanOf(match: RegExpExecArray, group: number): { start: number; end: nu
   return { start, end: start + value.length, value };
 }
 
-const SECRET_NAME = /(key|token|secret|password|passwd)/i;
-const JWT_SECRET_NAME = /(jwt|session).*(secret|key)|(secret|key).*(jwt|session)/i;
-const PLACEHOLDER_VALUE = /^(?:\$|\{|<|%|your[-_]|example|changeme|xxx+|\*+$)/i;
+/** Names whose assigned value is treated as a secret (D-28: quoted and unquoted). */
+export const SECRET_NAME = /(key|token|secret|password|passwd|pwd|credential|auth)/i;
+const JWT_SECRET_NAME = /(jwt|session)/i;
+const PUBLIC_PREFIX = /^(?:NEXT_PUBLIC_|VITE_|EXPO_PUBLIC_|REACT_APP_)/;
+
+/**
+ * Shared placeholder rule (security.md section 2, D-28): empty, `your-` /
+ * `your_` prefix, contains `changeme` / `example` / `xxx`, wrapped in `<…>`,
+ * a `${…}` / `{{…}}` / `$NAME` reference, or one repeated character. The
+ * bare-variable-name rule (`^[A-Z][A-Z0-9_]*$`) applies to the generic
+ * assignment rule only, since several provider keys are uppercase
+ * alphanumerics.
+ */
+export function isPlaceholderValue(value: string, options: { bareName?: boolean } = {}): boolean {
+  const v = value.trim();
+  if (v === "") return true;
+  if (/^your[-_]/i.test(v)) return true;
+  if (/changeme|example|xxx/i.test(v)) return true;
+  if (/^<.*>$/.test(v)) return true;
+  if (v.includes("${") || v.includes("{{") || v.startsWith("$")) return true;
+  if (/^(.)\1*$/.test(v)) return true;
+  // A provider prefix followed by one repeated character (`SK000…`, `key-000…`).
+  const body = v.replace(/^[A-Za-z]{1,12}[-_.]?/, "");
+  if (body.length >= 8 && /^(.)\1*$/.test(body)) return true;
+  if (options.bareName === true && /^[A-Z][A-Z0-9_]*$/.test(v)) return true;
+  return false;
+}
+
+/** Files where an unquoted `NAME=VALUE` / `NAME: VALUE` is a literal (D-28). */
+export function isUnquotedConfigFile(path: string): boolean {
+  const normalized = normalizeRepoPath(path) ?? path;
+  const base = basenameOf(normalized);
+  if (base === ENV_EXAMPLE_BASENAME || base === "Dockerfile" || base === "Procfile") return true;
+  if (/\.(?:ya?ml|toml)$/i.test(base)) return true;
+  if (/^\.github\/workflows\//.test(normalized) || normalized.includes("/.github/workflows/")) return true;
+  return false;
+}
+
+function isDockerfile(path: string): boolean {
+  const base = basenameOf(normalizeRepoPath(path) ?? path).toLowerCase();
+  return base === "dockerfile" || base.startsWith("dockerfile.") || base.endsWith(".dockerfile");
+}
+
+/** True for the Supabase service-role JWT (payload `"role":"service_role"`). */
+export function isServiceRoleJwt(token: string): boolean {
+  const payload = token.split(".")[1];
+  if (payload === undefined) return false;
+  const decoded = decodeBase64UrlJson(payload);
+  return (
+    typeof decoded === "object" &&
+    decoded !== null &&
+    (decoded as Record<string, unknown>).role === "service_role"
+  );
+}
+
+/** Provider key shapes, for the generic rule's "or matches a provider pattern". */
+const PROVIDER_VALUE_PATTERNS: readonly RegExp[] = [
+  /^sk-ant-[A-Za-z0-9_-]{20,}$/,
+  /^sk-or-[A-Za-z0-9_-]{32,}$/,
+  /^sk-(?!ant-|or-)(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{32,}$/,
+  /^SG\.[A-Za-z0-9_-]{16,32}\.[A-Za-z0-9_-]{30,64}$/,
+  /^npm_[A-Za-z0-9]{36}$/,
+  /^glpat-[A-Za-z0-9_-]{20,}$/,
+  /^sb_secret_[A-Za-z0-9_-]{20,}$/,
+  /^SK[0-9a-fA-F]{32}$/,
+  /^key-[0-9a-f]{32}$/,
+  /^(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,255}$/,
+  /^(?:sk_live|rk_live|sk_test)_[A-Za-z0-9]{10,}$/,
+  /^xox[abprs]-[A-Za-z0-9-]{10,}$/,
+];
+
+function isSecretLikeValue(value: string): boolean {
+  if (value.length >= 20 && shannonEntropy(value) >= 3.5) return true;
+  return PROVIDER_VALUE_PATTERNS.some((pattern) => pattern.test(value));
+}
+
+function genericCategory(name: string): FindingCategory {
+  if (PUBLIC_PREFIX.test(name)) return "client_exposed_secret";
+  return JWT_SECRET_NAME.test(name) ? "jwt_signing_secret" : "hardcoded_secret";
+}
+
+function genericMatch(m: RegExpExecArray, nameGroup: number, valueGroup: number): RawMatch | null {
+  const name = m[nameGroup];
+  const value = m[valueGroup];
+  if (name === undefined || value === undefined) return null;
+  if (!SECRET_NAME.test(name)) return null;
+  if (isPlaceholderValue(value, { bareName: true })) return null;
+  if (!isSecretLikeValue(value)) return null;
+  const start = m.index + m[0].lastIndexOf(value);
+  return {
+    start,
+    end: start + value.length,
+    value,
+    category: genericCategory(name),
+    type: "high-entropy secret",
+    redact: true,
+    priority: 2,
+  };
+}
+
+function provider(type: string, regexp: RegExp, extra?: (value: string) => boolean): Detector {
+  return {
+    name: type,
+    regexp,
+    build: (m) => {
+      const span = spanOf(m, 1);
+      if (span === null) return null;
+      if (extra !== undefined && !extra(span.value)) return null;
+      return { ...span, category: "hardcoded_secret", type, redact: true, priority: 1 };
+    },
+  };
+}
+
+const UUID = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
 
 const DETECTORS: readonly Detector[] = [
   {
@@ -243,6 +356,9 @@ const DETECTORS: readonly Detector[] = [
       if (span === null) return null;
       // The public Supabase anon key is meant for the browser: not a finding.
       if (isAnonJwt(span.value)) return null;
+      if (isServiceRoleJwt(span.value)) {
+        return { ...span, category: "hardcoded_secret", type: "Supabase service key", redact: true, priority: 1 };
+      }
       return { ...span, category: "jwt_signing_secret", type: "JWT", redact: true, priority: 1 };
     },
   },
@@ -254,7 +370,7 @@ const DETECTORS: readonly Detector[] = [
       const url = spanOf(m, 1);
       const password = m[2];
       if (url === null || password === undefined) return null;
-      if (PLACEHOLDER_VALUE.test(password)) return null;
+      if (isPlaceholderValue(password)) return null;
       return {
         start: url.start,
         end: url.end,
@@ -266,29 +382,51 @@ const DETECTORS: readonly Detector[] = [
       };
     },
   },
+  // --- provider patterns (D-28, security.md section 2) ---------------------------
+  provider("Anthropic key", /\b(sk-ant-[A-Za-z0-9_-]{20,})/g),
+  provider("OpenRouter key", /\b(sk-or-[A-Za-z0-9_-]{32,})/g),
+  provider("OpenAI key", /\b(sk-(?!ant-|or-)(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{32,})/g),
+  provider("SendGrid key", /\b(SG\.[A-Za-z0-9_-]{16,32}\.[A-Za-z0-9_-]{30,64})/g),
+  provider("npm token", /\b(npm_[A-Za-z0-9]{36})\b/g),
+  provider("GitLab token", /\b(glpat-[A-Za-z0-9_-]{20,})/g),
+  provider("Supabase service key", /\b(sb_secret_[A-Za-z0-9_-]{20,})/g),
+  provider("Twilio key", /\b(SK[0-9a-fA-F]{32})\b/g),
+  provider("Mailgun key", /\b(key-[0-9a-f]{32})\b/g),
+  provider("Mailgun key", /\b([0-9a-f]{32}-[0-9a-f]{8}-[0-9a-f]{8})\b/g),
+  provider(
+    "Resend key",
+    /\b(re_[A-Za-z0-9]{6,12}_[A-Za-z0-9]{16,40})\b/g,
+    (value) => shannonEntropy(value.slice(3)) >= 3.5,
+  ),
+  provider(
+    "Postmark token",
+    // Bounded name runs keep the scan linear on long identifier-like text (S2-3).
+    new RegExp(`postmark[A-Za-z0-9_.-]{0,64}["']?[ \\t]*(?::|=|=>|:=)[ \\t]*["'\`]?(${UUID})`, "gi"),
+  ),
+  provider(
+    "Postmark token",
+    new RegExp(`X-Postmark-(?:Server|Account)-Token["']?[ \\t]*[:,][ \\t]*["'\`]?(${UUID})`, "gi"),
+  ),
+  // --- generic assignment rule (D-28) ---------------------------------------------
   {
+    // Quoted form, any fetched file.
     name: "high-entropy assignment",
-    regexp: /([A-Za-z_][A-Za-z0-9_.-]{0,63})["']?\s*(?::|=|=>|:=)\s*(["'`])([^"'`\s]{20,})\2/g,
-    build: (m) => {
-      const name = m[1];
-      const value = m[3];
-      if (name === undefined || value === undefined) return null;
-      if (!SECRET_NAME.test(name)) return null;
-      if (PLACEHOLDER_VALUE.test(value)) return null;
-      if (shannonEntropy(value) < 3.5) return null;
-      const quoteOffset = m[0].lastIndexOf(value);
-      const start = m.index + quoteOffset;
-      const category: FindingCategory = JWT_SECRET_NAME.test(name) ? "jwt_signing_secret" : "hardcoded_secret";
-      return {
-        start,
-        end: start + value.length,
-        value,
-        category,
-        type: "high-entropy secret",
-        redact: true,
-        priority: 2,
-      };
-    },
+    regexp: /([A-Za-z_][A-Za-z0-9_.-]{0,63})["']?[ \t]*(?::|=|=>|:=)[ \t]*(["'`])([^"'`\s]{1,512})\2/g,
+    build: (m) => genericMatch(m, 1, 3),
+  },
+  {
+    // Unquoted form, config files only: NAME=VALUE / NAME: VALUE, optional `export ` or `- `.
+    name: "unquoted assignment",
+    regexp: /^[ \t]*(?:export[ \t]+|-[ \t]+)?([A-Za-z_][A-Za-z0-9_.-]{0,63})[ \t]*[:=][ \t]*([^\s"'`]{1,512})/gm,
+    appliesTo: isUnquotedConfigFile,
+    build: (m) => genericMatch(m, 1, 2),
+  },
+  {
+    // Dockerfile ENV NAME=VALUE, ENV NAME VALUE, ARG NAME=VALUE.
+    name: "Dockerfile ENV/ARG",
+    regexp: /^[ \t]*(?:ENV|ARG)[ \t]+([A-Za-z_][A-Za-z0-9_]{0,63})(?:[ \t]*=[ \t]*|[ \t]+)([^\s"'`]{1,512})/gim,
+    appliesTo: isDockerfile,
+    build: (m) => genericMatch(m, 1, 2),
   },
   {
     name: "public secret variable",
@@ -310,7 +448,7 @@ const DETECTORS: readonly Detector[] = [
   },
   {
     name: "Python debug flag",
-    regexp: /^[ 	]*(DEBUG[ 	]*=[ 	]*True)/gm,
+    regexp: /^[ 	]*(DEBUG[ 	]*=[ 	]*True)\b/gm,
     build: (m) => {
       const span = spanOf(m, 1);
       return (
@@ -327,7 +465,7 @@ const DETECTORS: readonly Detector[] = [
   },
   {
     name: "APP_DEBUG flag",
-    regexp: /^[ 	]*(?:export[ 	]+)?(APP_DEBUG[ 	]*=[ 	]*["']?(?:true|TRUE|True))/gm,
+    regexp: /^[ 	]*(?:export[ 	]+)?(APP_DEBUG[ 	]*=[ 	]*["']?(?:true|TRUE|True))\b/gm,
     build: (m) => {
       const span = spanOf(m, 1);
       return (
@@ -381,6 +519,7 @@ export function scan(path: string, text: string): ScanResult {
   const ci = isCiFile(path);
   const candidates: RawMatch[] = [];
   for (const detector of DETECTORS) {
+    if (detector.appliesTo !== undefined && !detector.appliesTo(path)) continue;
     detector.regexp.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = detector.regexp.exec(text)) !== null) {
@@ -389,7 +528,10 @@ export function scan(path: string, text: string): ScanResult {
         continue;
       }
       const built = detector.build(match);
-      if (built !== null) candidates.push(built);
+      // Shared placeholder rule for every value-bearing pattern (D-28).
+      if (built !== null && !(built.redact && built.value !== "" && isPlaceholderValue(built.value))) {
+        candidates.push(built);
+      }
     }
   }
 
@@ -435,13 +577,18 @@ export function scan(path: string, text: string): ScanResult {
 
 // --- path-only findings (file never opened) --------------------------------------
 
-const PRIVATE_KEY_BASENAME = /^(?:.*\.(?:pem|key|p12|pfx|jks|keystore|ppk)|id_rsa.*|id_ed25519.*)$/i;
+const PRIVATE_KEY_BASENAME = /^(?:.*\.(?:pem|key|p12|pfx|jks|keystore|ppk|p8)|id_rsa.*|id_ed25519.*)$/i;
 const CLOUD_FILE_BASENAME = /^.*\.(?:tfstate|tfstate\.backup|tfvars)$/i;
 const CREDENTIAL_FILE_BASENAMES: ReadonlySet<string> = new Set([
   ".npmrc",
   ".pypirc",
   ".netrc",
   ".git-credentials",
+  // D-31 / S2-7
+  ".yarnrc.yml",
+  "credentials.json",
+  ".htpasswd",
+  "wp-config.php",
 ]);
 
 function pathFinding(category: FindingCategory, filePath: string): MaskedFinding {
@@ -477,6 +624,12 @@ export function pathOnlyFinding(path: string): MaskedFinding | null {
   }
   if (CLOUD_FILE_BASENAME.test(base)) return pathFinding("cloud_credentials", normalized);
   if (CREDENTIAL_FILE_BASENAMES.has(lowerBase)) return pathFinding("hardcoded_secret", normalized);
+  if (lowerBase === ".pgpass") return pathFinding("db_connection_string", normalized);
+  // Composer auth.json only at the root or under .composer/ (translation
+  // files such as locales/en/auth.json are denied without a finding).
+  if (lowerBase === "auth.json" && (dirs.length === 0 || dirs[dirs.length - 1] === ".composer")) {
+    return pathFinding("hardcoded_secret", normalized);
+  }
   if (lowerBase === "config.json" && dirs[dirs.length - 1] === ".docker") {
     return pathFinding("hardcoded_secret", normalized);
   }

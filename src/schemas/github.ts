@@ -221,9 +221,14 @@ export const ghUserInstallationRepoSchema = z.object({
   private: z.boolean(),
   default_branch: z.string().min(1).max(255),
 });
+/**
+ * R11-12: the page structure is strict, but each repository item is
+ * validated one by one by the caller (a malformed item is dropped and
+ * counted, never a whole-link failure).
+ */
 export const ghUserInstallationReposSchema = z.object({
   total_count: z.number().int().nonnegative(),
-  repositories: z.array(ghUserInstallationRepoSchema),
+  repositories: z.array(z.unknown()),
 });
 
 // --- Webhook payloads (only the fields used) --------------------------------

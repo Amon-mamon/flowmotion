@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { GitHubApiError, GitHubResponseError } from "@/lib/github/errors";
 import type { FetchLike } from "@/lib/github/http";
-import { listUserInstallations } from "@/server/github/user-auth";
+import { listUserInstallationRepos, listUserInstallations } from "@/server/github/user-auth";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -50,6 +50,35 @@ describe("listUserInstallations", () => {
     ).rejects.toBeInstanceOf(GitHubApiError);
     await expect(
       listUserInstallations({ userToken: "ghu", fetch: async () => jsonResponse({ installations: "x" }) }),
+    ).rejects.toBeInstanceOf(GitHubResponseError);
+  });
+});
+
+describe("listUserInstallationRepos (R11-12)", () => {
+  const repo = (id: number, fullName = `acme/repo-${id}`) => ({
+    id,
+    full_name: fullName,
+    private: false,
+    default_branch: "main",
+  });
+
+  it("drops and counts a malformed item and keeps the valid ones", async () => {
+    const fetchMock: FetchLike = async () =>
+      jsonResponse({
+        total_count: 4,
+        repositories: [repo(1), { id: "x", full_name: 5 }, repo(2), repo(3, "bad/../name")],
+      });
+    const list = await listUserInstallationRepos("ghu", 7, fetchMock);
+    expect(list.repos.map((r) => r.id)).toEqual([1, 2]);
+    expect(list.dropped).toBe(2);
+  });
+
+  it("structural errors still fail the link", async () => {
+    await expect(
+      listUserInstallationRepos("ghu", 7, async () => jsonResponse({ repositories: [] })),
+    ).rejects.toBeInstanceOf(GitHubResponseError);
+    await expect(
+      listUserInstallationRepos("ghu", 7, async () => jsonResponse({ total_count: 1, repositories: {} })),
     ).rejects.toBeInstanceOf(GitHubResponseError);
   });
 });

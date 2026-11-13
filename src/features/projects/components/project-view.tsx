@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircleIcon, ArrowRightIcon, GitBranchIcon, ListChecksIcon, SparklesIcon, Trash2Icon } from "lucide-react";
+import { AlertCircleIcon, ArrowRightIcon, GitBranchIcon, ListChecksIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -18,7 +18,6 @@ import { AnalysisStatusLabel } from "@/features/analysis/components/analysis-sta
 import { AnalyzeAction, analysisHref, findActiveAnalysis } from "@/features/analysis/components/analyze-action";
 import { AnalyzeErrorNotice } from "@/features/analysis/components/analyze-error-notice";
 import { COPY, shortSha } from "@/features/analysis/copy";
-import { isAnalyzeApiReady } from "@/features/analysis/readiness";
 import { isActiveStatus } from "@/features/analysis/schemas";
 import { useStartAnalysis } from "@/features/analysis/use-start-analysis";
 import { DeleteProjectDialog } from "@/features/projects/components/delete-project-dialog";
@@ -76,8 +75,6 @@ function ProjectBody({ project }: { project: ProjectDetail }) {
   const start = useStartAnalysis(project.id);
   const disconnected = project.installationId === null;
   const active = findActiveAnalysis(project);
-  // R11-2: no live Analyze until the Analyze API is marked ready in docs/status.md.
-  const analyzeReady = isAnalyzeApiReady();
 
   return (
     <>
@@ -98,24 +95,12 @@ function ProjectBody({ project }: { project: ProjectDetail }) {
         }
         actions={
           <>
-            {analyzeReady ? (
-              <AnalyzeAction
-                project={project}
-                onStart={start.start}
-                isPending={start.isPending}
-                hintId="analyze-hint"
-              />
-            ) : (
-              <div className="flex flex-col items-start gap-1 sm:items-end">
-                <Button type="button" disabled aria-describedby="analyze-hint">
-                  <SparklesIcon aria-hidden="true" />
-                  Analyze
-                </Button>
-                <span id="analyze-hint" className="text-xs text-muted-foreground">
-                  Analysis arrives in Phase 2
-                </span>
-              </div>
-            )}
+            <AnalyzeAction
+              project={project}
+              onStart={start.start}
+              isPending={start.isPending}
+              hintId="analyze-hint"
+            />
             <Button type="button" variant="outline" onClick={() => setDeleting(true)}>
               <Trash2Icon aria-hidden="true" />
               Delete project
@@ -131,7 +116,7 @@ function ProjectBody({ project }: { project: ProjectDetail }) {
           <AlertTitle>This repository was not recognized as a website or app</AlertTitle>
           <AlertDescription>
             <p>{project.invalidReason}</p>
-            {analyzeReady ? <p>If you changed the repository, analyze it again.</p> : null}
+            <p>If you changed the repository, analyze it again.</p>
           </AlertDescription>
         </Alert>
       ) : null}
@@ -139,27 +124,14 @@ function ProjectBody({ project }: { project: ProjectDetail }) {
       {project.stale ? (
         <StaleNotice
           action={
-            !analyzeReady || disconnected || active ? undefined : (
+            disconnected || active ? undefined : (
               <ReanalyzeButton onClick={start.start} disabled={start.isPending} />
             )
           }
         />
       ) : null}
 
-      {analyzeReady ? (
-        <AnalysesHistory project={project} />
-      ) : (
-        <section aria-labelledby="latest-heading" className="flex flex-col gap-4">
-          <h2 id="latest-heading" className="text-lg font-semibold">
-            Analysis
-          </h2>
-          <EmptyState
-            icon={<ListChecksIcon />}
-            title={COPY.notAnalyzed}
-            description="Analysis arrives in Phase 2. It will check that this is a website or app, scan it for exposed secrets, and list the automations it contains."
-          />
-        </section>
-      )}
+      <AnalysesHistory project={project} />
 
       <DeleteProjectDialog
         project={project}

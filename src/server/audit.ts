@@ -9,7 +9,8 @@ export type AuditAction =
   | "github.sync"
   | "github.disconnect"
   | "project.create"
-  | "project.delete";
+  | "project.delete"
+  | "analysis.start";
 
 /**
  * Appends an audit_log row. Writes go through the service role (clients have

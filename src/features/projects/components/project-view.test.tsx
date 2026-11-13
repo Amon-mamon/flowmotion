@@ -7,9 +7,6 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-let analyzeReady = true;
-vi.mock("@/features/analysis/readiness", () => ({ isAnalyzeApiReady: () => analyzeReady }));
-
 import { ProjectView } from "@/features/projects/components/project-view";
 import { invalidProject, pendingProject, validProject } from "@/features/projects/fixtures";
 import type { Project, ProjectAnalysisSummary, ProjectDetail } from "@/features/projects/schemas";
@@ -18,7 +15,6 @@ import { fail, mockFetch, ok, renderWithQuery } from "@/features/test-utils/rend
 afterEach(() => {
   vi.unstubAllGlobals();
   push.mockReset();
-  analyzeReady = true;
 });
 
 function serve(project: Project) {
@@ -204,26 +200,6 @@ describe("ProjectView: branch (Phase 1.1)", () => {
     renderWithQuery(<ProjectView projectId={pendingProject.id} />);
     expect(await screen.findByTestId("project-branch")).toHaveTextContent("main");
     expect(screen.getByText("default")).toBeInTheDocument();
-  });
-});
-
-describe("ProjectView: Analyze API not ready (R11-2)", () => {
-  it("Analyze stays disabled with the Phase 2 wording and never calls the analyze endpoint", async () => {
-    analyzeReady = false;
-    const fetchMock = serveDetail({ ...validProject, analyses: [] });
-    renderWithQuery(<ProjectView projectId={validProject.id} />);
-    const analyze = await screen.findByRole("button", { name: "Analyze" });
-    expect(analyze).toBeDisabled();
-    expect(analyze).toHaveAccessibleDescription("Analysis arrives in Phase 2");
-    fireEvent.click(analyze);
-    // Stale notice is shown but offers no Re-analyze while the API is missing.
-    expect(screen.getByText("New commits since the last analysis")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Re-analyze" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /View progress|View results/ })).not.toBeInTheDocument();
-    await new Promise((r) => setTimeout(r, 30));
-    expect(fetchMock.mock.calls.some(([u]) => String(u).includes("/analyze"))).toBe(false);
-    expect(fetchMock.mock.calls.every(([, init]) => (init?.method ?? "GET") === "GET")).toBe(true);
-    expect(push).not.toHaveBeenCalled();
   });
 });
 

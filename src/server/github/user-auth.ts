@@ -5,6 +5,7 @@ import { GITHUB_API_URL, GITHUB_HEADERS, GITHUB_WEB_URL, type FetchLike } from "
 import {
   ghAuthenticatedUserSchema,
   ghOAuthTokenResponseSchema,
+  ghUserInstallationRepoSchema,
   ghUserInstallationReposSchema,
   ghUserInstallationsSchema,
   isValidRepoFullName,
@@ -194,7 +195,13 @@ export async function listUserInstallationRepos(
     if (!parsed.success) throw new GitHubResponseError(operation);
     total = parsed.data.total_count;
     seen += parsed.data.repositories.length;
-    for (const item of parsed.data.repositories) {
+    for (const raw of parsed.data.repositories) {
+      const itemResult = ghUserInstallationRepoSchema.safeParse(raw);
+      if (!itemResult.success) {
+        dropped += 1;
+        continue;
+      }
+      const item = itemResult.data;
       if (!isValidRepoFullName(item.full_name)) {
         dropped += 1;
         continue;

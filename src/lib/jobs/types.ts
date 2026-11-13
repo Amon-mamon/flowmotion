@@ -115,6 +115,8 @@ export interface ProjectRef {
   id: string;
   user_id: string;
   repo_full_name: string;
+  /** GitHub repo id verified by analyze (D-22); the worker re-checks it at `validate` (S2-1). */
+  repo_id: number | null;
   installation_id: string | null;
 }
 
@@ -164,8 +166,11 @@ export interface UsageEventInsert {
 
 /** Persistence used by the worker (service role). */
 export interface WorkerDb {
-  /** `claim_job(p_worker_id)`: 0 or 1 job, already marked running. */
-  claimJob(workerId: string): Promise<JobRow | null>;
+  /**
+   * `claim_job(p_worker_id, p_user_id)`: 0 or 1 job, already marked running.
+   * `userId` limits the claim to that user's jobs (local runner only, D-27).
+   */
+  claimJob(workerId: string, userId?: string): Promise<JobRow | null>;
   /** Updates the job only while this worker still holds its lock. */
   updateJob(jobId: string, workerId: string, patch: JobPatch): Promise<boolean>;
   getAnalysis(id: string): Promise<AnalysisRef | null>;
@@ -196,6 +201,8 @@ export interface WorkerGitHub {
   mintToken(installationId: number): Promise<string>;
   /** Head sha of the analysis branch; GitHubApiError 404 when the branch is gone. */
   getBranchHeadSha(token: string, fullName: string, branch: string): Promise<string>;
+  /** GitHub's repo id for `fullName` (`GET /repos/{o}/{r}`), or null when not readable (404). */
+  getRepoId(token: string, fullName: string): Promise<number | null>;
   /**
    * After a branch-head 404 at `validate`: true when the repo itself is still
    * readable (→ BRANCH_NOT_FOUND), false otherwise (→ GITHUB_ACCESS_LOST).
@@ -214,6 +221,8 @@ export interface WorkerDeps {
   model: AnalysisModel | null;
   now: () => Date;
   workerId: string;
+  /** Local runner only (D-27): claim only this user's jobs. */
+  claimUserId?: string;
   /** Ids, step names, counts and codes only. */
   log?: WorkerLog;
   /** Overrides for tests. */

@@ -1,4 +1,4 @@
-import { basenameOf, classifyPath, extensionOf, normalizeRepoPath } from "@/lib/security/path-policy";
+import { MAX_FILE_BYTES, basenameOf, classifyPath, extensionOf, normalizeRepoPath } from "@/lib/security/path-policy";
 import type { ValidationResult } from "@/schemas/analysis";
 
 /**
@@ -53,6 +53,8 @@ export function pickManifestPaths(entries: readonly { path: string; size: number
     .filter((entry) => {
       // requirements.txt, Pipfile, pom.xml, go.mod, build.gradle have no
       // allowlisted extension; only the deny list and size cap apply here.
+      // S2-4: the size cap applies to manifests too (extension-less ones included).
+      if (entry.size > MAX_FILE_BYTES) return false;
       const decision = classifyPath(entry.path, entry.size);
       return decision.allowed || decision.reason === "extension";
     })

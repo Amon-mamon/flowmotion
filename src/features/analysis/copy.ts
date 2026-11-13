@@ -38,6 +38,8 @@ export const COPY = {
 /** exact (design.md): message per failed-analysis error code. */
 export function failedMessage(code: JobErrorCode | null, branch?: string): string {
   switch (code) {
+    case "JOB_EXPIRED":
+      return "This analysis stopped making progress and was cancelled. Try again.";
     case "BRANCH_NOT_FOUND":
       return `The branch ${branch ?? ""} no longer exists on GitHub. Add the repository again and choose another branch.`;
     case "GITHUB_ACCESS_LOST":

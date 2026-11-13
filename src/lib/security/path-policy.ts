@@ -38,6 +38,14 @@ export const DENY_SEGMENT_GLOBS: readonly string[] = [
   ".pypirc",
   ".netrc",
   ".git-credentials",
+  // D-31 / S2-7: well-known credential files with allowlisted extensions
+  ".yarnrc.yml",
+  "auth.json",
+  "credentials.json",
+  ".htpasswd",
+  ".pgpass",
+  "wp-config.php",
+  "*.p8",
   // credential directories
   ".aws",
   ".ssh",

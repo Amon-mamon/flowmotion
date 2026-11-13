@@ -270,6 +270,33 @@ describe("AnalysisView: failed", () => {
     await waitFor(() => expect(push).toHaveBeenCalled());
   });
 
+  it("INTERNAL after detect (ai step failed, zero signals): saved findings are still shown (R2-4)", async () => {
+    const aiFailed: Analysis = { ...internalFailedAnalysis, progress: 75, signals: [] };
+    serve(aiFailed);
+    view(aiFailed);
+    expect(await screen.findByText("Something went wrong during analysis. Try again.")).toBeInTheDocument();
+    expect(await screen.findAllByTestId("masked-evidence")).toHaveLength(4);
+    expect(screen.queryByRole("heading", { name: "Recommendations" })).not.toBeInTheDocument();
+  });
+
+  it("JOB_EXPIRED (D-29): exact message, Retry starts a new analysis", async () => {
+    const expired: Analysis = { ...internalFailedAnalysis, errorCode: "JOB_EXPIRED" };
+    serve(expired);
+    view(expired);
+    expect(
+      await screen.findByText("This analysis stopped making progress and was cancelled. Try again."),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry analysis" }));
+    await waitFor(() => expect(push).toHaveBeenCalled());
+  });
+
+  it("INTERNAL before detect: no results block", async () => {
+    serve(internalFailedAnalysis);
+    view(internalFailedAnalysis);
+    expect(await screen.findByText("Something went wrong during analysis. Try again.")).toBeInTheDocument();
+    expect(screen.queryByText("Security findings")).not.toBeInTheDocument();
+  });
+
   it("reconnect notice and disabled Retry when the installation is gone", async () => {
     serve(accessLostAnalysis, { project: { ...baseProject, installationId: null } });
     view(accessLostAnalysis);

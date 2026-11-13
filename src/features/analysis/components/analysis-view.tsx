@@ -36,6 +36,9 @@ import { formatDate } from "@/hooks/use-format-date";
 
 type Props = { projectId: string; analysisId: string; pollIntervalMs?: number };
 
+/** `analyses.progress` once the `detect` step is reached (contract section 4). */
+const DETECT_PROGRESS = 70;
+
 /** `/projects/[projectId]/analysis/[analysisId]`: progress, validity, files, findings, signals, recommendations. */
 export function AnalysisView({ projectId, analysisId, pollIntervalMs }: Props) {
   const analysis = useAnalysis(analysisId, { pollIntervalMs });
@@ -100,10 +103,14 @@ function AnalysisBody({
     project.lastCommitSha !== null &&
     analysis.commitSha !== project.lastCommitSha;
 
+  // Findings exist from `detect` onward (progress 70, contract section 4), also on a
+  // `failed` analysis whose `ai` step failed. Empty lists render their own empty state.
   const showResults =
     analysis.status === "done" ||
     (analysis.status === "failed" &&
-      (analysis.errorCode === "MODEL_OUTPUT_INVALID" || analysis.signals.length > 0));
+      (analysis.progress >= DETECT_PROGRESS ||
+        analysis.errorCode === "MODEL_OUTPUT_INVALID" ||
+        analysis.signals.length > 0));
 
   return (
     <>

@@ -1,8 +1,25 @@
 import { z } from "zod";
 
+import {
+  MAX_SIGNALS,
+  analysisStatusSchema,
+  findingCategorySchema,
+  severitySchema,
+  signalSchema,
+  validationResultSchema,
+  type Analysis,
+  type Finding,
+  type Signal,
+} from "@/schemas/analysis";
 import { jobErrorCodeSchema } from "@/schemas/api";
 import type { Installation } from "@/schemas/github";
 import type { Profile } from "@/schemas/profile";
+import {
+  recommendationStatusSchema,
+  riskLevelSchema,
+  triggerKindSchema,
+  type Recommendation,
+} from "@/schemas/recommendation";
 import type { Project, ProjectAnalysisSummary } from "@/schemas/project";
 
 /**
@@ -126,4 +143,130 @@ export function toAnalysisSummaryDto(
 
 export function toProfileDto(row: z.infer<typeof profileRowSchema>, email: string): Profile {
   return { id: row.id, email, displayName: row.display_name };
+}
+
+// --- Phase 2: analyses, findings, recommendations -----------------------------------
+
+export const ANALYSIS_COLUMNS =
+  "id, project_id, status, progress, branch, commit_sha, validation, files_considered, files_read, files_blocked, files_blocked_by_reason, files_skipped_budget, signals, error_code, started_at, finished_at";
+
+const countSchema = z.number().int().nonnegative().catch(0);
+
+export const analysisRowSchema = z.object({
+  id: z.uuid(),
+  project_id: z.uuid(),
+  status: analysisStatusSchema,
+  progress: z.number().int().min(0).max(100),
+  branch: z.string(),
+  commit_sha: z.string().nullable(),
+  validation: validationResultSchema.nullable().catch(null),
+  files_considered: countSchema,
+  files_read: countSchema,
+  files_blocked: countSchema,
+  // Readers treat a missing key (rows written before `cap`) as 0.
+  files_blocked_by_reason: z
+    .object({ denied: countSchema, extension: countSchema, size: countSchema, cap: countSchema })
+    .catch({ denied: 0, extension: 0, size: 0, cap: 0 }),
+  files_skipped_budget: countSchema,
+  signals: z.array(z.unknown()).catch([]),
+  error_code: z.string().nullable(),
+  started_at: timestamp.nullable(),
+  finished_at: timestamp.nullable(),
+});
+export type AnalysisRow = z.infer<typeof analysisRowSchema>;
+
+export function toAnalysisDto(row: AnalysisRow): Analysis {
+  const signals: Signal[] = [];
+  for (const item of row.signals) {
+    const parsed = signalSchema.safeParse(item);
+    if (parsed.success && signals.length < MAX_SIGNALS) signals.push(parsed.data);
+  }
+  const errorCode = jobErrorCodeSchema.safeParse(row.error_code);
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    status: row.status,
+    progress: row.progress,
+    branch: row.branch,
+    commitSha: row.commit_sha,
+    validation: row.validation,
+    counts: {
+      filesConsidered: row.files_considered,
+      filesRead: row.files_read,
+      filesBlocked: row.files_blocked,
+      filesBlockedByReason: row.files_blocked_by_reason,
+      filesSkippedBudget: row.files_skipped_budget,
+    },
+    signals,
+    errorCode: errorCode.success ? errorCode.data : null,
+    startedAt: row.started_at === null ? null : toIso(row.started_at),
+    finishedAt: row.finished_at === null ? null : toIso(row.finished_at),
+  };
+}
+
+export const FINDING_COLUMNS = "id, analysis_id, category, severity, file_path, line, masked_evidence, remediation";
+
+export const findingRowSchema = z.object({
+  id: z.uuid(),
+  analysis_id: z.uuid(),
+  category: findingCategorySchema,
+  severity: severitySchema,
+  file_path: z.string(),
+  line: z.number().int().positive().nullable(),
+  masked_evidence: z.string(),
+  remediation: z.string(),
+});
+export type FindingRow = z.infer<typeof findingRowSchema>;
+
+export function toFindingDto(row: FindingRow): Finding {
+  return {
+    id: row.id,
+    analysisId: row.analysis_id,
+    category: row.category,
+    severity: row.severity,
+    filePath: row.file_path,
+    line: row.line,
+    maskedEvidence: row.masked_evidence,
+    remediation: row.remediation,
+  };
+}
+
+export const RECOMMENDATION_COLUMNS =
+  "id, analysis_id, title, description, trigger_kind, confidence, source_files, required_credentials, risk_level, node_types, rationale, estimated_tokens, status";
+
+export const recommendationRowSchema = z.object({
+  id: z.uuid(),
+  analysis_id: z.uuid(),
+  title: z.string(),
+  description: z.string(),
+  trigger_kind: triggerKindSchema,
+  confidence: z.number().min(0).max(1),
+  source_files: z.array(z.string()),
+  required_credentials: z.array(z.string()),
+  risk_level: riskLevelSchema,
+  node_types: z.array(z.string()),
+  rationale: z.string(),
+  estimated_tokens: z.number().int().nonnegative(),
+  status: recommendationStatusSchema,
+});
+export type RecommendationRow = z.infer<typeof recommendationRowSchema>;
+
+export function toRecommendationDto(row: RecommendationRow): Recommendation {
+  return {
+    id: row.id,
+    analysisId: row.analysis_id,
+    title: row.title,
+    description: row.description,
+    triggerKind: row.trigger_kind,
+    confidence: row.confidence,
+    sourceFiles: row.source_files,
+    requiredCredentials: row.required_credentials,
+    riskLevel: row.risk_level,
+    nodeTypes: row.node_types,
+    rationale: row.rationale,
+    estimatedTokens: row.estimated_tokens,
+    status: row.status,
+    // Phase 3 links generated flows.
+    flowId: null,
+  };
 }

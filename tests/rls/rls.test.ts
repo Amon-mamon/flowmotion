@@ -289,6 +289,136 @@ describe.skipIf(!configured)("RLS (skipped: no local Supabase)", () => {
     expect(await countRows("projects", "id", a.ids.projects)).toBe(1);
   });
 
+  it("Phase 2 functions claim_job, kick_worker, purge_rate_limits are service-role only", async () => {
+    const claim = await a.client.rpc("claim_job", { p_worker_id: "client" });
+    expect(claim.error).not.toBeNull();
+    const kick = await a.client.rpc("kick_worker");
+    expect(kick.error).not.toBeNull();
+    const purge = await a.client.rpc("purge_rate_limits");
+    expect(purge.error).not.toBeNull();
+    // Service role: purge runs; kick_worker is a no-op (false) without pg_net / Vault secrets.
+    expect(typeof (await must(admin.rpc("purge_rate_limits")))).toBe("number");
+    expect(typeof (await must(admin.rpc("kick_worker")))).toBe("boolean");
+  });
+
+  it("A cannot read B's analyses.signals / validation or recommendations.node_types (Phase 2 columns)", async () => {
+    const analyses = await a.client.from("analyses").select("id, signals, validation").eq("id", b.ids.analyses);
+    expect(analyses.data ?? []).toEqual([]);
+    const recs = await a.client.from("recommendations").select("id, node_types, rationale").eq("id", b.ids.recommendations);
+    expect(recs.data ?? []).toEqual([]);
+  });
+
+  it("one active analysis per project (partial unique index)", async () => {
+    const second = await admin.from("analyses").insert({
+      project_id: a.ids.projects,
+      user_id: a.userId,
+      status: "queued",
+      branch: "main",
+    });
+    expect(second.error?.code).toBe("23505");
+  });
+
+  it("concurrent link_github_installations calls of a user with no rows are serialised (S11-7 advisory lock)", async () => {
+    const e = await seedUser("e");
+    try {
+      await admin.from("github_installations").delete().eq("user_id", e.userId);
+      const link = (installationId: number) =>
+        admin.rpc("link_github_installations", {
+          p_user_id: e.userId,
+          p_github_user_id: 99,
+          p_github_user_login: "octocat",
+          p_installations: [
+            { installationId, accountLogin: "org", repos: [{ id: installationId, fullName: "org/r", private: false, defaultBranch: "main" }] },
+          ],
+        });
+      const results = await Promise.all([link(515151), link(515151)]);
+      for (const result of results) expect(result.error).toBeNull();
+      expect(await countRows("github_installations", "user_id", e.userId)).toBe(1);
+    } finally {
+      await admin.auth.admin.deleteUser(e.userId);
+    }
+  });
+
+  describe("claim_job / expire_stale_jobs (R2-3, D-27, D-29)", () => {
+    type ClaimRow = { id: string; attempts: number; status: string; locked_by: string };
+    const claim = async (worker: string, userId: string | null) =>
+      (await must(admin.rpc("claim_job", { p_worker_id: worker, p_user_id: userId }))) as ClaimRow[];
+
+    it("claims a due job once; a concurrent claim gets 0 rows; p_user_id filters; future run_after is skipped; stale lock re-claimed", async () => {
+      const f = await seedUser("f");
+      try {
+        // p_user_id filters to that user only.
+        expect(await claim("w-other", crypto.randomUUID())).toEqual([]);
+        // Two concurrent claims of f's single due job: exactly one row in total.
+        const [x, y] = await Promise.all([claim("w-1", f.userId), claim("w-2", f.userId)]);
+        const claimed = [...x, ...y];
+        expect(claimed).toHaveLength(1);
+        expect(claimed[0]).toMatchObject({ id: f.ids.jobs, status: "running", attempts: 1 });
+        // Running with a fresh lock: not claimable.
+        expect(await claim("w-3", f.userId)).toEqual([]);
+        // Lock older than 2 minutes: re-claimed with attempts + 1.
+        await must(
+          admin
+            .from("jobs")
+            .update({ locked_at: new Date(Date.now() - 3 * 60_000).toISOString() })
+            .eq("id", f.ids.jobs)
+            .select("id"),
+        );
+        const again = await claim("w-4", f.userId);
+        expect(again).toHaveLength(1);
+        expect(again[0]).toMatchObject({ attempts: 2, locked_by: "w-4" });
+        // Future run_after: not claimed.
+        await must(
+          admin
+            .from("jobs")
+            .update({ status: "queued", locked_at: null, locked_by: null, run_after: new Date(Date.now() + 3_600_000).toISOString() })
+            .eq("id", f.ids.jobs)
+            .select("id"),
+        );
+        expect(await claim("w-5", f.userId)).toEqual([]);
+      } finally {
+        await admin.auth.admin.deleteUser(f.userId);
+      }
+    });
+
+    it("a job idle for 61 minutes is expired: JOB_EXPIRED, empty state, analysis failed", async () => {
+      const g = await seedUser("g");
+      try {
+        await must(admin.from("jobs").delete().eq("id", g.ids.jobs).select("id"));
+        const old = new Date(Date.now() - 61 * 60_000).toISOString();
+        const inserted = (await must(
+          admin
+            .from("jobs")
+            .insert({
+              user_id: g.userId,
+              kind: "analyze",
+              ref_id: g.ids.analyses,
+              step: "fetch:0",
+              state: { snippets: [{ path: "a.ts", text: "redacted" }] },
+              updated_at: old,
+            })
+            .select("id")
+            .single(),
+        )) as { id: string };
+        expect(await must(admin.rpc("expire_stale_jobs"))).toBeGreaterThanOrEqual(1);
+        const job = (await must(
+          admin.from("jobs").select("status, state, last_error_code").eq("id", inserted.id).single(),
+        )) as { status: string; state: unknown; last_error_code: string };
+        expect(job).toEqual({ status: "failed", state: {}, last_error_code: "JOB_EXPIRED" });
+        const analysis = (await must(
+          admin.from("analyses").select("status, error_code").eq("id", g.ids.analyses).single(),
+        )) as { status: string; error_code: string };
+        expect(analysis).toEqual({ status: "failed", error_code: "JOB_EXPIRED" });
+      } finally {
+        await admin.auth.admin.deleteUser(g.userId);
+      }
+    });
+
+    it("expire_stale_jobs is service-role only", async () => {
+      expect((await a.client.rpc("expire_stale_jobs")).error).not.toBeNull();
+    });
+  });
+
   it("profiles: A cannot read or update B's profile", async () => {
     const read = await a.client.from("profiles").select("id").eq("id", b.userId);
     expect(read.data ?? []).toHaveLength(0);

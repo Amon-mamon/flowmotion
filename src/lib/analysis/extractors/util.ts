@@ -10,11 +10,33 @@ export type Extractor = (file: ExtractorFile) => Signal[];
 
 export const MAX_LABEL_LENGTH = 120;
 
-/** 1-based line of a character index. */
+/** Matches kept per regexp and per extractor in one file (S2-3). */
+export const MAX_MATCHES_PER_EXTRACTOR = 500;
+
+// Line starts of the file being processed, computed once per text (S2-3).
+let cachedText: string | null = null;
+let cachedStarts: number[] = [0];
+
+function lineStartsOf(text: string): number[] {
+  if (cachedText === text) return cachedStarts;
+  const starts = [0];
+  for (let i = 0; i < text.length; i += 1) if (text.charCodeAt(i) === 10) starts.push(i + 1);
+  cachedText = text;
+  cachedStarts = starts;
+  return starts;
+}
+
+/** 1-based line of a character index (binary search over cached line starts). */
 export function lineOf(text: string, index: number): number {
-  let line = 1;
-  for (let i = 0; i < index && i < text.length; i += 1) if (text.charCodeAt(i) === 10) line += 1;
-  return line;
+  const starts = lineStartsOf(text);
+  let low = 0;
+  let high = starts.length - 1;
+  while (low < high) {
+    const mid = (low + high + 1) >> 1;
+    if ((starts[mid] ?? 0) <= index) low = mid;
+    else high = mid - 1;
+  }
+  return low + 1;
 }
 
 /** Plain-text label: control characters removed, whitespace collapsed, max 120 chars. */
@@ -54,7 +76,10 @@ export function collect(
   const flags = regexp.flags.includes("g") ? regexp.flags : `${regexp.flags}g`;
   const re = new RegExp(regexp.source, flags);
   let match: RegExpExecArray | null;
+  let matches = 0;
   while ((match = re.exec(text)) !== null) {
+    matches += 1;
+    if (matches > MAX_MATCHES_PER_EXTRACTOR) break;
     if (match[0].length === 0) {
       re.lastIndex += 1;
       continue;

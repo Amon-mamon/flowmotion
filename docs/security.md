@@ -7,7 +7,7 @@ Flow Motion reads other people's code, so security is a core feature. Owned by t
 ## 1. Never read secret files
 Path policy runs **before** any fetch. Order: deny list, then extension allowlist, then size cap.
 
-**Deny (never fetch, never open):** `.env`, `.env.*` (except the single exact basename `.env.example`, see below), `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*`, `id_ed25519*`, `*.ppk`, `.npmrc`, `.pypirc`, `.netrc`, `.git-credentials`, `.aws/`, `.ssh/`, `.gcloud/`, `.kube/`, `.docker/config.json`, `*credentials*`, `*secret*`, `*secrets*`, `service-account*.json`, `*.tfstate`, `*.tfstate.backup`, `terraform.tfvars`, `*.tfvars`, `*.sqlite`, `*.db`, `*.dump`, `.git/`, `node_modules/`, lockfile bodies, build output, binaries, archives, images, media.
+**Deny (never fetch, never open):** `.env`, `.env.*` (except the single exact basename `.env.example`, see below), `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*`, `id_ed25519*`, `*.ppk`, `.npmrc`, `.pypirc`, `.netrc`, `.git-credentials`, `.aws/`, `.ssh/`, `.gcloud/`, `.kube/`, `.docker/config.json`, `*credentials*`, `*secret*`, `*secrets*`, `service-account*.json`, `*.tfstate`, `*.tfstate.backup`, `terraform.tfvars`, `*.tfvars`, `*.sqlite`, `*.db`, `*.dump`, and (D-31, S2-7) `.yarnrc.yml`, `auth.json` (any directory, including `.composer/auth.json`), `credentials.json`, `.htpasswd`, `.pgpass`, `wp-config.php`, `*.p8`; `.git/`, `node_modules/`, lockfile bodies, build output, binaries, archives, images, media.
 **Allow (examples):** source code, `package.json`, framework configs, route/handler files, CI workflow files, schema files, README.
 **Explicit exception — `.env.example`:** the deny glob `.env.*` has exactly one exception: a file whose basename is exactly `.env.example` (case-sensitive, any directory) passes the path policy because it holds variable names only. It is still fetched through the normal pipeline and **still goes through the secret scanner**; any match there becomes a finding like any other file. Every other `.env.*` name stays denied: `.env.local`, `.env.production`, `.env.example.bak`, `.env.sample`, `.env.example.local`, `env.example` (no leading dot is not an env file but is also not the exception), `.ENV.EXAMPLE`.
 **Broad globs block ordinary files:** `*secret*`, `*credentials*`, `*secrets*` will also deny ordinary source such as `secrets-manager-client.ts` or `credentialsForm.tsx`. This is intended (deny first, no exceptions beyond `.env.example`), but the analysis must stay honest about it: blocked files are counted by reason (`denied`, `extension`, `size`) and files dropped by the token budget as `budget`, and the analysis UI shows these counts grouped by reason (`contract.md` section 6, `GET /api/analyses/:id` counts).
@@ -16,7 +16,35 @@ Path policy runs **before** any fetch. Order: deny list, then extension allowlis
 **Required path-policy tests** (every pattern above plus): `./.env`, `a/../.env`, uppercase variants, `.env.local`, Windows separators (`sub\.env`), `.env.example` allowed at root and in a subdirectory, `.env.example.bak` and `.env.sample` denied, `.ENV.EXAMPLE` denied, and a test that `.env.example` content is passed to the secret scanner.
 
 ## 2. Secret scanner (content level)
-Runs on every file that was fetched. Patterns include: AWS keys, GitHub tokens, Slack tokens and webhook URLs, Stripe keys, Google API keys, private key blocks, JWTs, database URLs with passwords, generic high-entropy strings next to words like key, token, secret, password.
+Runs on every file that was fetched. Patterns include: AWS keys, GitHub tokens, Slack tokens and webhook URLs, Stripe keys, Google API keys, private key blocks, JWTs, database URLs with passwords, generic high-entropy strings next to words like key, token, secret, password. The base patterns are listed in `contract.md` section 11 (Phase 2 backend item 4); the additions below (D-28, S2-2) are required **before any AI provider is enabled** (Phase 2b).
+
+**Generic assignment rule (quoted and unquoted).**
+- *Name:* the variable or key name contains, case-insensitively, `key`, `token`, `secret`, `password`, `passwd`, `pwd`, `credential`, or `auth`.
+- *Quoted form (any fetched file):* `NAME` followed by `=`, `:`, `=>`, or `:=` and a value in `"…"`, `'…'`, or `` `…` ``.
+- *Unquoted form (config files only):* basename `.env.example`, extensions `.yml` `.yaml` `.toml`, basename `Dockerfile`, basename `Procfile`, and any `docker-compose*.yml` / `compose*.yml` or `.github/workflows/*` file. Line shapes: `NAME=VALUE` or `NAME: VALUE` at line start (after optional indentation), optionally prefixed by `export ` or `- ` (compose `environment:` lists, CI `env:` blocks); Dockerfile `ENV NAME=VALUE`, `ENV NAME VALUE`, `ARG NAME=VALUE`. `VALUE` is the run of characters up to the first whitespace, quote, or ` #` comment. Not applied to source code, where an unquoted value is an expression (`apiKey: process.env.OPENAI_API_KEY`).
+- *Match:* the value is at least 20 characters with Shannon entropy ≥ 3.5, **or** it matches a provider pattern below (provider patterns also run on their own over all text).
+- Category `hardcoded_secret` (`ci_secret` in CI, Dockerfile, compose; `client_exposed_secret` per the existing `NEXT_PUBLIC_` rule; `jwt_signing_secret` when the name contains `JWT` or `SESSION`).
+
+**Provider patterns (all fetched files, quoted or not; category `hardcoded_secret` unless the CI or client rule applies; masked type in parentheses):**
+| Provider | Pattern (regex, case-sensitive) |
+|---|---|
+| Anthropic (`Anthropic key`) | `\bsk-ant-[A-Za-z0-9_-]{20,}` |
+| OpenRouter (`OpenRouter key`) | `\bsk-or-[A-Za-z0-9_-]{32,}` |
+| OpenAI (`OpenAI key`) | `\bsk-(?!ant-\|or-)(?:proj-\|svcacct-\|admin-)?[A-Za-z0-9_-]{32,}` (checked after the two above) |
+| SendGrid (`SendGrid key`) | `\bSG\.[A-Za-z0-9_-]{16,32}\.[A-Za-z0-9_-]{30,64}` |
+| npm (`npm token`) | `\bnpm_[A-Za-z0-9]{36}\b` |
+| GitLab (`GitLab token`) | `\bglpat-[A-Za-z0-9_-]{20,}` |
+| Supabase (`Supabase service key`) | a JWT (existing pattern) whose decoded payload has `"role":"service_role"`; `\bsb_secret_[A-Za-z0-9_-]{20,}`. `sb_publishable_…` and anon JWTs are public and never match. |
+| Twilio (`Twilio key`) | API key `\bSK[0-9a-fA-F]{32}\b`; auth tokens through the generic rule (`TWILIO_AUTH_TOKEN`) |
+| Mailgun (`Mailgun key`) | `\bkey-[0-9a-f]{32}\b`; `\b[0-9a-f]{32}-[0-9a-f]{8}-[0-9a-f]{8}\b` |
+| Postmark (`Postmark token`) | a UUID assigned (quoted or unquoted) to a name containing `POSTMARK` (any case), or following `X-Postmark-Server-Token` / `X-Postmark-Account-Token`; entropy not required |
+| Resend (`Resend key`) | `\bre_[A-Za-z0-9]{6,12}_[A-Za-z0-9]{16,40}\b` with entropy ≥ 3.5 on the part after `re_` (avoids Python `re_` identifiers) |
+
+**Placeholders never match (every pattern above and the generic rule):** an empty value; a value starting with `your-` or `your_`; a value containing `changeme`, `example`, or `xxx` (case-insensitive); a value wrapped in `<…>`; a value containing `${` or `{{`, or starting with `$` (variable and CI secret references such as `${{ secrets.X }}`); a bare variable name (`^[A-Z][A-Z0-9_]*$`); a value made of one repeated character.
+
+**Tests (mandatory, AGENTS rule 11):** for every provider pattern and both generic forms, one positive case and one placeholder case that must **not** match; unquoted cases for `.env.example`, compose `environment:` list, YAML `password: …`, Dockerfile `ENV`/`ARG`, and a workflow `env:` block; a TypeScript `apiKey: process.env.X` line that must not match; `sk-ant-`/`sk-or-` reported as Anthropic/OpenRouter, not OpenAI; `sb_publishable_` and an anon JWT not matched; raw values absent from findings and redacted text.
+**Path-only findings for the D-31 deny entries** (file never opened, `line = null`, evidence `"file present (not opened)"`; in addition to the list in `contract.md` section 11 Phase 2 item 4): `.yarnrc.yml`, `credentials.json`, `.htpasswd`, `wp-config.php`, and `auth.json` at the repo root or under `.composer/` → `hardcoded_secret`; `.pgpass` → `db_connection_string`; `*.p8` → `private_key`. `auth.json` elsewhere is denied without a finding.
+
 - A match creates a finding with `masked_evidence` (first 2 and last 2 characters at most, or just the type) and `[REDACTED]` replaces it in anything sent to the model.
 - The scanner must never log or store the raw value. It runs in the same worker step that fetched the file, **before** anything is written to `jobs.state`, so only redacted text ever reaches the database (`contract.md` section 4).
 - Manifests read by the validity check (`package.json` and similar) are parsed in memory for dependency names only, never stored or logged.
@@ -31,9 +59,13 @@ Runs on every file that was fetched. Patterns include: AWS keys, GitHub tokens, 
 - **Repo full names are user input (D-23 / S11-4):** `^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$`, no `.` or `..` segment, also enforced in the GitHub path encoder.
 - **Branch names are user input (Phase 1.1):** validated with `branchNameSchema` (`contract.md` section 6) before any use, confirmed to exist through the GitHub API before a project is created, placed in GitHub API paths only with per-segment encoding, never used in shell commands, file paths, or URLs other than `api.github.com`, and rendered as plain text.
 - **Do not store source code.** Keep only derived results: recommendations, masked findings, flows. Delete temporary text when the analysis ends.
+- **Job state TTL (D-29, S2-5):** a job not `done`/`failed` whose `updated_at` is older than 1 hour is failed with `JOB_EXPIRED` and its `state` cleared by `expire_stale_jobs()` (run by every `claim_job()`, the poll kick, and the analyze route). So redacted snippets in `jobs.state` outlive a broken chain by about an hour plus the time until the next worker call or poll.
+- **Worker bearer (D-30, S2-6):** the worker Edge Function accepts only `Authorization: Bearer <WORKER_TOKEN>` (dedicated random token, at least 64 hex characters, constant-time compare, missing or short token = reject everything). The service-role key is never used as a bearer and never stored in Vault.
+- **Local worker scope (D-27, R2-2):** the in-process development worker claims only jobs of the user whose request triggered it (`claim_job(p_worker_id, p_user_id)`), so a laptop running `next dev` against a shared database never processes other users' analyses.
 - Never log file contents, model prompts, or model outputs containing repo text. Log ids, counts, and error codes only.
 - Tell users plainly (privacy page) that redacted snippets are sent to the AI provider. Check the provider's retention terms before launch.
 - **AI provider choice (D-16, OQ-19):** no provider may receive real users' code if its terms allow training on submitted data or retention beyond what `/privacy` states. Free-tier hosted APIs commonly allow this, so they are acceptable only for the owner's own test repositories, never for real users. The AI kill switch (`contract.md` section 10) stays on until the owner has chosen a provider that meets this rule.
+- **OpenRouter is development only (D-24, Phase 2b):** free OpenRouter endpoints (and some paid upstream providers behind it) may log prompts or train on them, so `ANALYSIS_PROVIDER=openrouter` is for the owner's own test repositories only, never real users' code. Enforced in code, fail closed: `resolveModelConfig` refuses `openrouter` when `NODE_ENV=production` or `APP_URL` is not `localhost` / `127.0.0.1` / `[::1]` (the analysis ends `AI_DISABLED`). `OPENROUTER_API_KEY` is server-only (never `NEXT_PUBLIC_`, never logged, never in errors). The adapter sends no identifying headers. Anthropic stays the only production provider, so `/privacy` does not change; OQ-12 (Anthropic retention in writing) still gates launch. Launch checklist: no environment that serves real users has `ANALYSIS_PROVIDER=openrouter` or an `OPENROUTER_API_KEY`.
 - Project repo coverage: `POST /api/projects` accepts a repo only if `GET /repos/{owner}/{repo}/installation` (App JWT) returns the caller's own installation id, since an installation token can read any public repo. The composite FK `projects(installation_id, user_id)` keeps a project's installation owned by the same user.
 - "Delete my data": removing a project deletes its analyses, findings, recommendations, flows, test runs, and jobs in one transaction (service-role-only `delete_project()`, `contract.md` section 5).
 
@@ -42,7 +74,7 @@ Runs on every file that was fetched. Patterns include: AWS keys, GitHub tokens, 
 - The analysis and generation models have **no tools** and cannot fetch URLs.
 - All model output goes through Zod. Free text from the model is rendered as plain text, never as HTML.
 - Never execute, install, or build anything from a user repo.
-- Never fetch URLs found in repo content (SSRF). The only outbound calls are to the GitHub API, the AI provider, and Supabase.
+- Never fetch URLs found in repo content (SSRF). The only outbound calls are to the GitHub API, the AI provider (`api.anthropic.com`; `openrouter.ai` in development only, D-24), and Supabase.
 
 ## 5. Application security
 - Supabase RLS on every table; tests that user A cannot read or write user B's rows.
