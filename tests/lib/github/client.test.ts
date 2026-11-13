@@ -125,12 +125,23 @@ describe("getInstallationRepo", () => {
   it("returns the repo with one call to GET /repos/:owner/:repo", async () => {
     const fetchMock = vi.fn<FetchLike>(async () => jsonResponse(repo(7)));
     expect(await getInstallationRepo({ token: "t", fetch: fetchMock }, "octo/repo-7")).toEqual({
+      id: 7,
       fullName: "octo/repo-7",
       defaultBranch: "main",
       private: false,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.github.com/repos/octo/repo-7");
+  });
+
+  it("refuses . and .. segments before any request (S11-4)", async () => {
+    const fetchMock = vi.fn<FetchLike>(async () => jsonResponse(repo(1)));
+    for (const name of ["../meta", "octo/..", "./x", "octo/."]) {
+      await expect(getInstallationRepo({ token: "t", fetch: fetchMock }, name)).rejects.toMatchObject({
+        status: 400,
+      });
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("returns null on 404 (not accessible to the installation)", async () => {

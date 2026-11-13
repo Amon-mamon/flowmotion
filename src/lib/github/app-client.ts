@@ -26,7 +26,14 @@ export async function getRepoInstallationId(
   fullName: string,
 ): Promise<number | null> {
   const [owner, name, ...rest] = fullName.split("/");
-  if (owner === undefined || name === undefined || owner === "" || name === "" || rest.length > 0) {
+  if (
+    owner === undefined ||
+    name === undefined ||
+    owner === "" ||
+    name === "" ||
+    rest.length > 0 ||
+    [owner, name].some((segment) => segment === "." || segment === "..")
+  ) {
     throw new GitHubApiError("repository path", 400, "Repository name must be owner/name");
   }
   const operation = "get repository installation";

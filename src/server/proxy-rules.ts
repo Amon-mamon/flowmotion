@@ -17,6 +17,7 @@ export const UNCHECKED_API_PATHS: ReadonlySet<string> = new Set([
 /** Browser-navigated API routes: unauthenticated users go to /login. */
 export const BROWSER_API_PATHS: ReadonlySet<string> = new Set([
   "/api/github/install",
+  "/api/github/authorize",
   "/api/github/installations/callback",
 ]);
 

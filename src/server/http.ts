@@ -29,6 +29,7 @@ export const DEFAULT_MESSAGES: Readonly<Record<ErrorCode, string>> = {
   FORBIDDEN: "This request is not allowed.",
   NOT_FOUND: "Not found.",
   VALIDATION_ERROR: "The request is invalid.",
+  GITHUB_REFRESH_REQUIRED: "Refresh repository access to continue.",
   RATE_LIMITED: "Too many requests. Please try again in a minute.",
   DAILY_CAP_REACHED: "Daily limit reached.",
   PROJECT_STALE_ANALYSIS: "The analysis is older than the repository's latest commit.",

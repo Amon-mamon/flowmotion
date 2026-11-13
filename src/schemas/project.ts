@@ -1,7 +1,10 @@
 import { z } from "zod";
 
-import { isoDateTimeSchema, uuidSchema } from "@/schemas/api";
-import { repoFullNameSchema } from "@/schemas/github";
+import { analysisStatusSchema } from "@/schemas/analysis";
+import { isoDateTimeSchema, jobErrorCodeSchema, uuidSchema } from "@/schemas/api";
+import { branchNameSchema, repoFullNameSchema } from "@/schemas/github";
+
+export { analysisStatusSchema, type AnalysisStatus } from "@/schemas/analysis";
 
 export const projectStatusSchema = z.enum(["pending", "valid", "invalid"]);
 export type ProjectStatus = z.infer<typeof projectStatusSchema>;
@@ -9,22 +12,14 @@ export type ProjectStatus = z.infer<typeof projectStatusSchema>;
 export const detectedKindSchema = z.enum(["website", "app"]);
 export type DetectedKind = z.infer<typeof detectedKindSchema>;
 
-export const analysisStatusSchema = z.enum([
-  "queued",
-  "validating",
-  "scanning",
-  "analyzing",
-  "done",
-  "failed",
-  "rejected",
-]);
-export type AnalysisStatus = z.infer<typeof analysisStatusSchema>;
-
 /** Project DTO (docs/contract.md section 6). */
 export const projectSchema = z.object({
   id: uuidSchema,
   repoFullName: repoFullNameSchema,
+  /** Repository default branch at creation time (display only). */
   defaultBranch: z.string(),
+  /** Branch chosen by the user (Phase 1.1); the only branch analyzed. */
+  branch: z.string(),
   status: projectStatusSchema,
   invalidReason: z.string().nullable(),
   detectedKind: detectedKindSchema.nullable(),
@@ -40,12 +35,13 @@ export const projectAnalysisSummarySchema = z.object({
   id: uuidSchema,
   status: analysisStatusSchema,
   commitSha: z.string().nullable(),
+  errorCode: jobErrorCodeSchema.nullable(),
   startedAt: isoDateTimeSchema.nullable(),
   finishedAt: isoDateTimeSchema.nullable(),
 });
 export type ProjectAnalysisSummary = z.infer<typeof projectAnalysisSummarySchema>;
 
-/** GET /api/projects/:id */
+/** GET /api/projects/:id (analyses newest first, at most 20). */
 export const projectDetailSchema = projectSchema.extend({
   analyses: z.array(projectAnalysisSummarySchema),
 });
@@ -61,6 +57,7 @@ export type ProjectsResponse = z.infer<typeof projectsResponseSchema>;
 export const createProjectBodySchema = z.object({
   repoFullName: repoFullNameSchema,
   installationId: uuidSchema,
+  branch: branchNameSchema,
 });
 export type CreateProjectBody = z.infer<typeof createProjectBodySchema>;
 

@@ -48,6 +48,23 @@ export function installUrl(state: string): string {
   return `https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new?state=${encodeURIComponent(state)}`;
 }
 
+/** Path the callback falls back to when GitHub returns without our state (D-20). */
+export const AUTHORIZE_PATH = "/api/github/authorize";
+export const INSTALLATION_CALLBACK_PATH = "/api/github/installations/callback";
+
+/**
+ * GitHub App user authorization URL (no scopes) that returns to our
+ * installations callback with `state` (contract section 6, D-20).
+ */
+export function authorizeUrl(state: string): string {
+  const env = getServerEnv();
+  const url = new URL("https://github.com/login/oauth/authorize");
+  url.searchParams.set("client_id", env.GITHUB_APP_CLIENT_ID);
+  url.searchParams.set("state", state);
+  url.searchParams.set("redirect_uri", new URL(INSTALLATION_CALLBACK_PATH, env.APP_URL).toString());
+  return url.toString();
+}
+
 /** Installation id that covers `fullName`, or null when the App is not installed on it. */
 export async function repoInstallationId(fullName: string): Promise<number | null> {
   const env = getServerEnv();

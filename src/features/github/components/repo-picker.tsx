@@ -7,28 +7,42 @@ import { ErrorState } from "@/components/shared/error-state";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { describeError } from "@/features/api/client";
+import { BranchPicker } from "@/features/github/components/branch-picker";
+import {
+  RefreshAccessLink,
+  RefreshAccessNotice,
+  isRefreshRequired,
+} from "@/features/github/components/refresh-access-notice";
 import { useInstallationRepos, useInstallations } from "@/features/github/queries";
 import type { Repo } from "@/features/github/schemas";
-import { useCreateProject } from "@/features/projects/queries";
 import type { Project } from "@/features/projects/schemas";
 import { cn } from "@/lib/utils";
+
+export type RepoPickerStep = "repo" | "branch";
 
 type RepoPickerProps = {
   onCreated: (project: Project) => void;
   onCancel: () => void;
+  /** Lets the dialog switch its title and description per step. */
+  onStepChange?: (step: RepoPickerStep) => void;
 };
 
 /**
- * Repo picker: choose an installation, pick a repo (paged on `hasMore`),
- * confirm with `POST /api/projects`.
+ * Two-step repo picker (design.md "Add repository"): step 1 chooses an
+ * installation and a repo (paged on `hasMore`); step 2 chooses a branch and
+ * confirms with `POST /api/projects { repoFullName, installationId, branch }`.
  */
-export function RepoPicker({ onCreated, onCancel }: RepoPickerProps) {
+export function RepoPicker({ onCreated, onCancel, onStepChange }: RepoPickerProps) {
   const installations = useInstallations();
   const [installationId, setInstallationId] = useState<string | null>(null);
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null);
-  const create = useCreateProject();
+  const [step, setStepState] = useState<RepoPickerStep>("repo");
   const selectId = useId();
+
+  function setStep(next: RepoPickerStep) {
+    setStepState(next);
+    onStepChange?.(next);
+  }
 
   // Default to the first installation once loaded.
   const effectiveInstallationId =
@@ -67,18 +81,28 @@ export function RepoPicker({ onCreated, onCancel }: RepoPickerProps) {
         <a href="/api/github/install" className={cn(buttonVariants({ variant: "default" }))}>
           Connect GitHub
         </a>
+        <a href="/api/github/authorize" className="text-sm text-primary underline-offset-4 hover:underline">
+          Link existing installation
+        </a>
       </div>
     );
   }
 
   const allRepos = repos.data?.pages.flatMap((page) => page.repos) ?? [];
 
-  function submit() {
-    if (!selectedRepo || !effectiveInstallationId) return;
-    create.mutate(
-      { repoFullName: selectedRepo.fullName, installationId: effectiveInstallationId },
-      { onSuccess: onCreated },
+  if (step === "branch" && selectedRepo && effectiveInstallationId) {
+    return (
+      <BranchPicker
+        installationId={effectiveInstallationId}
+        repo={selectedRepo}
+        onBack={() => setStep("repo")}
+        onCreated={onCreated}
+      />
     );
+  }
+
+  function next() {
+    if (selectedRepo && effectiveInstallationId) setStep("branch");
   }
 
   return (
@@ -86,7 +110,7 @@ export function RepoPicker({ onCreated, onCancel }: RepoPickerProps) {
       className="flex flex-col gap-5"
       onSubmit={(event) => {
         event.preventDefault();
-        submit();
+        next();
       }}
     >
       <div className="flex flex-col gap-2">
@@ -97,7 +121,6 @@ export function RepoPicker({ onCreated, onCancel }: RepoPickerProps) {
           onChange={(event) => {
             setInstallationId(event.target.value);
             setSelectedRepo(null);
-            create.reset();
           }}
           className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         >
@@ -117,6 +140,8 @@ export function RepoPicker({ onCreated, onCancel }: RepoPickerProps) {
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
           </div>
+        ) : repos.isError && isRefreshRequired(repos.error) ? (
+          <RefreshAccessNotice />
         ) : repos.isError ? (
           <ErrorState
             title="Could not load repositories"
@@ -161,7 +186,6 @@ export function RepoPicker({ onCreated, onCancel }: RepoPickerProps) {
                       checked={checked}
                       onChange={() => {
                         setSelectedRepo(repo);
-                        create.reset();
                       }}
                       className="accent-primary"
                     />
@@ -189,24 +213,24 @@ export function RepoPicker({ onCreated, onCancel }: RepoPickerProps) {
         ) : null}
       </fieldset>
 
-      {create.isError ? (
-        <p role="alert" className="text-sm text-primary">
-          {describeError(create.error)}
-        </p>
-      ) : null}
-
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
-        <a
-          href="/api/github/install"
-          className="text-sm text-primary underline-offset-4 hover:underline sm:mr-auto"
-        >
-          Connect another account
-        </a>
-        <Button type="button" variant="outline" onClick={onCancel} disabled={create.isPending}>
+        <div className="flex flex-col gap-1 sm:mr-auto">
+          {/* Plain anchors: these routes redirect to GitHub and must not be prefetched. */}
+          <a href="/api/github/authorize" className="text-sm text-primary underline-offset-4 hover:underline">
+            Link existing installation
+          </a>
+          <p className="text-sm text-muted-foreground" data-testid="missing-repo">
+            Missing a repository? <RefreshAccessLink />
+          </p>
+          <a href="/api/github/install" className="text-sm text-primary underline-offset-4 hover:underline">
+            Connect another account
+          </a>
+        </div>
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" disabled={!selectedRepo || create.isPending}>
-          {create.isPending ? "Adding…" : "Add repository"}
+        <Button type="submit" disabled={!selectedRepo}>
+          Next
         </Button>
       </div>
     </form>

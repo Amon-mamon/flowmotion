@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField, fieldAria } from "@/components/shared/form-field";
+import { loginErrorMessage } from "@/features/auth/error-messages";
 import { loginSchema, type LoginValues } from "@/features/auth/schemas";
 import { createClient } from "@/lib/supabase/client";
 
@@ -41,8 +42,8 @@ export function LoginForm() {
       password: values.password,
     });
     if (error) {
-      // Generic on purpose (docs/contract.md Phase 1 scope).
-      setFormError("Invalid email or password");
+      // Generic on purpose (docs/contract.md Phase 1 scope); only a rate limit gets its own copy.
+      setFormError(loginErrorMessage(error));
       return;
     }
     setSignedIn(true);

@@ -10,6 +10,7 @@ export const ERROR_CODES = [
   "FORBIDDEN",
   "NOT_FOUND",
   "VALIDATION_ERROR",
+  "GITHUB_REFRESH_REQUIRED",
   "RATE_LIMITED",
   "DAILY_CAP_REACHED",
   "PROJECT_STALE_ANALYSIS",
@@ -26,6 +27,7 @@ export const ERROR_STATUS: Readonly<Record<ErrorCode, number>> = {
   FORBIDDEN: 403,
   NOT_FOUND: 404,
   VALIDATION_ERROR: 400,
+  GITHUB_REFRESH_REQUIRED: 403,
   RATE_LIMITED: 429,
   DAILY_CAP_REACHED: 429,
   PROJECT_STALE_ANALYSIS: 409,
@@ -36,6 +38,9 @@ export const ERROR_STATUS: Readonly<Record<ErrorCode, number>> = {
 /** Job-level codes stored on analyses/flows rows, never an HTTP response. */
 export const JOB_ERROR_CODES = [
   "PROJECT_INVALID",
+  "AI_DISABLED",
+  "GITHUB_ACCESS_LOST",
+  "BRANCH_NOT_FOUND",
   "MODEL_OUTPUT_INVALID",
   "GENERATION_EXHAUSTED",
   "INTERNAL",

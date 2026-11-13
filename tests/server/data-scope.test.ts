@@ -126,11 +126,27 @@ describe("createProject", () => {
   it("maps a unique violation to the contract message", async () => {
     h.next = { data: null, error: { code: "23505" } };
     await expect(
-      createProject({ userId: USER, installationRowId: OTHER_ID, repoFullName: "octo/site", defaultBranch: "main" }),
-    ).rejects.toMatchObject({ code: "VALIDATION_ERROR", message: "This repository is already connected" });
+      createProject({
+        userId: USER,
+        installationRowId: OTHER_ID,
+        repoFullName: "octo/site",
+        repoId: 101,
+        defaultBranch: "main",
+        branch: "feature/x",
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR", message: "This repository and branch are already connected" });
     expect(lastCalls()[0]).toEqual([
       "insert",
-      [{ user_id: USER, installation_id: OTHER_ID, repo_full_name: "octo/site", default_branch: "main" }],
+      [
+        {
+          user_id: USER,
+          installation_id: OTHER_ID,
+          repo_full_name: "octo/site",
+          repo_id: 101,
+          default_branch: "main",
+          branch: "feature/x",
+        },
+      ],
     ]);
   });
 });

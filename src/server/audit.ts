@@ -6,6 +6,7 @@ import { logServerError } from "@/server/log";
 /** Audit actions written in Phase 1. More arrive with later phases. */
 export type AuditAction =
   | "github.connect"
+  | "github.sync"
   | "github.disconnect"
   | "project.create"
   | "project.delete";

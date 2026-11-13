@@ -15,24 +15,57 @@ const env = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/env.server", () => ({ getServerEnv: () => env }));
 
-const { deleteByGitHubId, upsertInstallation, sessionUser, verifyOwnership } = vi.hoisted(() => ({
+type InstallationAccess = {
+  installationId: number;
+  accountLogin: string;
+  repos: { id: number; fullName: string; private: boolean; defaultBranch: string }[];
+};
+type AccessSync = {
+  user: { id: number; login: string };
+  installations: InstallationAccess[];
+  droppedRepos: number;
+  truncatedRepos: number;
+};
+const {
+  deleteByGitHubId,
+  revokeRepos,
+  linkInstallations,
+  sessionUser,
+  resolveAccess,
+  audit,
+  handlePush,
+  ipLimit,
+} = vi.hoisted(() => ({
   deleteByGitHubId: vi.fn<(id: number) => Promise<number>>(async () => 1),
-  upsertInstallation: vi.fn<
-    (input: { userId: string; installationId: number; accountLogin: string }) => Promise<{ id: string }>
-  >(async () => ({ id: "11111111-1111-4111-8111-111111111111" })),
+  revokeRepos: vi.fn<(id: number, repoIds: readonly number[]) => Promise<number>>(async () => 1),
+  linkInstallations: vi.fn<
+    (input: {
+      userId: string;
+      githubUserId: number;
+      githubUserLogin: string;
+      installations: readonly InstallationAccess[];
+    }) => Promise<number[]>
+  >(async (input) => input.installations.map((item) => item.installationId)),
   sessionUser: vi.fn<() => Promise<{ id: string; email: string } | null>>(),
-  verifyOwnership: vi.fn(),
+  resolveAccess: vi.fn<(input: { code: string }) => Promise<AccessSync>>(),
+  audit: vi.fn(async () => undefined),
+  handlePush: vi.fn(async () => 0),
+  ipLimit: vi.fn(async () => undefined),
 }));
-vi.mock("@/server/installations", () => ({
+vi.mock("@/server/installations", async (importOriginal) => ({
+  GitHubAccountMismatchError: (await importOriginal<typeof import("@/server/installations")>())
+    .GitHubAccountMismatchError,
   deleteInstallationsByGitHubId: deleteByGitHubId,
-  upsertInstallation,
+  revokeInstallationRepos: revokeRepos,
+  linkGithubInstallations: linkInstallations,
 }));
+vi.mock("@/server/github/push", () => ({ handlePushEvent: handlePush }));
 vi.mock("@/server/rate-limit", () => ({
   RATE_LIMITS: { api: 120, heavy: 10, auth: 20, webhook: 60 },
-  enforceIpLimit: vi.fn(async () => undefined),
+  enforceIpLimit: ipLimit,
   enforceUserLimit: vi.fn(async () => undefined),
 }));
-vi.mock("@/server/audit", () => ({ audit: vi.fn(async () => undefined) }));
+vi.mock("@/server/audit", () => ({ audit }));
 
 vi.mock("@/server/auth", () => ({
   getSessionUser: () => sessionUser(),
@@ -44,12 +77,15 @@ vi.mock("@/server/auth", () => ({
   requireSameOrigin: () => undefined,
 }));
 
-vi.mock("@/server/github/user-auth", () => ({ verifyInstallationOwnership: verifyOwnership }));
+vi.mock("@/server/github/user-auth", () => ({ resolveUserAccess: resolveAccess }));
 
 import { computeWebhookSignature } from "@/lib/github/webhook-signature";
 import { GET as callback } from "@/app/api/github/installations/callback/route";
+import { GET as authorize } from "@/app/api/github/authorize/route";
 import { GET as install } from "@/app/api/github/install/route";
 import { POST as webhook } from "@/app/api/github/webhook/route";
+import { GitHubAccountMismatchError } from "@/server/installations";
+import { ApiError } from "@/server/http";
 
 const ctx = { params: Promise.resolve({}) };
 
@@ -130,7 +166,6 @@ describe("POST /api/github/webhook", () => {
 
   it("other events are acknowledged and ignored", async () => {
     for (const [event, body] of [
-      ["push", { ref: "refs/heads/main" }],
       ["installation", { action: "created", installation: { id: 1 } }],
       ["ping", { zen: "x" }],
     ] as const) {
@@ -138,6 +173,115 @@ describe("POST /api/github/webhook", () => {
       expect(await response.json()).toEqual({ ok: true, data: { received: true } });
     }
     expect(deleteByGitHubId).not.toHaveBeenCalled();
+    expect(handlePush).not.toHaveBeenCalled();
+  });
+
+  it("push â†’ parsed payload handed to the push handler (matching is tested in push.test.ts)", async () => {
+    const push = {
+      ref: "refs/heads/feature/x",
+      after: "a".repeat(40),
+      repository: { full_name: "octo/site" },
+      installation: { id: 4242 },
+    };
+    const response = await webhook(await webhookRequest("push", push), ctx);
+    expect(await response.json()).toEqual({ ok: true, data: { received: true } });
+    expect(handlePush).toHaveBeenCalledWith(push);
+  });
+
+  it("push with a malformed payload â†’ 400, nothing updated", async () => {
+    const response = await webhook(await webhookRequest("push", { ref: "refs/heads/main" }), ctx);
+    expect(response.status).toBe(400);
+    expect(handlePush).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/github/webhook installation_repositories (D-22)", () => {
+  it("removed → deletes those repo ids from every user's set for that installation", async () => {
+    const body = {
+      action: "removed",
+      installation: { id: 4242 },
+      repositories_removed: [{ id: 11, full_name: "octo/a" }, { id: 12, full_name: "octo/b" }],
+    };
+    const response = await webhook(await webhookRequest("installation_repositories", body), ctx);
+    expect(await response.json()).toEqual({ ok: true, data: { received: true } });
+    expect(revokeRepos).toHaveBeenCalledWith(4242, [11, 12]);
+  });
+
+  it("added → nothing changes until each user refreshes", async () => {
+    const body = {
+      action: "added",
+      installation: { id: 4242 },
+      repositories_added: [{ id: 13, full_name: "octo/c" }],
+    };
+    const response = await webhook(await webhookRequest("installation_repositories", body), ctx);
+    expect(response.status).toBe(200);
+    expect(revokeRepos).not.toHaveBeenCalled();
+  });
+
+  it("bad signature → 403, nothing revoked", async () => {
+    const body = { action: "removed", installation: { id: 4242 }, repositories_removed: [{ id: 11 }] };
+    const response = await webhook(await webhookRequest("installation_repositories", body, "sha256=" + "0".repeat(64)), ctx);
+    expect(response.status).toBe(403);
+    expect(revokeRepos).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/github/authorize", () => {
+  it("sets fm_gh_state and redirects to GitHub App user authorization with our callback", async () => {
+    sessionUser.mockResolvedValue({ id: "u1", email: "a@b.c" });
+    const response = await authorize(new Request("https://app.example.com/api/github/authorize"), ctx);
+    expect(response.status).toBe(307);
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(location.origin + location.pathname).toBe("https://github.com/login/oauth/authorize");
+    expect(location.searchParams.get("client_id")).toBe("Iv1.id");
+    expect(location.searchParams.get("redirect_uri")).toBe(
+      "https://app.example.com/api/github/installations/callback",
+    );
+    expect(location.searchParams.get("scope")).toBeNull();
+    const state = location.searchParams.get("state") ?? "";
+    expect(state).toMatch(/^[0-9a-f]{64}$/);
+    const cookie = response.headers.get("set-cookie") ?? "";
+    expect(cookie).toContain(`fm_gh_state=u1.${state}`);
+    expect(cookie).toMatch(/HttpOnly/i);
+    expect(cookie).toMatch(/SameSite=lax/i);
+    expect(cookie).toMatch(/Max-Age=600/i);
+  });
+
+  it("S11-3: Sec-Fetch-Site cross-site → /dashboard?error=github, no cookie", async () => {
+    sessionUser.mockResolvedValue({ id: "u1", email: "a@b.c" });
+    const response = await authorize(
+      new Request("https://app.example.com/api/github/authorize", { headers: { "sec-fetch-site": "cross-site" } }),
+      ctx,
+    );
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("same-origin and same-site navigations are allowed", async () => {
+    sessionUser.mockResolvedValue({ id: "u1", email: "a@b.c" });
+    for (const site of ["same-origin", "same-site", "none"]) {
+      const response = await authorize(
+        new Request("https://app.example.com/api/github/authorize", { headers: { "sec-fetch-site": site } }),
+        ctx,
+      );
+      expect(new URL(response.headers.get("location") ?? "").host).toBe("github.com");
+    }
+  });
+
+  it("S11-5: rate limited → /dashboard?error=github, never JSON", async () => {
+    sessionUser.mockResolvedValue({ id: "u1", email: "a@b.c" });
+    ipLimit.mockRejectedValueOnce(new ApiError("RATE_LIMITED"));
+    const response = await authorize(new Request("https://app.example.com/api/github/authorize"), ctx);
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("redirects to /login without a session, no cookie", async () => {
+    sessionUser.mockResolvedValue(null);
+    const response = await authorize(new Request("https://app.example.com/api/github/authorize"), ctx);
+    expect(response.headers.get("location")).toBe("https://app.example.com/login");
+    expect(response.headers.get("set-cookie")).toBeNull();
   });
 });
 
@@ -160,6 +304,14 @@ describe("GET /api/github/install", () => {
     expect(cookie).toMatch(/Max-Age=600/i);
   });
 
+  it("S11-5: rate limited → /dashboard?error=github, never JSON", async () => {
+    sessionUser.mockResolvedValue({ id: "u1", email: "a@b.c" });
+    ipLimit.mockRejectedValueOnce(new ApiError("RATE_LIMITED"));
+    const response = await install(new Request("https://app.example.com/api/github/install"), ctx);
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
+  });
+
   it("redirects to /login without a session", async () => {
     sessionUser.mockResolvedValue(null);
     const response = await install(new Request("https://app.example.com/api/github/install"), ctx);
@@ -175,57 +327,141 @@ describe("GET /api/github/installations/callback", () => {
       headers: cookieState === null ? {} : { cookie: `other=1; fm_gh_state=${cookieState}` },
     });
   const goodQuery = `installation_id=77&setup_action=install&state=${STATE}&code=abc`;
+  const cleared = (response: Response) =>
+    expect(response.headers.get("set-cookie") ?? "").toMatch(/fm_gh_state=;.*Max-Age=0/i);
+  const repo = (id: number, fullName: string) => ({ id, fullName, private: true, defaultBranch: "main" });
+  const sync = (installations: InstallationAccess[]): AccessSync => ({
+    user: { id: 9001, login: "octocat" },
+    installations,
+    droppedRepos: 0,
+    truncatedRepos: 0,
+  });
 
   beforeEach(() => {
     sessionUser.mockResolvedValue({ id: "u1", email: "a@b.c" });
   });
 
+  it("no state (installed directly on GitHub) → /dashboard?link=github, nothing exchanged or written (S11-3)", async () => {
+    const response = await callback(callbackRequest("installation_id=77&setup_action=install&code=abc", COOKIE), ctx);
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?link=github");
+    expect(resolveAccess).not.toHaveBeenCalled();
+    expect(linkInstallations).not.toHaveBeenCalled();
+    expect(audit).not.toHaveBeenCalled();
+    cleared(response);
+  });
+
+  it("no state and no code → /dashboard?link=github", async () => {
+    const response = await callback(callbackRequest("", null), ctx);
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?link=github");
+    expect(resolveAccess).not.toHaveBeenCalled();
+    cleared(response);
+  });
+
+  it("empty state → treated as no state, never bound", async () => {
+    const response = await callback(callbackRequest("state=&code=abc&installation_id=77", COOKIE), ctx);
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?link=github");
+    expect(linkInstallations).not.toHaveBeenCalled();
+  });
+
   it("state mismatch → /dashboard?error=github, no GitHub call, cookie cleared", async () => {
     const response = await callback(callbackRequest(goodQuery, `u1.${"b".repeat(64)}`), ctx);
     expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
-    expect(verifyOwnership).not.toHaveBeenCalled();
-    expect(upsertInstallation).not.toHaveBeenCalled();
-    expect(response.headers.get("set-cookie") ?? "").toMatch(/fm_gh_state=;.*Max-Age=0/i);
+    expect(resolveAccess).not.toHaveBeenCalled();
+    expect(linkInstallations).not.toHaveBeenCalled();
+    cleared(response);
   });
 
   it("missing state cookie → error redirect", async () => {
     const response = await callback(callbackRequest(goodQuery, null), ctx);
     expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
-    expect(verifyOwnership).not.toHaveBeenCalled();
+    expect(resolveAccess).not.toHaveBeenCalled();
+    cleared(response);
   });
 
-  it("installation not owned by the GitHub user → error redirect, nothing stored", async () => {
-    verifyOwnership.mockResolvedValue(null);
+  it("installation_id not in the user's installations → error redirect, nothing stored", async () => {
+    resolveAccess.mockResolvedValue(sync([{ installationId: 5, accountLogin: "someone", repos: [] }]));
     const response = await callback(callbackRequest(goodQuery, COOKIE), ctx);
     expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
-    expect(upsertInstallation).not.toHaveBeenCalled();
+    expect(linkInstallations).not.toHaveBeenCalled();
+    expect(audit).not.toHaveBeenCalled();
+    cleared(response);
   });
 
   it("GitHub failure → error redirect", async () => {
-    verifyOwnership.mockRejectedValue(new Error("boom"));
+    resolveAccess.mockRejectedValue(new Error("boom"));
     const response = await callback(callbackRequest(goodQuery, COOKIE), ctx);
     expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
+    expect(linkInstallations).not.toHaveBeenCalled();
+    cleared(response);
   });
 
-  it("bad query → error redirect", async () => {
+  it("bad query (state without code) → error redirect", async () => {
     const response = await callback(callbackRequest(`state=${STATE}`, COOKIE), ctx);
     expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
+    cleared(response);
   });
 
-  it("valid state + ownership → upsert and /dashboard?connected=1", async () => {
-    verifyOwnership.mockResolvedValue({ accountLogin: "octo" });
+  it("valid state → links every installation with its repo set and the GitHub user, audits, connected=1", async () => {
+    const installations = [
+      { installationId: 77, accountLogin: "octo", repos: [repo(1, "octo/a")] },
+      { installationId: 88, accountLogin: "octo-org", repos: [repo(2, "octo-org/b"), repo(3, "octo-org/c")] },
+    ];
+    resolveAccess.mockResolvedValue(sync(installations));
+    linkInstallations.mockResolvedValueOnce([88]);
     const response = await callback(callbackRequest(goodQuery, COOKIE), ctx);
     expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?connected=1");
-    expect(verifyOwnership).toHaveBeenCalledWith(
-      expect.objectContaining({ code: "abc", installationId: 77 }),
-    );
-    expect(upsertInstallation).toHaveBeenCalledWith({ userId: "u1", installationId: 77, accountLogin: "octo" });
+    expect(resolveAccess).toHaveBeenCalledWith(expect.objectContaining({ code: "abc" }));
+    expect(linkInstallations).toHaveBeenCalledWith({
+      userId: "u1",
+      githubUserId: 9001,
+      githubUserLogin: "octocat",
+      installations,
+    });
+    expect(audit).toHaveBeenCalledWith("u1", "github.connect", "88");
+    expect(audit).toHaveBeenCalledWith("u1", "github.sync", "2");
+    expect(audit).toHaveBeenCalledTimes(2);
+    cleared(response);
+  });
+
+  it("valid state without installation_id (authorize / refresh) → links all listed", async () => {
+    const installations = [{ installationId: 77, accountLogin: "octo", repos: [repo(1, "octo/a")] }];
+    resolveAccess.mockResolvedValue(sync(installations));
+    const response = await callback(callbackRequest(`state=${STATE}&code=abc`, COOKIE), ctx);
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?connected=1");
+    expect(linkInstallations).toHaveBeenCalledWith(expect.objectContaining({ installations }));
+  });
+
+  it("no installations → link called with [] (clears the sets), /dashboard?error=github_none", async () => {
+    resolveAccess.mockResolvedValue(sync([]));
+    const response = await callback(callbackRequest(`state=${STATE}&code=abc`, COOKIE), ctx);
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github_none");
+    expect(linkInstallations).toHaveBeenCalledWith(expect.objectContaining({ installations: [] }));
+    cleared(response);
+  });
+
+  it("different GitHub account than the one linked → ?error=github_account, nothing audited", async () => {
+    resolveAccess.mockResolvedValue(sync([{ installationId: 77, accountLogin: "octo", repos: [] }]));
+    linkInstallations.mockRejectedValueOnce(new GitHubAccountMismatchError());
+    const response = await callback(callbackRequest(goodQuery, COOKIE), ctx);
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github_account");
+    expect(audit).not.toHaveBeenCalled();
+    cleared(response);
+  });
+
+  it("never logs anything token-like or repo names", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    resolveAccess.mockResolvedValue(sync([{ installationId: 77, accountLogin: "octo", repos: [repo(1, "octo/secret-repo")] }]));
+    await callback(callbackRequest(goodQuery, COOKIE), ctx);
+    const logged = JSON.stringify(info.mock.calls);
+    expect(logged).not.toContain("secret-repo");
+    expect(logged).not.toContain("abc");
+    expect(logged).not.toMatch(/gh[us]_/);
   });
 
   it("state cookie started by another Flow Motion user → error redirect (R1-5)", async () => {
     const response = await callback(callbackRequest(goodQuery, `u2.${STATE}`), ctx);
     expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
-    expect(verifyOwnership).not.toHaveBeenCalled();
+    expect(resolveAccess).not.toHaveBeenCalled();
   });
 
   it("malformed cookie encoding → redirect, never a JSON 500 (R1-5)", async () => {
@@ -236,14 +472,29 @@ describe("GET /api/github/installations/callback", () => {
     const response = await callback(request, ctx);
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
-    expect(response.headers.get("set-cookie") ?? "").toMatch(/fm_gh_state=;.*Max-Age=0/i);
+    cleared(response);
   });
 
-  it("database failure after ownership → error redirect with cookie cleared", async () => {
-    verifyOwnership.mockResolvedValue({ accountLogin: "octo" });
-    upsertInstallation.mockRejectedValueOnce(new Error("db"));
+  it("database failure while linking → error redirect with cookie cleared", async () => {
+    resolveAccess.mockResolvedValue(sync([{ installationId: 77, accountLogin: "octo", repos: [] }]));
+    linkInstallations.mockRejectedValueOnce(new Error("db"));
     const response = await callback(callbackRequest(goodQuery, COOKIE), ctx);
     expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
-    expect(response.headers.get("set-cookie") ?? "").toMatch(/fm_gh_state=;.*Max-Age=0/i);
+    cleared(response);
+  });
+
+  it("rate limited → error redirect", async () => {
+    ipLimit.mockRejectedValueOnce(new ApiError("RATE_LIMITED"));
+    const response = await callback(callbackRequest(goodQuery, COOKIE), ctx);
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
+    cleared(response);
+  });
+
+  it("signed out → /login and the state cookie is cleared (R11-7)", async () => {
+    sessionUser.mockResolvedValue(null);
+    const response = await callback(callbackRequest(goodQuery, COOKIE), ctx);
+    expect(response.headers.get("location")).toBe("https://app.example.com/login");
+    cleared(response);
+    expect(resolveAccess).not.toHaveBeenCalled();
   });
 });

@@ -4,6 +4,15 @@ export {
   installationsResponseSchema as installationListSchema,
   repoSchema,
   reposResponseSchema as repoPageSchema,
+  branchNameSchema,
+  branchSchema,
+  branchesResponseSchema,
 } from "@/schemas/github";
-export type { Installation, Repo, ReposResponse as RepoPage } from "@/schemas/github";
+export type {
+  Installation,
+  Repo,
+  ReposResponse as RepoPage,
+  Branch,
+  BranchesResponse,
+} from "@/schemas/github";
 export { deletedSchema } from "@/schemas/api";

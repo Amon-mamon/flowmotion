@@ -47,7 +47,8 @@ export async function listAnalysisSummaries(userId: string, projectId: string) {
     .select(ANALYSIS_SUMMARY_COLUMNS)
     .eq("user_id", userId)
     .eq("project_id", projectId)
-    .order("started_at", { ascending: false, nullsFirst: true });
+    .order("started_at", { ascending: false, nullsFirst: true })
+    .limit(20);
   if (error !== null) throw new Error(`analyses select failed: ${error.code ?? "unknown"}`);
   return z.array(analysisSummaryRowSchema).parse(data);
 }
@@ -56,7 +57,11 @@ export async function createProject(input: {
   userId: string;
   installationRowId: string;
   repoFullName: string;
+  /** GitHub repository id (D-22). */
+  repoId: number;
   defaultBranch: string;
+  /** Branch name exactly as GitHub returned it. */
+  branch: string;
 }): Promise<ProjectRow> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
@@ -65,13 +70,15 @@ export async function createProject(input: {
       user_id: input.userId,
       installation_id: input.installationRowId,
       repo_full_name: input.repoFullName,
+      repo_id: input.repoId,
       default_branch: input.defaultBranch,
+      branch: input.branch,
     })
     .select(PROJECT_COLUMNS)
     .single();
   if (error !== null) {
     if (error.code === UNIQUE_VIOLATION) {
-      throw new ApiError("VALIDATION_ERROR", "This repository is already connected");
+      throw new ApiError("VALIDATION_ERROR", "This repository and branch are already connected");
     }
     throw new Error(`project insert failed: ${error.code ?? "unknown"}`);
   }

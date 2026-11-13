@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { jobErrorCodeSchema } from "@/schemas/api";
 import type { Installation } from "@/schemas/github";
 import type { Profile } from "@/schemas/profile";
 import type { Project, ProjectAnalysisSummary } from "@/schemas/project";
@@ -18,6 +19,9 @@ export const installationRowSchema = z.object({
   installation_id: z.number().int(),
   account_login: z.string(),
   created_at: timestamp,
+  github_user_id: z.number().int().nullable(),
+  github_user_login: z.string().nullable(),
+  repos_synced_at: timestamp.nullable(),
 });
 export type InstallationRow = z.infer<typeof installationRowSchema>;
 
@@ -26,7 +30,9 @@ export const projectRowSchema = z.object({
   user_id: z.uuid(),
   installation_id: z.uuid().nullable(),
   repo_full_name: z.string(),
+  repo_id: z.number().int().nullable(),
   default_branch: z.string(),
+  branch: z.string(),
   status: z.enum(["pending", "valid", "invalid"]),
   invalid_reason: z.string().nullable(),
   detected_kind: z.enum(["website", "app"]).nullable(),
@@ -40,6 +46,11 @@ export const analysisSummaryRowSchema = z.object({
   id: z.uuid(),
   status: z.enum(["queued", "validating", "scanning", "analyzing", "done", "failed", "rejected"]),
   commit_sha: z.string().nullable(),
+  // Unknown or legacy codes are shown as null rather than failing the page.
+  error_code: z.string().nullable().transform((value) => {
+    const parsed = jobErrorCodeSchema.safeParse(value);
+    return parsed.success ? parsed.data : null;
+  }),
   started_at: timestamp.nullable(),
   finished_at: timestamp.nullable(),
 });
@@ -50,9 +61,21 @@ export const profileRowSchema = z.object({
 });
 
 export const PROJECT_COLUMNS =
-  "id, user_id, installation_id, repo_full_name, default_branch, status, invalid_reason, detected_kind, last_commit_sha, stale, created_at";
-export const INSTALLATION_COLUMNS = "id, user_id, installation_id, account_login, created_at";
-export const ANALYSIS_SUMMARY_COLUMNS = "id, status, commit_sha, started_at, finished_at";
+  "id, user_id, installation_id, repo_full_name, repo_id, default_branch, branch, status, invalid_reason, detected_kind, last_commit_sha, stale, created_at";
+export const INSTALLATION_COLUMNS =
+  "id, user_id, installation_id, account_login, created_at, github_user_id, github_user_login, repos_synced_at";
+
+/** Repo access sets are fresh for 24 hours (D-22, OQ-20). */
+export const REPO_ACCESS_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** True when the row's repo set is missing or older than 24 h. */
+export function needsRepoRefresh(reposSyncedAt: string | null, nowMs: number = Date.now()): boolean {
+  if (reposSyncedAt === null) return true;
+  const synced = new Date(reposSyncedAt).getTime();
+  if (Number.isNaN(synced)) return true;
+  return nowMs - synced > REPO_ACCESS_MAX_AGE_MS;
+}
+export const ANALYSIS_SUMMARY_COLUMNS = "id, status, commit_sha, error_code, started_at, finished_at";
 
 /** Postgres returns `+00:00`-style offsets; normalise to ISO 8601 `Z`. */
 export function toIso(value: string): string {
@@ -66,6 +89,9 @@ export function toInstallationDto(row: InstallationRow): Installation {
     installationId: row.installation_id,
     accountLogin: row.account_login,
     createdAt: toIso(row.created_at),
+    githubUserLogin: row.github_user_login,
+    reposSyncedAt: row.repos_synced_at === null ? null : toIso(row.repos_synced_at),
+    needsRefresh: needsRepoRefresh(row.repos_synced_at),
   };
 }
 
@@ -74,6 +100,7 @@ export function toProjectDto(row: ProjectRow): Project {
     id: row.id,
     repoFullName: row.repo_full_name,
     defaultBranch: row.default_branch,
+    branch: row.branch,
     status: row.status,
     invalidReason: row.invalid_reason,
     detectedKind: row.detected_kind,
@@ -91,6 +118,7 @@ export function toAnalysisSummaryDto(
     id: row.id,
     status: row.status,
     commitSha: row.commit_sha,
+    errorCode: row.error_code,
     startedAt: row.started_at === null ? null : toIso(row.started_at),
     finishedAt: row.finished_at === null ? null : toIso(row.finished_at),
   };

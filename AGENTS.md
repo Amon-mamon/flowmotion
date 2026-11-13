@@ -49,3 +49,13 @@ Work happens in phases defined in `docs/contract.md`. In each phase: architect c
 
 ## Docs map
 `contract.md` source of truth · `node-catalog.md` allowed n8n nodes · `testing.md` mock-data simulator · `security.md` rules and leak list · `design.md` UI rules · `status.md` progress · `requests.md` cross-role requests · `open-questions.md` · `decisions.md` · `review.md` · `security-review.md` · `subscription.md` (NOT READY) · `n8n.md` (NOT READY)
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

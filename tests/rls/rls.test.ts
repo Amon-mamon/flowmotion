@@ -74,9 +74,11 @@ function validRow(table: OwnedTable, userId: string, parents: Partial<Ids>, tag:
         installation_id: parents.github_installations,
         repo_full_name: `octo/${tag}-${uniq}`,
         default_branch: "main",
+        // Required since 20261113000000_phase1_1_project_branch.sql (S11-2).
+        branch: "main",
       };
     case "analyses":
-      return { user_id: userId, project_id: parents.projects };
+      return { user_id: userId, project_id: parents.projects, branch: "main" };
     case "jobs":
       return {
         user_id: userId,
@@ -127,6 +129,8 @@ interface Seeded {
   userId: string;
   client: SupabaseClient;
   ids: Ids;
+  /** github_installation_repos row (composite PK, no id column). */
+  repoId: number;
 }
 
 const noSession = { auth: { persistSession: false, autoRefreshToken: false } };
@@ -169,7 +173,21 @@ describe.skipIf(!configured)("RLS (skipped: no local Supabase)", () => {
       )) as { id: string };
       ids[table] = row.id;
     }
-    return { userId, client, ids: ids as Ids };
+    const repoId = Math.floor(Math.random() * 1e9) + 1;
+    await must(
+      admin
+        .from("github_installation_repos")
+        .insert({
+          user_id: userId,
+          installation_id: ids.github_installations,
+          repo_id: repoId,
+          repo_full_name: `octo/${tag}-access`,
+          private: true,
+          default_branch: "main",
+        })
+        .select("repo_id"),
+    );
+    return { userId, client, ids: ids as Ids, repoId };
   }
 
   beforeAll(async () => {
@@ -281,12 +299,135 @@ describe.skipIf(!configured)("RLS (skipped: no local Supabase)", () => {
     expect(after.display_name).not.toBe("hijack");
   });
 
+  it("A cannot read B's projects.branch or analyses.branch (S11-2)", async () => {
+    const projects = await a.client.from("projects").select("branch").eq("id", b.ids.projects);
+    expect(projects.data ?? []).toHaveLength(0);
+    const analyses = await a.client.from("analyses").select("branch").eq("id", b.ids.analyses);
+    expect(analyses.data ?? []).toHaveLength(0);
+  });
+
+  describe("github_installation_repos (D-22)", () => {
+    const repoRow = (owner: Seeded, installationId: string) => ({
+      user_id: owner.userId,
+      installation_id: installationId,
+      repo_id: Math.floor(Math.random() * 1e9) + 1,
+      repo_full_name: "octo/injected",
+      private: false,
+      default_branch: "main",
+    });
+
+    it("owner can read own access rows", async () => {
+      const { data, error } = await a.client
+        .from("github_installation_repos")
+        .select("repo_id")
+        .eq("installation_id", a.ids.github_installations);
+      expect(error).toBeNull();
+      expect(data).toEqual([{ repo_id: a.repoId }]);
+    });
+
+    it("user A cannot read user B's access rows", async () => {
+      const { data } = await a.client
+        .from("github_installation_repos")
+        .select("repo_id")
+        .eq("installation_id", b.ids.github_installations);
+      expect(data ?? []).toHaveLength(0);
+    });
+
+    it("anon sees nothing", async () => {
+      const { data } = await anon.from("github_installation_repos").select("repo_id");
+      expect(data ?? []).toHaveLength(0);
+    });
+
+    it("clients cannot insert, update, or delete access rows (own or B's)", async () => {
+      for (const row of [repoRow(a, a.ids.github_installations), repoRow(b, b.ids.github_installations)]) {
+        const inserted = await a.client.from("github_installation_repos").insert(row);
+        expect(inserted.error?.code).toBe(PERMISSION_DENIED);
+      }
+      for (const owner of [a, b]) {
+        const updated = await a.client
+          .from("github_installation_repos")
+          .update({ repo_full_name: "octo/hijacked" })
+          .eq("repo_id", owner.repoId);
+        expect(updated.error?.code).toBe(PERMISSION_DENIED);
+        const deleted = await a.client.from("github_installation_repos").delete().eq("repo_id", owner.repoId);
+        expect(deleted.error?.code).toBe(PERMISSION_DENIED);
+      }
+      expect(
+        await must(admin.from("github_installation_repos").select("repo_id").eq("repo_id", b.repoId)),
+      ).toHaveLength(1);
+    });
+
+    it("access rows cannot point at another user's installation (composite FK)", async () => {
+      const result = await admin.from("github_installation_repos").insert(repoRow(a, b.ids.github_installations));
+      expect(result.error?.code).toBe("23503");
+    });
+
+    it("repo full names with . or .. segments are rejected by the check constraint (S11-4)", async () => {
+      for (const name of ["octo/..", "octo/.", "a_b/c"]) {
+        const result = await admin
+          .from("github_installation_repos")
+          .insert({ ...repoRow(a, a.ids.github_installations), repo_full_name: name });
+        expect(result.error?.code).toBe("23514");
+      }
+    });
+
+    it("link_github_installations is service-role only", async () => {
+      const result = await a.client.rpc("link_github_installations", {
+        p_user_id: a.userId,
+        p_github_user_id: 1,
+        p_github_user_login: "x",
+        p_installations: [],
+      });
+      expect(result.error).not.toBeNull();
+    });
+
+    it("link_github_installations replaces the set, clears unlisted rows, and refuses another GitHub account", async () => {
+      const d = await seedUser("d");
+      try {
+        const link = (githubUserId: number, repos: { id: number; fullName: string }[]) =>
+          admin.rpc("link_github_installations", {
+            p_user_id: d.userId,
+            p_github_user_id: githubUserId,
+            p_github_user_login: "octocat",
+            p_installations: [
+              {
+                installationId: 424242,
+                accountLogin: "octo-org",
+                repos: repos.map((repo) => ({ ...repo, private: true, defaultBranch: "main" })),
+              },
+            ],
+          });
+        const first = await must(link(77, [{ id: 1, fullName: "octo-org/a" }, { id: 2, fullName: "octo-org/b" }]));
+        expect(first).toEqual([{ installation_id: 424242, inserted: true }]);
+        await must(link(77, [{ id: 3, fullName: "octo-org/c" }]));
+        const rows = (await must(
+          admin.from("github_installation_repos").select("repo_full_name").eq("user_id", d.userId),
+        )) as { repo_full_name: string }[];
+        expect(rows.map((row) => row.repo_full_name).sort()).toEqual(["octo-org/c"]);
+        // The seeded row (installation not listed) was cleared and needs a refresh.
+        const seeded = (await must(
+          admin.from("github_installations").select("repos_synced_at").eq("id", d.ids.github_installations).single(),
+        )) as { repos_synced_at: string | null };
+        expect(seeded.repos_synced_at).toBeNull();
+        const mismatch = await link(78, [{ id: 9, fullName: "octo-org/z" }]);
+        expect(mismatch.error?.message ?? "").toContain("github_account_mismatch");
+        const after = (await must(
+          admin.from("github_installation_repos").select("repo_full_name").eq("user_id", d.userId),
+        )) as { repo_full_name: string }[];
+        expect(after.map((row) => row.repo_full_name)).toEqual(["octo-org/c"]);
+      } finally {
+        await admin.auth.admin.deleteUser(d.userId);
+      }
+    });
+  });
+
   it("projects cannot reference another user's installation (composite FK, R1-7)", async () => {
     const result = await admin.from("projects").insert({
       user_id: a.userId,
       installation_id: b.ids.github_installations,
       repo_full_name: `octo/fk-${crypto.randomUUID().slice(0, 8)}`,
       default_branch: "main",
+      branch: "main",
     });
     expect(result.error?.code).toBe("23503"); // foreign_key_violation
   });

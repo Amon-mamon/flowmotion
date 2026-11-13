@@ -57,6 +57,10 @@ describe("proxy rules (contract section 3)", () => {
       to: "/login",
     });
     expect(auth("/api/github/install")).toEqual({ kind: "next" });
+    expect(unauth("/api/github/authorize")).toEqual({ kind: "redirect", to: "/login" });
+    expect(auth("/api/github/authorize")).toEqual({ kind: "next" });
+    // The new JSON branches route is not browser-navigated: 401, not a redirect.
+    expect(unauth("/api/github/installations/abc/branches")).toEqual({ kind: "unauthorized" });
   });
 
   it("sessionless routes are never checked", () => {

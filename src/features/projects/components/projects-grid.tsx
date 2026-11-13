@@ -6,14 +6,19 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useInstallations } from "@/features/github/queries";
+import { AddRepositoryDialog } from "@/features/projects/components/add-repository-dialog";
 import { ProjectCard } from "@/features/projects/components/project-card";
 import { useProjects } from "@/features/projects/queries";
 import { cn } from "@/lib/utils";
 
 export function ProjectsGrid() {
   const projects = useProjects();
+  // Needed only for the empty state: decides between "Add repository" and "Connect GitHub".
+  const installations = useInstallations();
+  const empty = projects.isSuccess && projects.data.length === 0;
 
-  if (projects.isPending) {
+  if (projects.isPending || (empty && installations.isPending)) {
     return (
       <div
         role="status"
@@ -43,16 +48,43 @@ export function ProjectsGrid() {
   }
 
   if (projects.data.length === 0) {
+    if (installations.isError) {
+      return (
+        <ErrorState
+          title="Could not load GitHub connections"
+          error={installations.error}
+          onRetry={() => void installations.refetch()}
+        />
+      );
+    }
+    if (installations.data && installations.data.length > 0) {
+      return (
+        <EmptyState
+          icon={<FolderGit2Icon />}
+          title="No projects yet"
+          description="Add a repository to analyze it."
+          action={<AddRepositoryDialog />}
+        />
+      );
+    }
     return (
       <EmptyState
         icon={<FolderGit2Icon />}
         title="No projects yet"
-        description="Connect GitHub, then add a repository to start finding automations."
+        description="Connect GitHub to choose a repository."
         action={
-          // Plain anchor: this route redirects to GitHub and must not be prefetched.
-          <a href="/api/github/install" className={cn(buttonVariants({ size: "lg" }))}>
-            Connect GitHub
-          </a>
+          // Plain anchors: these routes redirect to GitHub and must not be prefetched.
+          <div className="flex flex-col items-center gap-3">
+            <a href="/api/github/install" className={cn(buttonVariants({ size: "lg" }))}>
+              Connect GitHub
+            </a>
+            <p className="text-sm text-muted-foreground">
+              Already installed Flow Motion on GitHub?{" "}
+              <a href="/api/github/authorize" className="text-primary underline-offset-4 hover:underline">
+                Link existing installation
+              </a>
+            </p>
+          </div>
         }
       />
     );

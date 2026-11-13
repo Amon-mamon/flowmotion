@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -11,6 +11,7 @@ import { fail, mockFetch, ok, renderWithQuery } from "@/features/test-utils/rend
 import { DashboardView } from "@/features/projects/components/dashboard-view";
 import { ProjectStatusBadge } from "@/features/projects/components/project-status-badge";
 import { projects } from "@/features/projects/fixtures";
+import { installations } from "@/features/github/fixtures";
 import { render } from "@testing-library/react";
 
 afterEach(() => {
@@ -19,6 +20,7 @@ afterEach(() => {
 });
 
 const isProjects = (u: string) => u === "/api/projects";
+const isInstallations = (u: string) => u === "/api/github/installations";
 
 describe("Dashboard projects grid", () => {
   it("shows a loading state", () => {
@@ -27,12 +29,50 @@ describe("Dashboard projects grid", () => {
     expect(screen.getByRole("status", { name: "Loading projects" })).toHaveAttribute("aria-busy", "true");
   });
 
-  it("shows the empty state with Connect GitHub", async () => {
-    mockFetch([{ match: isProjects, respond: () => ok({ projects: [] }) }]);
+  it("empty + no installations: Connect GitHub", async () => {
+    mockFetch([
+      { match: isProjects, respond: () => ok({ projects: [] }) },
+      { match: isInstallations, respond: () => ok({ installations: [] }) },
+    ]);
     renderWithQuery(<DashboardView />);
     expect(await screen.findByText("No projects yet")).toBeInTheDocument();
+    expect(screen.getByText("Connect GitHub to choose a repository.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Connect GitHub" })).toHaveAttribute("href", "/api/github/install");
+    expect(screen.getByText(/Already installed Flow Motion on GitHub\?/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Link existing installation" })).toHaveAttribute(
+      "href",
+      "/api/github/authorize",
+    );
     expect(screen.getByText("No flows yet")).toBeInTheDocument();
+  });
+
+  it("empty + an installation: Add repository opens the dialog, no Connect GitHub", async () => {
+    mockFetch([
+      { match: isProjects, respond: () => ok({ projects: [] }) },
+      { match: isInstallations, respond: () => ok({ installations }) },
+      { match: (u) => u.includes("/repos?page="), respond: () => new Promise(() => {}) },
+    ]);
+    renderWithQuery(<DashboardView />);
+    expect(await screen.findByText("Add a repository to analyze it.")).toBeInTheDocument();
+    expect(screen.getByText("No projects yet")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Connect GitHub" })).not.toBeInTheDocument();
+    const emptyState = screen.getByText("No projects yet").closest("[role=status]") as HTMLElement;
+    fireEvent.click(within(emptyState).getByRole("button", { name: "Add repository" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("empty while installations load: skeleton, never the wrong button", async () => {
+    mockFetch([
+      { match: isProjects, respond: () => ok({ projects: [] }) },
+      { match: isInstallations, respond: () => new Promise(() => {}) },
+    ]);
+    renderWithQuery(<DashboardView />);
+    await waitFor(() => expect(screen.getByRole("status", { name: "Loading projects" })).toBeInTheDocument());
+    // Give the projects response time to resolve; the skeleton must stay.
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.getByRole("status", { name: "Loading projects" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Connect GitHub" })).not.toBeInTheDocument();
+    expect(screen.queryByText("No projects yet")).not.toBeInTheDocument();
   });
 
   it("shows an error state with retry", async () => {
@@ -97,5 +137,99 @@ describe("ProjectStatusBadge mapping", () => {
   it("invalid → outlined Invalid", () => {
     render(<ProjectStatusBadge project={{ status: "invalid", detectedKind: null }} />);
     expect(screen.getByText("Invalid")).toHaveAttribute("data-status", "invalid");
+  });
+});
+
+describe("Phase 1.1 dashboard", () => {
+  it("cards show the chosen branch, not the default branch", async () => {
+    mockFetch([{ match: isProjects, respond: () => ok({ projects }) }]);
+    renderWithQuery(<DashboardView />);
+    const cards = await screen.findAllByTestId("project-card");
+    // validProject: default "develop", chosen "release/2026-11".
+    expect(within(cards[1]!).getByTestId("project-branch")).toHaveTextContent("release/2026-11");
+    expect(within(cards[1]!).queryByText("develop")).not.toBeInTheDocument();
+  });
+
+  it("shows the github_none notice with the Connect GitHub link", async () => {
+    mockParams = new URLSearchParams("error=github_none");
+    mockFetch([{ match: isProjects, respond: () => ok({ projects }) }]);
+    renderWithQuery(<DashboardView />);
+    expect(
+      await screen.findByText(/Flow Motion is not installed on any GitHub account you can access\. Install it first\./),
+    ).toBeInTheDocument();
+    const notice = document.querySelector('[data-notice="github-none"]') as HTMLElement;
+    expect(within(notice).getByRole("link", { name: "Connect GitHub" })).toHaveAttribute("href", "/api/github/install");
+  });
+});
+
+describe("Dashboard empty state with a failed installations request (R11-8)", () => {
+  it("shows the error state with Retry and neither empty-state action", async () => {
+    mockFetch([
+      { match: isProjects, respond: () => ok({ projects: [] }) },
+      { match: isInstallations, respond: () => fail("INTERNAL", "boom", 500) },
+    ]);
+    renderWithQuery(<DashboardView />);
+    expect(await screen.findByText("Could not load GitHub connections")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByText("No projects yet")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Connect GitHub" })).not.toBeInTheDocument();
+    // Only the header's dialog trigger exists, not an empty-state action.
+    expect(screen.getAllByRole("button", { name: "Add repository" })).toHaveLength(1);
+  });
+});
+
+describe("Dashboard GitHub notices (D-22, D-23)", () => {
+  it("connected=1 names the GitHub account", async () => {
+    mockParams = new URLSearchParams("connected=1");
+    mockFetch([
+      { match: isProjects, respond: () => ok({ projects }) },
+      { match: isInstallations, respond: () => ok({ installations }) },
+    ]);
+    renderWithQuery(<DashboardView />);
+    expect(await screen.findByText("GitHub connected as @jane-example")).toBeInTheDocument();
+  });
+
+  it("connected=1 without any login stays plain", async () => {
+    mockParams = new URLSearchParams("connected=1");
+    mockFetch([
+      { match: isProjects, respond: () => ok({ projects }) },
+      {
+        match: isInstallations,
+        respond: () => ok({ installations: installations.map((i) => ({ ...i, githubUserLogin: null })) }),
+      },
+    ]);
+    renderWithQuery(<DashboardView />);
+    await waitFor(() =>
+      expect(document.querySelector('[data-notice="connected"]')).toHaveTextContent(/^GitHub connected$/),
+    );
+  });
+
+  it("link=github: notice with the Link existing installation button", async () => {
+    mockParams = new URLSearchParams("link=github");
+    mockFetch([{ match: isProjects, respond: () => ok({ projects }) }]);
+    renderWithQuery(<DashboardView />);
+    expect(
+      await screen.findByText("Flow Motion was installed or updated on GitHub. Link it to your account to continue."),
+    ).toBeInTheDocument();
+    const notice = document.querySelector('[data-notice="link-github"]') as HTMLElement;
+    expect(within(notice).getByRole("link", { name: "Link existing installation" })).toHaveAttribute(
+      "href",
+      "/api/github/authorize",
+    );
+  });
+
+  it("error=github_account: notice with a Settings link", async () => {
+    mockParams = new URLSearchParams("error=github_account");
+    mockFetch([{ match: isProjects, respond: () => ok({ projects }) }]);
+    renderWithQuery(<DashboardView />);
+    const notice = await waitFor(() => {
+      const el = document.querySelector('[data-notice="github-account"]') as HTMLElement | null;
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(notice).toHaveTextContent(
+      "You are signed in to GitHub with a different account than the one linked to Flow Motion. Switch accounts on GitHub, or disconnect the linked installations in Settings first.",
+    );
+    expect(within(notice).getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
   });
 });

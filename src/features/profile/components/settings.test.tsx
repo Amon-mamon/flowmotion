@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DisplayNameForm } from "@/features/profile/components/display-name-form";
@@ -46,6 +46,10 @@ describe("SettingsView", () => {
       "href",
       "/api/github/install",
     );
+    expect(screen.getByRole("link", { name: "Link existing installation" })).toHaveAttribute(
+      "href",
+      "/api/github/authorize",
+    );
     await waitFor(() => expect(screen.getByLabelText("Display name")).toHaveValue("Jane Example"));
     expect(screen.queryByText(/plan/i)).not.toBeInTheDocument();
   });
@@ -57,5 +61,28 @@ describe("SettingsView", () => {
     ]);
     renderWithQuery(<SettingsView />);
     expect(await screen.findByText("No GitHub installation connected")).toBeInTheDocument();
+  });
+});
+
+describe("SettingsView installations (D-22)", () => {
+  it("shows Linked as @login, and Needs refresh with the refresh link only where needed", async () => {
+    mockFetch([
+      { match: (u) => u === "/api/profile", respond: () => ok(profile) },
+      { match: (u) => u === "/api/github/installations", respond: () => ok({ installations }) },
+    ]);
+    renderWithQuery(<SettingsView />);
+    const list = await screen.findByRole("list", { name: "Connected GitHub installations" });
+    const [acme, personal] = within(list).getAllByRole("listitem");
+    // acme: linked by jane-example, fresh.
+    expect(within(acme!).getByText("Linked as @jane-example")).toBeInTheDocument();
+    expect(within(acme!).queryByText("Needs refresh")).toBeNull();
+    expect(within(acme!).queryByRole("link", { name: "Refresh repository access" })).toBeNull();
+    // personal: linked before D-22 (no login), needs refresh.
+    expect(within(personal!).queryByText(/Linked as/)).toBeNull();
+    expect(within(personal!).getByText("Needs refresh")).toBeInTheDocument();
+    expect(within(personal!).getByRole("link", { name: "Refresh repository access" })).toHaveAttribute(
+      "href",
+      "/api/github/authorize",
+    );
   });
 });

@@ -194,3 +194,93 @@ Commands from `C:\Users\amon\Desktop\flowmotion`: typecheck pass, lint pass, `np
 
 ### Counts after final verification
 Open: high 0 · medium 0 · low 1 (R1-8, backend, open by design until a Supabase stack runs the migration and RLS suite). Phase 1 has no open high or medium findings.
+
+## Phase 1.1 (branch selection and Phase 1 fixes) — code review 2026-11-13
+
+Scope: contract section 11 "Phase 1.1 scope", sections 5 and 6, D-18 to D-21, design.md branch copy. Phase 2 completeness not reviewed. Checks run: `npm run typecheck` pass, `npm run lint` pass, `vitest run` 28 files passed / 1 skipped (354 passed, 67 skipped = RLS suite without local Supabase), `npm run build` pass (route list includes `/api/github/authorize` and `/api/github/installations/[id]/branches`; it does **not** include `/api/projects/[id]/analyze` or `/api/analyses/[id]`).
+
+**Migration `supabase/migrations/20261113000000_phase1_1_project_branch.sql`: safe to apply now.** `git diff HEAD -- supabase/migrations/` is empty, so the baseline and Phase 1 files are unchanged (D-19). `projects.branch` is added nullable, backfilled from `default_branch` (which is `not null` with a 1..255 check in Phase 1, so no row stays null and the new length check cannot fail), then set `not null`. The dropped name `projects_user_id_repo_full_name_key` is what Postgres generates for the inline `unique (user_id, repo_full_name)` at line 107 of the Phase 1 migration. The new `(user_id, repo_full_name, branch)` key is strictly looser than the old one, so existing rows cannot violate it. `analyses.branch` is backfilled through the `project_id` FK (not null, cascade), so every row gets a value. Re-runs are guarded (`if not exists`, `if exists`, `duplicate_object`/`duplicate_table` handlers). Table-level `grant select` on both tables already covers the new columns, so no grant change is needed.
+
+Verified correct: the frontend branches URL (`/api/github/installations/:id/branches?repo=<encoded>&page=N`) and the `POST /api/projects { repoFullName, installationId, branch }` body match the contract and are asserted in `repo-picker.test.tsx`. `branchNameSchema` implements every section 6 rule, including the UTF-8 byte limit, and is tested with the full list. `encodeBranchPath` encodes per segment and is used by `getBranchHeadSha` and `getBranch`, with a `feature/x` URL test. The branches route checks run in contract order. `POST /api/projects` stores GitHub's branch name, and the test asserts this. Push matching is exact `refs/heads/<branch>` and case-sensitive, and the tests cover two branches of one repo, a non-chosen branch, and case. The callback follows the three D-20 rules. Dashboard empty state: loading shows the skeleton, zero installations shows Connect GitHub, at least one shows Add repository, and all three are tested. The login and signup mapping only singles out rate-limit codes, and `user_already_exists` stays generic (tested). Ownership: backend edited only backend paths and frontend only frontend paths. The `AGENTS.md` diff is the block that `next dev` writes, not an agent edit.
+
+- **R11-1** · `src/features/auth/error-messages.ts` (and `auth-forms.test.tsx`) · **medium** · frontend · status: resolved
+  Problem: the signup rate-limit copy is "Too many sign-up emails were sent recently. Please try again in a little while." design.md line 39 requires exactly "Too many sign-up emails were sent recently. Wait a few minutes and try again." The mapping also checks only `code === "over_email_send_rate_limit"`, but design.md also requires "or HTTP 429 from `signUp`" (for example a 429 with no code, or `over_request_rate_limit`). The test asserts the wrong string, so it passes against the wrong behavior.
+  Fix: set `SIGNUP_EMAIL_RATE_LIMIT` to the design.md string. Map `error?.code === "over_email_send_rate_limit" || error?.status === 429` (widen `AuthErrorLike` with `status?: number`). Add a test for `{ status: 429, code: undefined }` and update the expected copy.
+
+- **R11-2** · `src/features/projects/components/project-view.tsx` (`AnalyzeAction`, `useStartAnalysis`) and `src/features/analysis/**` · **medium** · frontend (coordinator decides the commit scope) · status: resolved
+  Problem: Phase 1.1 replaced the disabled "Analyze" button with a live action that calls `POST /api/projects/:id/analyze` (`src/features/analysis/queries.ts:42`). The build route list shows that this handler and `GET /api/analyses/:id` do not exist yet. If Phase 1.1 is committed and deployed as is, every Analyze click on the project page gets a Next.js 404 (not the API envelope), and the history links lead to an analysis page whose data call also 404s.
+  Fix: for the Phase 1.1 commit, keep the Phase 1 disabled Analyze button (or gate the action on the route existing), or commit Phase 1.1 only together with the Phase 2 backend routes. Do not ship a live button to a missing endpoint.
+
+- **R11-3** · `src/schemas/project.ts`, `src/features/projects/components/project-view.tsx` · **low** · backend + frontend (coordinator)
+  Problem: tracked Phase 1.1 files now import untracked, partly built Phase 2 files (`@/schemas/analysis`, `@/features/analysis/*`). A Phase 1.1 commit that excludes the Phase 2 folders will not build, and `git add -A` (CLAUDE.md step 5) will commit half-built Phase 2 code (`src/lib/analysis`, `src/lib/jobs`, path policy, scanner) under a "phase 1.1" message.
+  Fix: decide the commit scope explicitly before committing. Either move `analysisStatusSchema` back into `project.ts` (or a small shared module) so 1.1 is self-contained, or label the commit as including Phase 2 work in progress.
+
+- **R11-4** · `src/features/auth/error-messages.ts` (`LOGIN_RATE_LIMIT`) · **low** · architect (frontend if removed) · status: resolved
+  Problem: the login form now shows "Too many attempts. Please wait a moment and try again." for `over_request_rate_limit`. design.md has no login rate-limit copy, and the Phase 1 contract says sign-in errors show the generic "Invalid email or password". This is not an enumeration leak (the limit is per IP, not per account), but the copy is undocumented.
+  Fix: the architect adds this copy to design.md "Auth pages", or the frontend reverts to the generic message.
+
+- **R11-5** · `src/features/auth/error-messages.ts` / `docs/security.md` · **low** · architect
+  Problem: Supabase also returns `over_email_send_rate_limit` for the per-address resend cooldown. Signing up again within about 60 s with an address that has a pending, unconfirmed signup gets the rate-limit message, while a new address gets "Check your email". This weakly reveals that the address has a recent pending signup. The leak is small and the client cannot tell the two cases apart.
+  Fix: record it as an accepted residual risk in security.md (next to D-21 confirm email), or show the same neutral copy for both. No code change is required unless the architect decides otherwise.
+
+- **R11-6** · `src/schemas/github.ts` (`ghBranchListItemSchema`) · **low** · architect + backend · status: resolved (backend 2026-11-13)
+  Problem: list items are parsed with `branchNameSchema`. A real branch that git and GitHub accept but our rules reject (for example longer than 255 bytes) fails the **whole page** with `INTERNAL`. The user then cannot add any branch of that repo, and the Load more pages after it are also unreachable. This follows the contract text ("Zod failure on a malformed GitHub item → INTERNAL"), but it confuses an unusable branch with a malformed response.
+  Fix: parse `name` as `z.string().min(1)` in the GitHub list schema and drop items that fail `branchNameSchema` (log a count). Keep `INTERNAL` for structural failures (missing `name` or `protected`, non-array). The architect updates contract section 6 to match.
+
+- **R11-7** · `src/app/api/github/installations/callback/route.ts` (signed-out branch) · **low** · backend · status: resolved (backend 2026-11-13)
+  Problem: when there is no session, the handler returns `NextResponse.redirect("/login")` without clearing `fm_gh_state`. Contract section 6 rule 3 says "The cookie is cleared on every outcome". The impact is small because the cookie is user-bound and expires in 10 minutes.
+  Fix: define `finish` before the session check (it only needs `env`) and wrap the `/login` redirect in it. Add the cookie assertion to the existing "signed out → /login" test.
+
+- **R11-8** · `src/features/projects/components/projects-grid.tsx` · **low** · frontend · status: resolved
+  Problem: with zero projects and an installations **error**, the grid shows `ErrorState` "Could not load GitHub connections" (a sensible choice, but design.md is silent and no test covers it). If someone later changes the branch order, a fallback to "Connect GitHub" with an installation present would go unnoticed.
+  Fix: add a dashboard test for empty projects + installations 500 → error state with Retry, and no "Connect GitHub" or "Add repository" empty-state action. The architect may add one line for this state to design.md.
+
+- **R11-9** · `src/features/github/components/branch-picker.tsx` · **low** · frontend · status: resolved
+  Problem: the filter can hide the selected radio, but "Add repository" still submits the hidden `effectiveSelected`. The user can confirm a branch they cannot see, for example after filtering to `feat` the preselected default `main` is still sent.
+  Fix: show the selected branch name next to the confirm button ("Selected: `main`"), or clear the selection when the filter hides it. Add a test.
+
+### Counts (Phase 1.1)
+Open: high 0 · medium 2 (R11-1 frontend, R11-2 frontend/coordinator) · low 7 (R11-3 to R11-9). Migration safe to apply to the hosted DB now.
+
+### Phase 1.1 re-review after fixes — 2026-11-13
+
+Checks run: `vitest run` 30 files passed / 1 skipped, 416 passed / 76 skipped (RLS suite, no local Supabase); `tsc --noEmit` clean; `eslint` clean. The coordinator reports the build passing.
+
+**Status of earlier findings**
+- R11-1 **resolved.** `signupErrorMessage` maps `over_email_send_rate_limit` or `status === 429` to the exact design.md copy.
+- R11-2 **resolved.** `isAnalyzeApiReady()` returns `false`, so the project page keeps the disabled Analyze button and never calls `POST /api/projects/:id/analyze`. Re-analyze and the history list are gated the same way.
+- R11-3 **open (low, coordinator).** `project-view.tsx` and `src/schemas/project.ts` still import untracked Phase 2 files (`@/features/analysis/*`, `@/schemas/analysis`). The Phase 1.1 commit has to include them (now inert behind the readiness gate) or it will not build. Name this in the commit message.
+- R11-4 **resolved.** The copy is in design.md (D-23) and the code matches, including the 429 fallback.
+- R11-5 **accepted** (D-23, security.md section 5).
+- R11-6 **resolved.** `listRepoBranches` skips names that fail `branchNameSchema` and returns a `skipped` count, which the route logs. Structural failures still map to `INTERNAL`.
+- R11-7 **resolved.** `finish` is defined before the session check, and the signed-out `/login` redirect clears `fm_gh_state`.
+- R11-8 **resolved.** `dashboard.test.tsx` covers empty projects + installations error → "Could not load GitHub connections".
+- R11-9 **resolved.** `branchRows` always keeps the selected row visible under any filter.
+
+**New work (D-22 / D-23) verified**
+- The DTOs match. `installationSchema` has `githubUserLogin: string | null`, `reposSyncedAt: iso | null`, and `needsRefresh: boolean`. `toInstallationDto` fills them from `github_user_login` and `toIso(repos_synced_at)`, with `needsRefresh = needsRepoRefresh(repos_synced_at)`: null, an unparsable value, or older than 24 h all give `true`. `INSTALLATION_COLUMNS` selects the three new columns. `GITHUB_REFRESH_REQUIRED` is in `ERROR_CODES` with HTTP 403, and the frontend envelope parses it.
+- The frontend matches design.md and the backend codes. `isRefreshRequired` checks `ApiError.code === "GITHUB_REFRESH_REQUIRED"`. The notice appears for the repos list, the branches list, the `POST /api/projects` result, and the Analyze error. `?link=github`, `?error=github_account`, and `?connected=1` with the login use the exact design.md copy and redirect targets, which match the callback (`link=github`, `error=github_account`, `error=github_none`, `connected=1`). Settings shows the "Needs refresh" badge plus the refresh link when `needsRefresh`, and "Linked as @login" only when it is not null.
+- The route order matches contract section 6. Branches and `POST /api/projects` call `requireRepoAccess` by name before minting a token, then `resolveCoveredRepo(..., access.repo_id)` raises `GITHUB_REFRESH_REQUIRED` on an id mismatch. `mapGitHubError` passes `ApiError` through. The repos list is served from the table with no GitHub call. `POST /api/projects` stores `repo_id`.
+- `tests/server/repo-access-flow.test.ts` runs the real handlers for authorize, callback, installations, repos, branches, and `POST /api/projects`. GitHub is mocked at `fetch`, and it asserts the exact GitHub call sequence and that the token never appears in the DB or logs. Supabase is replaced by an in-memory fake, and the fake's `fakeLink` is a TypeScript copy of the SQL function, so the SQL itself is not exercised (R11-10).
+- **Migration `20261113120000_phase1_1_repo_access.sql` is SQL Editor safe.** It uses only `do $$` blocks and a `$$` function body, no CLI-only meta-commands or `\` commands. The new columns are nullable with no backfill. The table, indexes, and policy are guarded (`if not exists` / `drop policy if exists`), the constraints sit in `duplicate_object` handlers, and the function is `create or replace`, so a re-run is safe. `on conflict on constraint github_installations_user_id_installation_id_key` matches the name Postgres generated for the Phase 1 inline `unique (user_id, installation_id)`. `#variable_conflict use_column` plus qualified column references avoid clashes with the OUT columns. `xid = integer` exists for `xmax = 0`. `search_path = ''` is used with fully qualified names. `execute` is revoked from `public`, `anon`, and `authenticated` and granted to `service_role`. Apply `20261113000000` first, then this one. Because both are re-runnable, a later `supabase db push` that re-applies them (no history row after a manual SQL Editor run) is harmless; `supabase migration repair --status applied 20261113000000 20261113120000` records them cleanly.
+
+**Owner runtime bugs, by code reading**
+1. *Asked to connect again after connecting.* The current code selects `github_user_id, github_user_login, repos_synced_at` and calls `link_github_installations()`. Without the migration, the installations list fails (unknown column) and every callback ends in `?error=github`. A direct install on GitHub, which arrives without our state, now lands on `?link=github` with one "Link existing installation" click instead of an error. **Fixed by both migrations + one refresh.**
+2. *Add repository fails.* `createProject` writes `branch` (migration 1) and `repo_id` (migration 2). `requireRepoAccess` needs a fresh set, and existing rows have `repos_synced_at = null` until a refresh, so the dialog shows the refresh notice. **Fixed by both migrations + one refresh.**
+3. *Branches not loading.* Same causes: missing columns or table give `INTERNAL`, and a null set gives `GITHUB_REFRESH_REQUIRED`. After the refresh, the route finds the repo by name, checks coverage and repo id, and lists branches (the flow test proves the chain). **Fixed by both migrations + one refresh.**
+
+Remaining conditions (configuration, not code): "Request user authorization (OAuth) during installation" must stay on, or every install callback lacks `code` and ends in `?error=github` (contract owner setup). The refresh also has to be repeated every 24 h (the needs-refresh state, by design, OQ-20).
+
+**New findings**
+- **R11-10** · `supabase/migrations/20261113120000_phase1_1_repo_access.sql` (`link_github_installations`) / `tests/rls/rls.test.ts` · **low** · backend
+  Problem: no test executes the real SQL function. The route chain uses a TypeScript copy (`fakeLink`), so a SQL-only mistake (constraint name, replace/clear logic, the mismatch raise, the `inserted` flag) would pass CI. The RLS suite covers table access but does not call the RPC.
+  Fix: in the skippable local-Supabase suite, call `link_github_installations` via the admin client. Cover: first link `inserted = true`; a re-link replaces the set; an omitted installation is cleared with `repos_synced_at` null; a different `p_github_user_id` raises `github_account_mismatch` and writes nothing; `authenticated` and `anon` cannot execute it.
+- **R11-11** · same function · **low** · backend
+  Problem: `perform ... for update` only locks rows that already exist. Two concurrent first-time callbacks for one Flow Motion user from two different GitHub accounts (no rows yet) both pass the mismatch check, and the user ends up with rows from two GitHub accounts. This needs a deliberate race by the account owner, so the impact is low.
+  Fix: take `pg_advisory_xact_lock(hashtextextended(p_user_id::text, 0))` at the start of the function instead of (or before) the row lock.
+- **R11-12** · `src/server/github/user-auth.ts` (`listUserInstallationRepos`) · **low** · backend
+  Problem: one repository item that fails `ghUserInstallationRepoSchema` (for example a missing or over-255 `default_branch`) fails the whole page. The callback then ends in `?error=github`, and the user cannot link or refresh at all. That looks to the user like "asked to connect again".
+  Fix: parse `repositories` as `z.array(z.unknown())` and validate each item, dropping and counting failures exactly like the full-name drops. Keep the failure for structural errors (missing `total_count`, non-array).
+
+### Counts after re-review (Phase 1.1)
+Open: high 0 · medium 0 · low 4 (R11-3 coordinator, R11-10, R11-11, R11-12 backend). Accepted: R11-5. Resolved: R11-1, R11-2, R11-4, R11-6, R11-7, R11-8, R11-9.

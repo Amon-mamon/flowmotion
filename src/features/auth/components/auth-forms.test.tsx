@@ -115,3 +115,82 @@ describe("SignupForm", () => {
     expect(call.options.data).toBeUndefined();
   });
 });
+
+describe("Auth rate-limit messages", () => {
+  it("login: over_request_rate_limit shows the design.md rate-limit copy (R11-4)", async () => {
+    signInWithPassword.mockResolvedValue({
+      data: {},
+      error: { message: "Request rate limit reached", code: "over_request_rate_limit", status: 429 },
+    });
+    render(<LoginForm />);
+    fill(/^email$/i, "jane@example.com");
+    fill(/^password$/i, "some-password");
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+    expect(await screen.findByText("Too many attempts. Please wait a moment and try again.")).toBeInTheDocument();
+    expect(screen.queryByText("Invalid email or password")).not.toBeInTheDocument();
+    expect(screen.queryByText("Request rate limit reached")).not.toBeInTheDocument();
+  });
+
+  it("login: HTTP 429 without a code shows the rate-limit copy", async () => {
+    signInWithPassword.mockResolvedValue({ data: {}, error: { message: "Too Many Requests", status: 429 } });
+    render(<LoginForm />);
+    fill(/^email$/i, "jane@example.com");
+    fill(/^password$/i, "some-password");
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+    expect(await screen.findByText("Too many attempts. Please wait a moment and try again.")).toBeInTheDocument();
+  });
+
+  it("login: other codes stay generic", async () => {
+    signInWithPassword.mockResolvedValue({
+      data: {},
+      error: { message: "Invalid login credentials", code: "invalid_credentials", status: 400 },
+    });
+    render(<LoginForm />);
+    fill(/^email$/i, "jane@example.com");
+    fill(/^password$/i, "some-password");
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+    expect(await screen.findByText("Invalid email or password")).toBeInTheDocument();
+  });
+
+  it("signup: over_email_send_rate_limit shows the email rate-limit message", async () => {
+    signUp.mockResolvedValue({
+      data: { session: null, user: null },
+      error: { message: "email rate limit exceeded", code: "over_email_send_rate_limit", status: 429 },
+    });
+    render(<SignupForm />);
+    fill(/^email$/i, "jane@example.com");
+    fill(/^password$/i, "long-enough-pw");
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+    // Exact design.md copy ("Auth pages", signup rate limit).
+    expect(
+      await screen.findByText("Too many sign-up emails were sent recently. Wait a few minutes and try again."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("email rate limit exceeded")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [{ message: "Too Many Requests", status: 429 }],
+    [{ message: "Request rate limit reached", code: "over_request_rate_limit", status: 429 }],
+  ])("signup: any HTTP 429 shows the rate-limit message (%#)", async (error) => {
+    signUp.mockResolvedValue({ data: { session: null, user: null }, error });
+    render(<SignupForm />);
+    fill(/^email$/i, "jane@example.com");
+    fill(/^password$/i, "long-enough-pw");
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+    expect(
+      await screen.findByText("Too many sign-up emails were sent recently. Wait a few minutes and try again."),
+    ).toBeInTheDocument();
+  });
+
+  it.each(["user_already_exists", "weak_password", undefined])("signup: %s stays generic", async (code) => {
+    signUp.mockResolvedValue({ data: { session: null, user: null }, error: { message: "User already registered", code } });
+    render(<SignupForm />);
+    fill(/^email$/i, "jane@example.com");
+    fill(/^password$/i, "long-enough-pw");
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+    expect(
+      await screen.findByText("Could not create your account. Check your details and try again."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("User already registered")).not.toBeInTheDocument();
+  });
+});

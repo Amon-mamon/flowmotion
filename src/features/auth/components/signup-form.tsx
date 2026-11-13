@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField, fieldAria } from "@/components/shared/form-field";
+import { signupErrorMessage } from "@/features/auth/error-messages";
 import { signupSchema, type SignupValues } from "@/features/auth/schemas";
 import { createClient } from "@/lib/supabase/client";
 
@@ -48,7 +49,7 @@ export function SignupForm() {
       },
     });
     if (error) {
-      setFormError("Could not create your account. Check your details and try again.");
+      setFormError(signupErrorMessage(error));
       return;
     }
     if (data.session) {

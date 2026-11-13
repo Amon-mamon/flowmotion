@@ -21,7 +21,12 @@ export const GET = withApi("github.install", async (request) => {
   const user = await getSessionUser();
   if (user === null) return NextResponse.redirect(new URL("/login", env.APP_URL));
 
-  await enforceIpLimit("github.install", request, RATE_LIMITS.auth);
+  try {
+    await enforceIpLimit("github.install", request, RATE_LIMITS.auth);
+  } catch {
+    // S11-5: browser navigation, never JSON.
+    return NextResponse.redirect(new URL("/dashboard?error=github", env.APP_URL));
+  }
 
   const state = generateInstallState();
   const response = NextResponse.redirect(installUrl(state));

@@ -58,7 +58,10 @@ export function ProjectCard({ project }: { project: Project }) {
         <ProjectStatusBadge project={project} />
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <GitBranchIcon aria-hidden="true" className="size-4" />
-          <span className="truncate font-mono">{project.defaultBranch}</span>
+          <span className="sr-only">Branch </span>
+          <span className="truncate font-mono" data-testid="project-branch">
+            {project.branch}
+          </span>
         </p>
       </CardContent>
       <CardFooter className="justify-between text-xs text-muted-foreground">
