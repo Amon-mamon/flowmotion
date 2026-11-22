@@ -54,7 +54,7 @@ Last check run (2026-11-13): typecheck, lint, build pass; tests 923 passed, 83 s
 ## Prompt to paste in the next session
 
 ```
-Read README-RESUME.md, CLAUDE.md, docs/status.md, and the Phase 2 sections of
+Read README-RESUME.md, last-session.md, CLAUDE.md, docs/status.md, and the Phase 2 sections of
 docs/review.md and docs/security-review.md. Then continue from "Next steps":
 run the security re-review of the Phase 2 fixes, fix what it reopens, and commit
 Phase 2. Ask me for my /usage weekly number before starting anything large.
