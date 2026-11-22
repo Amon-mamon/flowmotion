@@ -184,18 +184,21 @@ describe("parseDrafts (model output Zod validation)", () => {
   });
 });
 
-describe("kill switch (resolveModelConfig)", () => {
+describe("kill switch (resolveModelConfig, anthropic)", () => {
+  const A = { ANALYSIS_PROVIDER: "anthropic" };
   it.each([
     [{}, false],
-    [{ ANALYSIS_MODEL: "disabled", ANTHROPIC_API_KEY: "k" }, false],
-    [{ ANALYSIS_MODEL: " DISABLED ", ANTHROPIC_API_KEY: "k" }, false],
-    [{ ANALYSIS_MODEL: "", ANTHROPIC_API_KEY: "k" }, false],
-    [{ ANALYSIS_MODEL: "claude-haiku", ANTHROPIC_API_KEY: "" }, false],
-    [{ ANALYSIS_MODEL: "claude-haiku", ANTHROPIC_API_KEY: "  " }, false],
-    [{ ANALYSIS_MODEL: "claude-haiku" }, false],
-    [{ ANALYSIS_MODEL: " claude-haiku ", ANTHROPIC_API_KEY: "k" }, true],
+    [{ ...A, ANALYSIS_MODEL: "disabled", ANTHROPIC_API_KEY: "k" }, false],
+    [{ ...A, ANALYSIS_MODEL: " DISABLED ", ANTHROPIC_API_KEY: "k" }, false],
+    [{ ...A, ANALYSIS_MODEL: "", ANTHROPIC_API_KEY: "k" }, false],
+    [{ ...A, ANALYSIS_MODEL: "claude-haiku", ANTHROPIC_API_KEY: "" }, false],
+    [{ ...A, ANALYSIS_MODEL: "claude-haiku", ANTHROPIC_API_KEY: "  " }, false],
+    [{ ...A, ANALYSIS_MODEL: "claude-haiku" }, false],
+    // D-24: no provider selected = disabled, even with a model id and key.
+    [{ ANALYSIS_MODEL: "claude-haiku", ANTHROPIC_API_KEY: "k" }, false],
+    [{ ...A, ANALYSIS_MODEL: " claude-haiku ", ANTHROPIC_API_KEY: "k" }, true],
   ])("%j → enabled %s", (env, enabled) => {
-    const config = resolveModelConfig(env);
+    const config = resolveModelConfig(env, "local");
     expect(config.enabled).toBe(enabled);
     if (config.enabled) expect(config).toEqual({ enabled: true, provider: "anthropic", model: "claude-haiku", apiKey: "k" });
   });

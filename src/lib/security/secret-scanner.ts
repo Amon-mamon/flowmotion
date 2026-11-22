@@ -133,6 +133,8 @@ interface RawMatch {
   evidence?: string;
   /** Lower runs first when spans overlap. */
   priority: number;
+  /** Provider patterns: the literal prefix skipped by the repeated-character check (D-33). */
+  placeholderPrefix?: string;
 }
 
 interface Detector {
@@ -153,31 +155,62 @@ function spanOf(match: RegExpExecArray, group: number): { start: number; end: nu
   return { start, end: start + value.length, value };
 }
 
-/** Names whose assigned value is treated as a secret (D-28: quoted and unquoted). */
-export const SECRET_NAME = /(key|token|secret|password|passwd|pwd|credential|auth)/i;
+/** Names whose assigned value is treated as a secret (D-28, D-34: quoted and unquoted). */
+export const SECRET_NAME = /(?:key|token|secret|password|passwd|pwd|passphrase|credential|auth)|_pass$/i;
+/**
+ * Password-type names (D-34 / R2b-1): a quoted value may contain spaces and
+ * tabs (never a line break or a quote character) and runs to its closing quote.
+ */
+export const PASSWORD_TYPE_NAME = /(?:password|passwd|pwd|passphrase|secret)|_pass$/i;
 const JWT_SECRET_NAME = /(jwt|session)/i;
 const PUBLIC_PREFIX = /^(?:NEXT_PUBLIC_|VITE_|EXPO_PUBLIC_|REACT_APP_)/;
 
+/** `changeme`, `example`, or a run of 3+ `x`, as a whole word (bounded by a non-alphanumeric or the ends). */
+const PLACEHOLDER_WORD = /(?<![A-Za-z0-9])(?:changeme|example|x{3,})(?![A-Za-z0-9])/i;
+const BARE_VARIABLE_NAME = /^[A-Z][A-Z0-9_]*$/;
+
+export interface PlaceholderOptions {
+  /** Generic assignment rule only: skip bare variable names (D-33). */
+  bareName?: boolean;
+  /** Provider patterns: literal prefix to skip for the repeated-character check (D-33). */
+  prefix?: string;
+}
+
 /**
- * Shared placeholder rule (security.md section 2, D-28): empty, `your-` /
- * `your_` prefix, contains `changeme` / `example` / `xxx`, wrapped in `<…>`,
- * a `${…}` / `{{…}}` / `$NAME` reference, or one repeated character. The
- * bare-variable-name rule (`^[A-Z][A-Z0-9_]*$`) applies to the generic
- * assignment rule only, since several provider keys are uppercase
- * alphanumerics.
+ * Shared placeholder rule (security.md section 2, D-28, amended by D-33 /
+ * S2R-1): empty, `your-` / `your_` prefix, `changeme` / `example` / `xxx` as a
+ * whole word, wrapped in `<…>`, a `${…}` / `{{…}}` / `$NAME` reference, or one
+ * repeated character (for a provider pattern, after its literal prefix). The
+ * bare-variable-name rule applies to the generic assignment rule only and
+ * requires a `_` plus (length < 20 or entropy < 3.5), so uppercase keys and
+ * base32 seeds are not skipped.
  */
-export function isPlaceholderValue(value: string, options: { bareName?: boolean } = {}): boolean {
+export function isPlaceholderValue(value: string, options: PlaceholderOptions = {}): boolean {
   const v = value.trim();
   if (v === "") return true;
   if (/^your[-_]/i.test(v)) return true;
-  if (/changeme|example|xxx/i.test(v)) return true;
+  if (PLACEHOLDER_WORD.test(v)) return true;
   if (/^<.*>$/.test(v)) return true;
   if (v.includes("${") || v.includes("{{") || v.startsWith("$")) return true;
   if (/^(.)\1*$/.test(v)) return true;
-  // A provider prefix followed by one repeated character (`SK000…`, `key-000…`).
+  if (options.prefix !== undefined && v.startsWith(options.prefix)) {
+    const rest = v.slice(options.prefix.length);
+    if (rest.length > 0 && /^(.)\1*$/.test(rest)) return true;
+    // D-34 (e) / R2b-6: also skip an optional `v<digits>-` segment (`sk-or-v1-000…`).
+    const unversioned = rest.replace(/^v\d+-/, "");
+    if (unversioned !== rest && unversioned.length > 0 && /^(.)\1*$/.test(unversioned)) return true;
+  }
+  // A short letter prefix followed by one repeated character (`SK000…`, `key-000…`).
   const body = v.replace(/^[A-Za-z]{1,12}[-_.]?/, "");
   if (body.length >= 8 && /^(.)\1*$/.test(body)) return true;
-  if (options.bareName === true && /^[A-Z][A-Z0-9_]*$/.test(v)) return true;
+  if (
+    options.bareName === true &&
+    BARE_VARIABLE_NAME.test(v) &&
+    v.includes("_") &&
+    (v.length < 20 || shannonEntropy(v) < 3.5)
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -224,8 +257,12 @@ const PROVIDER_VALUE_PATTERNS: readonly RegExp[] = [
   /^xox[abprs]-[A-Za-z0-9-]{10,}$/,
 ];
 
+/** Base32-shaped values such as TOTP seeds match without entropy (D-33). */
+const BASE32_VALUE = /^[A-Z2-7]{16,}={0,6}$/;
+
 function isSecretLikeValue(value: string): boolean {
   if (value.length >= 20 && shannonEntropy(value) >= 3.5) return true;
+  if (BASE32_VALUE.test(value) && /[2-7]/.test(value)) return true;
   return PROVIDER_VALUE_PATTERNS.some((pattern) => pattern.test(value));
 }
 
@@ -234,12 +271,44 @@ function genericCategory(name: string): FindingCategory {
   return JWT_SECRET_NAME.test(name) ? "jwt_signing_secret" : "hardcoded_secret";
 }
 
-function genericMatch(m: RegExpExecArray, nameGroup: number, valueGroup: number): RawMatch | null {
+/** Literal prefixes of provider key shapes, for the generic rule's placeholder check. */
+const PROVIDER_PLACEHOLDER_PREFIXES: readonly string[] = [
+  "sk-ant-",
+  "sk-or-",
+  "sk-",
+  "SG.",
+  "npm_",
+  "glpat-",
+  "sb_secret_",
+  "re_",
+];
+
+/** A provider-shaped value whose body (after the prefix) is a placeholder (D-33, D-34 (e)). */
+function isProviderPlaceholder(value: string): boolean {
+  const v = value.trim();
+  return PROVIDER_PLACEHOLDER_PREFIXES.some(
+    (prefix) => v.startsWith(prefix) && isPlaceholderValue(v, { prefix }),
+  );
+}
+
+function genericMatch(
+  m: RegExpExecArray,
+  nameGroup: number,
+  valueGroup: number,
+  options: { requireWhitespace?: boolean } = {},
+): RawMatch | null {
   const name = m[nameGroup];
   const value = m[valueGroup];
   if (name === undefined || value === undefined) return null;
   if (!SECRET_NAME.test(name)) return null;
+  if (options.requireWhitespace === true) {
+    // D-34 (a): spaces and tabs are allowed only for password-type names; a
+    // value without whitespace is left to the plain quoted rule.
+    if (!PASSWORD_TYPE_NAME.test(name)) return null;
+    if (!/[ \t]/.test(value)) return null;
+  }
   if (isPlaceholderValue(value, { bareName: true })) return null;
+  if (isProviderPlaceholder(value)) return null;
   if (!isSecretLikeValue(value)) return null;
   const start = m.index + m[0].lastIndexOf(value);
   return {
@@ -253,15 +322,26 @@ function genericMatch(m: RegExpExecArray, nameGroup: number, valueGroup: number)
   };
 }
 
-function provider(type: string, regexp: RegExp, extra?: (value: string) => boolean): Detector {
+function provider(
+  type: string,
+  regexp: RegExp,
+  options: { prefix?: string; extra?: (value: string) => boolean } = {},
+): Detector {
   return {
     name: type,
     regexp,
     build: (m) => {
       const span = spanOf(m, 1);
       if (span === null) return null;
-      if (extra !== undefined && !extra(span.value)) return null;
-      return { ...span, category: "hardcoded_secret", type, redact: true, priority: 1 };
+      if (options.extra !== undefined && !options.extra(span.value)) return null;
+      return {
+        ...span,
+        category: "hardcoded_secret",
+        type,
+        redact: true,
+        priority: 1,
+        ...(options.prefix !== undefined ? { placeholderPrefix: options.prefix } : {}),
+      };
     },
   };
 }
@@ -383,21 +463,20 @@ const DETECTORS: readonly Detector[] = [
     },
   },
   // --- provider patterns (D-28, security.md section 2) ---------------------------
-  provider("Anthropic key", /\b(sk-ant-[A-Za-z0-9_-]{20,})/g),
-  provider("OpenRouter key", /\b(sk-or-[A-Za-z0-9_-]{32,})/g),
-  provider("OpenAI key", /\b(sk-(?!ant-|or-)(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{32,})/g),
-  provider("SendGrid key", /\b(SG\.[A-Za-z0-9_-]{16,32}\.[A-Za-z0-9_-]{30,64})/g),
-  provider("npm token", /\b(npm_[A-Za-z0-9]{36})\b/g),
-  provider("GitLab token", /\b(glpat-[A-Za-z0-9_-]{20,})/g),
-  provider("Supabase service key", /\b(sb_secret_[A-Za-z0-9_-]{20,})/g),
-  provider("Twilio key", /\b(SK[0-9a-fA-F]{32})\b/g),
-  provider("Mailgun key", /\b(key-[0-9a-f]{32})\b/g),
+  provider("Anthropic key", /\b(sk-ant-[A-Za-z0-9_-]{20,})/g, { prefix: "sk-ant-" }),
+  provider("OpenRouter key", /\b(sk-or-[A-Za-z0-9_-]{32,})/g, { prefix: "sk-or-" }),
+  provider("OpenAI key", /\b(sk-(?!ant-|or-)(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{32,})/g, { prefix: "sk-" }),
+  provider("SendGrid key", /\b(SG\.[A-Za-z0-9_-]{16,32}\.[A-Za-z0-9_-]{30,64})/g, { prefix: "SG." }),
+  provider("npm token", /\b(npm_[A-Za-z0-9]{36})\b/g, { prefix: "npm_" }),
+  provider("GitLab token", /\b(glpat-[A-Za-z0-9_-]{20,})/g, { prefix: "glpat-" }),
+  provider("Supabase service key", /\b(sb_secret_[A-Za-z0-9_-]{20,})/g, { prefix: "sb_secret_" }),
+  provider("Twilio key", /\b(SK[0-9a-fA-F]{32})\b/g, { prefix: "SK" }),
+  provider("Mailgun key", /\b(key-[0-9a-f]{32})\b/g, { prefix: "key-" }),
   provider("Mailgun key", /\b([0-9a-f]{32}-[0-9a-f]{8}-[0-9a-f]{8})\b/g),
-  provider(
-    "Resend key",
-    /\b(re_[A-Za-z0-9]{6,12}_[A-Za-z0-9]{16,40})\b/g,
-    (value) => shannonEntropy(value.slice(3)) >= 3.5,
-  ),
+  provider("Resend key", /\b(re_[A-Za-z0-9]{6,12}_[A-Za-z0-9]{16,40})\b/g, {
+    prefix: "re_",
+    extra: (value) => shannonEntropy(value.slice(3)) >= 3.5,
+  }),
   provider(
     "Postmark token",
     // Bounded name runs keep the scan linear on long identifier-like text (S2-3).
@@ -409,22 +488,33 @@ const DETECTORS: readonly Detector[] = [
   ),
   // --- generic assignment rule (D-28) ---------------------------------------------
   {
-    // Quoted form, any fetched file.
+    // Quoted form, any fetched file. No upper bound on the value (D-33): it
+    // runs to the closing quote and is redacted whole; the 200 KB file cap
+    // bounds the work, and the value class stops at the next quote.
     name: "high-entropy assignment",
-    regexp: /([A-Za-z_][A-Za-z0-9_.-]{0,63})["']?[ \t]*(?::|=|=>|:=)[ \t]*(["'`])([^"'`\s]{1,512})\2/g,
+    regexp: /([A-Za-z_][A-Za-z0-9_.-]{0,63})["']?[ \t]*(?::|=|=>|:=)[ \t]*(["'`])([^"'`\s]+)\2/g,
     build: (m) => genericMatch(m, 1, 3),
+  },
+  {
+    // Quoted form for password-type names (D-34 / R2b-1): the value may hold
+    // spaces and tabs (never a line break or quote) and runs to the closing
+    // quote. The two value branches are disjoint, so there is no backtracking
+    // blow-up; an unterminated quote stops at the end of the line.
+    name: "high-entropy passphrase assignment",
+    regexp: /([A-Za-z_][A-Za-z0-9_.-]{0,63})["']?[ \t]*(?::|=|=>|:=)[ \t]*(["'`])((?:[^"'`\s]|[ \t])+)\2/g,
+    build: (m) => genericMatch(m, 1, 3, { requireWhitespace: true }),
   },
   {
     // Unquoted form, config files only: NAME=VALUE / NAME: VALUE, optional `export ` or `- `.
     name: "unquoted assignment",
-    regexp: /^[ \t]*(?:export[ \t]+|-[ \t]+)?([A-Za-z_][A-Za-z0-9_.-]{0,63})[ \t]*[:=][ \t]*([^\s"'`]{1,512})/gm,
+    regexp: /^[ \t]*(?:export[ \t]+|-[ \t]+)?([A-Za-z_][A-Za-z0-9_.-]{0,63})[ \t]*[:=][ \t]*([^\s"'`]+)/gm,
     appliesTo: isUnquotedConfigFile,
     build: (m) => genericMatch(m, 1, 2),
   },
   {
     // Dockerfile ENV NAME=VALUE, ENV NAME VALUE, ARG NAME=VALUE.
     name: "Dockerfile ENV/ARG",
-    regexp: /^[ \t]*(?:ENV|ARG)[ \t]+([A-Za-z_][A-Za-z0-9_]{0,63})(?:[ \t]*=[ \t]*|[ \t]+)([^\s"'`]{1,512})/gim,
+    regexp: /^[ \t]*(?:ENV|ARG)[ \t]+([A-Za-z_][A-Za-z0-9_]{0,63})(?:[ \t]*=[ \t]*|[ \t]+)([^\s"'`]+)/gim,
     appliesTo: isDockerfile,
     build: (m) => genericMatch(m, 1, 2),
   },
@@ -529,7 +619,15 @@ export function scan(path: string, text: string): ScanResult {
       }
       const built = detector.build(match);
       // Shared placeholder rule for every value-bearing pattern (D-28).
-      if (built !== null && !(built.redact && built.value !== "" && isPlaceholderValue(built.value))) {
+      const placeholder =
+        built !== null &&
+        built.redact &&
+        built.value !== "" &&
+        isPlaceholderValue(
+          built.value,
+          built.placeholderPrefix !== undefined ? { prefix: built.placeholderPrefix } : {},
+        );
+      if (built !== null && !placeholder) {
         candidates.push(built);
       }
     }

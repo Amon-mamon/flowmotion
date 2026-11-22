@@ -56,7 +56,7 @@ export function localDeps(userId: string): WorkerDeps {
   return {
     db: createSupabaseWorkerDb(createAdminClient()),
     github: createWorkerGitHub({ appId: env.GITHUB_APP_ID, privateKeyPem: env.GITHUB_APP_PRIVATE_KEY }),
-    model: createModelFromEnv(process.env),
+    model: createModelFromEnv(process.env, "local"),
     now: () => new Date(),
     workerId: `local-${crypto.randomUUID()}`,
     claimUserId: userId,

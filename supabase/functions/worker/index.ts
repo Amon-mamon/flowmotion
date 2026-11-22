@@ -55,8 +55,9 @@ Deno.serve(async (request: Request) => {
     const result = await runOnce({
       db: createSupabaseWorkerDb(client),
       github: createWorkerGitHub({ appId, privateKeyPem }),
-      // A missing ANALYSIS_MODEL secret means disabled (fail safe, D-16).
-      model: createModelFromEnv(Deno.env.toObject()),
+      // A missing provider or model secret means disabled (fail safe, D-16,
+      // D-24). "edge" refuses OpenRouter unconditionally (D-33).
+      model: createModelFromEnv(Deno.env.toObject(), "edge"),
       now: () => new Date(),
       workerId,
       log,

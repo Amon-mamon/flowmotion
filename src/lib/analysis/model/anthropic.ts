@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { combineSignals, isRetryableStatus, type FetchLike } from "@/lib/analysis/model/http";
 import {
   ModelProviderError,
   type AnalysisModel,
@@ -17,7 +18,7 @@ export const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 export const ANTHROPIC_VERSION = "2023-06-01";
 export const ANTHROPIC_TIMEOUT_MS = 55_000;
 
-export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+export type { FetchLike };
 
 const anthropicResponseSchema = z.object({
   content: z.array(
@@ -35,21 +36,6 @@ export interface AnthropicModelOptions {
   model: string;
   fetch?: FetchLike;
   timeoutMs?: number;
-}
-
-function isRetryableStatus(status: number): boolean {
-  return status === 408 || status === 429 || status >= 500;
-}
-
-function combineSignals(timeoutMs: number, outer: AbortSignal | undefined): AbortSignal {
-  const timeout = AbortSignal.timeout(timeoutMs);
-  if (outer === undefined) return timeout;
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  if (timeout.aborted || outer.aborted) controller.abort();
-  timeout.addEventListener("abort", abort, { once: true });
-  outer.addEventListener("abort", abort, { once: true });
-  return controller.signal;
 }
 
 export function createAnthropicModel(options: AnthropicModelOptions): AnalysisModel {

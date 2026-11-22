@@ -1,19 +1,20 @@
 import { z } from "zod";
 
-import { DISABLED_MODEL_VALUE, isAnalysisModelDisabled } from "@/lib/analysis/model/config";
-
 /**
- * Environment variable schemas (names from docs/contract.md section 10).
+ * Client-safe environment schema (names from docs/contract.md section 10).
+ *
+ * This module is imported by browser code, so it holds only NEXT_PUBLIC_ names
+ * and generic parsing helpers (D-34, S2b-1). The server schema lives in the
+ * server-only module `src/lib/env.server.ts`; never add a server name here.
  *
  * Values are validated lazily at first use, never at module import time, so
- * `next build` and the test suite do not require real values. Server values
- * are only reachable through `src/lib/env.server.ts` (server-only).
+ * `next build` and the test suite do not require real values.
  */
 
-const nonEmpty = (name: string) =>
+export const nonEmpty = (name: string) =>
   z.string({ error: `${name} is required` }).trim().min(1, `${name} is required`);
 
-const httpUrl = (name: string) =>
+export const httpUrl = (name: string) =>
   nonEmpty(name).pipe(
     z.url({ protocol: /^https?$/, error: `${name} must be an http(s) URL` }),
   );
@@ -24,43 +25,9 @@ export const clientEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_ANON_KEY: nonEmpty("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
 });
 
-/** Server-only variables. Never import these values into client code. */
-export const serverEnvSchema = clientEnvSchema.extend({
-  SUPABASE_SERVICE_ROLE_KEY: nonEmpty("SUPABASE_SERVICE_ROLE_KEY"),
-  GITHUB_APP_ID: nonEmpty("GITHUB_APP_ID").regex(/^\d+$/, "GITHUB_APP_ID must be numeric"),
-  GITHUB_APP_SLUG: nonEmpty("GITHUB_APP_SLUG").regex(
-    /^[a-z0-9-]+$/,
-    "GITHUB_APP_SLUG must be a GitHub app slug",
-  ),
-  GITHUB_APP_CLIENT_ID: nonEmpty("GITHUB_APP_CLIENT_ID"),
-  GITHUB_APP_CLIENT_SECRET: nonEmpty("GITHUB_APP_CLIENT_SECRET"),
-  GITHUB_APP_PRIVATE_KEY: nonEmpty("GITHUB_APP_PRIVATE_KEY"),
-  GITHUB_WEBHOOK_SECRET: nonEmpty("GITHUB_WEBHOOK_SECRET"),
-  /** Required only when ANALYSIS_MODEL is a model id (AI kill switch, D-16). */
-  ANTHROPIC_API_KEY: z.string().trim().min(1).optional(),
-  /** Model id, or "disabled" (the documented off value; missing = disabled). */
-  ANALYSIS_MODEL: z.string().trim().min(1).default(DISABLED_MODEL_VALUE),
-  APP_URL: httpUrl("APP_URL"),
-  /**
-   * Bearer for the worker Edge Function (D-30): random, at least 64 chars.
-   * Required only when NODE_ENV=production (next dev runs the worker in-process).
-   */
-  WORKER_TOKEN: z.string().trim().min(64, "WORKER_TOKEN must be at least 64 characters").optional(),
-}).superRefine((env, ctx) => {
-  if (!isAnalysisModelDisabled(env.ANALYSIS_MODEL) && env.ANTHROPIC_API_KEY === undefined) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["ANTHROPIC_API_KEY"],
-      message: "ANTHROPIC_API_KEY is required unless ANALYSIS_MODEL=disabled",
-    });
-  }
-});
-
 export type ClientEnv = z.infer<typeof clientEnvSchema>;
-export type ServerEnv = z.infer<typeof serverEnvSchema>;
 
 export const CLIENT_ENV_NAMES = Object.keys(clientEnvSchema.shape) as (keyof ClientEnv)[];
-export const SERVER_ENV_NAMES = Object.keys(serverEnvSchema.shape) as (keyof ServerEnv)[];
 
 /** Thrown when validation fails. Lists variable names only, never values. */
 export class EnvValidationError extends Error {
@@ -83,13 +50,18 @@ export class EnvValidationError extends Error {
 
 export type EnvSource = Readonly<Record<string, string | undefined>>;
 
-function parseWith<T extends z.ZodObject>(
+/**
+ * Parses `source` against an object schema (its `.shape` lists the names).
+ * Empty strings count as missing. Throws EnvValidationError with names only.
+ */
+export function parseEnvWith<S extends z.ZodType<object>>(
   scope: "client" | "server",
-  schema: T,
+  schema: S,
+  names: readonly string[],
   source: EnvSource,
-): z.infer<T> {
+): z.infer<S> {
   const input: Record<string, string | undefined> = {};
-  for (const name of Object.keys(schema.shape)) {
+  for (const name of names) {
     const value = source[name];
     // Treat empty strings as missing so an empty placeholder is reported clearly.
     input[name] = value === undefined || value.trim() === "" ? undefined : value;
@@ -110,16 +82,7 @@ function parseWith<T extends z.ZodObject>(
 
 /** Pure parser for the client schema. Safe to call anywhere. */
 export function parseClientEnv(source: EnvSource): ClientEnv {
-  return parseWith("client", clientEnvSchema, source);
-}
-
-/** Pure parser for the server schema. Do not call from client code. */
-export function parseServerEnv(source: EnvSource): ServerEnv {
-  const env = parseWith("server", serverEnvSchema, source);
-  if (source.NODE_ENV === "production" && env.WORKER_TOKEN === undefined) {
-    throw new EnvValidationError("server", ["WORKER_TOKEN"], []);
-  }
-  return env;
+  return parseEnvWith("client", clientEnvSchema, CLIENT_ENV_NAMES, source);
 }
 
 let cachedClientEnv: ClientEnv | undefined;

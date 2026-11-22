@@ -6,11 +6,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CLIENT_ENV_NAMES,
   EnvValidationError,
-  SERVER_ENV_NAMES,
   getClientEnv,
   parseClientEnv,
-  parseServerEnv,
 } from "@/lib/env";
+import { SERVER_ENV_NAMES, parseServerEnv } from "@/lib/env.server";
 
 const validClient = {
   NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
@@ -26,6 +25,7 @@ const validServer = {
   GITHUB_APP_CLIENT_SECRET: "client-secret",
   GITHUB_APP_PRIVATE_KEY: "-----BEGIN RSA PRIVATE KEY-----\\n...\\n-----END RSA PRIVATE KEY-----",
   GITHUB_WEBHOOK_SECRET: "webhook-secret",
+  ANALYSIS_PROVIDER: "anthropic",
   ANTHROPIC_API_KEY: "sk-ant-test",
   ANALYSIS_MODEL: "claude-sonnet-4-5",
   APP_URL: "http://localhost:3000",
@@ -46,9 +46,11 @@ const CONTRACT_NAMES = [
   "ANALYSIS_MODEL",
   "APP_URL",
   "WORKER_TOKEN",
+  "ANALYSIS_PROVIDER",
+  "OPENROUTER_API_KEY",
 ];
 
-const AI_NAMES = ["ANTHROPIC_API_KEY", "ANALYSIS_MODEL", "WORKER_TOKEN"];
+const AI_NAMES = ["ANTHROPIC_API_KEY", "ANALYSIS_MODEL", "WORKER_TOKEN", "ANALYSIS_PROVIDER", "OPENROUTER_API_KEY"];
 
 function envExampleKeys(): string[] {
   // vitest runs with the project root as cwd.
@@ -191,10 +193,46 @@ describe("env schema", () => {
     expect((caught as EnvValidationError).missing).toEqual(["ANTHROPIC_API_KEY"]);
   });
 
+  it("ANALYSIS_PROVIDER: missing = disabled, unknown values rejected (D-24)", () => {
+    const { ANALYSIS_PROVIDER: _p, ...rest } = validServer;
+    void _p;
+    expect(parseServerEnv(rest).ANALYSIS_PROVIDER).toBe("disabled");
+    let caught: unknown;
+    try {
+      parseServerEnv({ ...validServer, ANALYSIS_PROVIDER: "gemini" });
+    } catch (error) {
+      caught = error;
+    }
+    expect((caught as EnvValidationError).invalid).toEqual(["ANALYSIS_PROVIDER"]);
+    expect((caught as Error).message).not.toContain("gemini");
+  });
+
+  it("keys are required only for the selected provider while AI is on", () => {
+    const { ANTHROPIC_API_KEY: _k, ...noAnthropic } = validServer;
+    void _k;
+    // openrouter needs OPENROUTER_API_KEY, not ANTHROPIC_API_KEY.
+    let caught: unknown;
+    try {
+      parseServerEnv({ ...noAnthropic, ANALYSIS_PROVIDER: "openrouter" });
+    } catch (error) {
+      caught = error;
+    }
+    expect((caught as EnvValidationError).missing).toEqual(["OPENROUTER_API_KEY"]);
+    const env = parseServerEnv({ ...noAnthropic, ANALYSIS_PROVIDER: "openrouter", OPENROUTER_API_KEY: "sk-or-test" });
+    expect(env.OPENROUTER_API_KEY).toBe("sk-or-test");
+    // anthropic needs no OpenRouter key; disabled needs no key at all.
+    expect(parseServerEnv(validServer).OPENROUTER_API_KEY).toBeUndefined();
+    expect(parseServerEnv({ ...noAnthropic, ANALYSIS_PROVIDER: "disabled" }).ANALYSIS_PROVIDER).toBe("disabled");
+    expect(parseServerEnv({ ...noAnthropic, ANALYSIS_PROVIDER: "openrouter", ANALYSIS_MODEL: "disabled" }).ANALYSIS_MODEL).toBe("disabled");
+  });
+
   it(".env.example ships with AI disabled", () => {
     const text = readFileSync(resolve(process.cwd(), ".env.example"), "utf8");
     expect(text).toMatch(/^ANALYSIS_MODEL=disabled$/m);
     expect(text).toMatch(/^ANTHROPIC_API_KEY=$/m);
+    expect(text).toMatch(/^ANALYSIS_PROVIDER=disabled$/m);
+    expect(text).toMatch(/^OPENROUTER_API_KEY=$/m);
+    expect(text).toContain("development only, owner test repos only (security.md section 3)");
   });
 
   it("WORKER_TOKEN: optional outside production, required (min 64) in production", () => {
@@ -229,5 +267,28 @@ describe("env schema", () => {
     expect(() => parseServerEnv({ ...validServer, GITHUB_APP_SLUG: "Not A Slug" })).toThrow(
       EnvValidationError,
     );
+  });
+});
+
+describe("env schema split (D-34, S2b-1)", () => {
+  const clientSource = readFileSync(resolve(process.cwd(), "src/lib/env.ts"), "utf8");
+  const serverSource = readFileSync(resolve(process.cwd(), "src/lib/env.server.ts"), "utf8");
+
+  it("src/lib/env.ts (client-safe) holds no server env name, provider name, or model config import", () => {
+    expect(clientSource).not.toContain("@/lib/analysis/model/config");
+    expect(clientSource).not.toMatch(/import\s+["']server-only["']/);
+    for (const banned of ["OPENROUTER", "ANTHROPIC", "SERVICE_ROLE", "WORKER_TOKEN", "GITHUB_APP_PRIVATE_KEY", "openrouter"]) {
+      expect(clientSource).not.toContain(banned);
+    }
+    for (const name of SERVER_ENV_NAMES) {
+      if (name.startsWith("NEXT_PUBLIC_")) continue;
+      expect(clientSource).not.toContain(name);
+    }
+  });
+
+  it("src/lib/env.server.ts is server-only and owns the server schema", () => {
+    expect(serverSource).toMatch(/^import "server-only";/);
+    expect(serverSource).toContain("export const serverEnvSchema");
+    expect(serverSource).toContain("@/lib/analysis/model/config");
   });
 });

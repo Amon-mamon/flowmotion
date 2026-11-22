@@ -83,8 +83,9 @@ describe("provider patterns: placeholders never match", () => {
     ["OpenAI", "sk-" + "proj-" + "your_key_" + "changeme_" + R(30)],
     ["SendGrid", "SG." + "x".repeat(22) + "." + "x".repeat(43)],
     ["npm", "npm_" + "x".repeat(36)],
-    ["GitLab", "glpat-" + "EXAMPLE" + R(20)],
-    ["Supabase sb_secret", "sb_secret_" + "xxx" + R(20)],
+    // D-33: placeholder words count only as whole words.
+    ["GitLab", "glpat-" + "EXAMPLE-" + R(20)],
+    ["Supabase sb_secret", "sb_secret_" + "xxx-" + R(20)],
     ["Twilio", "SK" + "0".repeat(32)],
     ["Mailgun", "key-" + "0".repeat(32)],
     ["Resend low entropy", "re_" + "aaaaaaaa_" + "a".repeat(20)],
@@ -118,7 +119,8 @@ describe("generic rule: quoted form (any file, widened names)", () => {
     'const token = "${SECRET_FROM_ENVIRONMENT_VAR}";',
     'const token = "{{ secrets.DEPLOY_TOKEN_VALUE }}";',
     'const token = "$DEPLOY_TOKEN_VALUE_FROM_ENV";',
-    'const token = "DEPLOY_TOKEN_VALUE_FROM_ENV";',
+    // D-33: a bare name must be under 20 chars or low entropy to count as a placeholder.
+    'const token = "DEPLOY_TOKEN_REF";',
     'const token = "zzzzzzzzzzzzzzzzzzzzzzzzzzz";',
   ])("placeholder: %s", (text) => expectNone("src/config.ts", text));
 });
@@ -164,7 +166,7 @@ describe("generic rule: unquoted form (config files only)", () => {
     ["docker-compose.yml", "    environment:\n      - DB_PASSWORD=${DB_PASSWORD}\n"],
     [".github/workflows/ci.yml", "    env:\n      DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}\n"],
     ["config/app.yml", "password: $DB_PASSWORD_FROM_ENV\n"],
-    ["config/app.yml", "token_name: DEPLOY_TOKEN_REFERENCE_NAME\n"],
+    ["config/app.yml", "token_name: DEPLOY_TOKEN_NAME\n"],
     ["Dockerfile", "ARG NPM_TOKEN\nENV NPM_TOKEN=$NPM_TOKEN\n"],
   ])("placeholder in %s: %j", (path, text) => expectNone(path, text));
 
@@ -184,8 +186,12 @@ describe("generic rule: unquoted form (config files only)", () => {
 
 describe("isPlaceholderValue", () => {
   it("shared rule", () => {
-    for (const v of ["", "your-x", "your_x", "xchangemex", "anEXAMPLE", "aXXXb", "<x>", "${X}", "{{X}}", "$X", "aaaa"]) {
+    for (const v of ["", "your-x", "your_x", "x-changeme-x", "an.EXAMPLE", "a-XXX-b", "<x>", "${X}", "{{X}}", "$X", "aaaa"]) {
       expect(isPlaceholderValue(v), v).toBe(true);
+    }
+    // D-33: embedded in a longer alphanumeric run, the words are not placeholders.
+    for (const v of ["xchangemex", "anEXAMPLE", "aXXXb", "zxxxq"]) {
+      expect(isPlaceholderValue(v), v).toBe(false);
     }
     expect(isPlaceholderValue("MY_VAR")).toBe(false);
     expect(isPlaceholderValue("MY_VAR", { bareName: true })).toBe(true);

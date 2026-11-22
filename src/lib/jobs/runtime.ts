@@ -1,5 +1,6 @@
 import { createAnthropicModel } from "@/lib/analysis/model/anthropic";
-import { resolveModelConfig, type ModelEnvSource } from "@/lib/analysis/model/config";
+import { resolveModelConfig, type ModelEnvSource, type ModelRunner } from "@/lib/analysis/model/config";
+import { createOpenRouterModel } from "@/lib/analysis/model/openrouter";
 import type { AnalysisModel } from "@/lib/analysis/model/types";
 import {
   fetchRepoTreeBlobs,
@@ -56,13 +57,20 @@ export function createWorkerGitHub(config: WorkerGitHubConfig): WorkerGitHub {
   };
 }
 
-/** The analysis model, or null while the AI kill switch is on (D-16). */
-export function createModelFromEnv(env: ModelEnvSource, fetch?: FetchLike): AnalysisModel | null {
-  const config = resolveModelConfig(env);
+/**
+ * The analysis model, or null while AI is off or refused (D-16, D-24, D-33).
+ * This is the only provider switch. `runner` is required: the local runner
+ * passes "local", the worker Edge Function passes "edge" (which refuses
+ * OpenRouter inside `resolveModelConfig`, so no adapter is ever built).
+ */
+export function createModelFromEnv(env: ModelEnvSource, runner: ModelRunner, fetch?: FetchLike): AnalysisModel | null {
+  const config = resolveModelConfig(env, runner);
   if (!config.enabled) return null;
-  return createAnthropicModel({
-    apiKey: config.apiKey,
-    model: config.model,
-    ...(fetch !== undefined ? { fetch } : {}),
-  });
+  const options = { apiKey: config.apiKey, model: config.model, ...(fetch !== undefined ? { fetch } : {}) };
+  switch (config.provider) {
+    case "anthropic":
+      return createAnthropicModel(options);
+    case "openrouter":
+      return createOpenRouterModel(options);
+  }
 }

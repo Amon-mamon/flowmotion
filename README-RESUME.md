@@ -9,8 +9,8 @@ Open this file first in a new Claude Code session, then paste the prompt at the 
 | 0 Foundation | done, committed |
 | 1 Auth and shell | done, committed |
 | 1.1 Branch selection, GitHub link fallback, per-repo access | done, committed |
-| 2 Analysis | **built, checkpoint committed, security re-review NOT done yet** |
-| 2b OpenRouter (dev-only AI provider) | not started (D-24) |
+| 2 Analysis | done, committed 2026-11-22 |
+| 2b OpenRouter (dev-only AI provider) | done, committed 2026-11-22 (see README-OPENROUTER.md) |
 | 3 Flows, 4 Simulation, 5 Hardening | not started |
 | Subscription, user-facing n8n testing | NOT READY, do not build |
 
