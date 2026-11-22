@@ -43,7 +43,10 @@ describe("GitHub install state", () => {
     expect(verifyInstallState(state, cookie, USER)).toBe(true);
     // Different signed-in user on the same browser (review R1-5).
     expect(verifyInstallState(state, cookie, OTHER)).toBe(false);
-    expect(verifyInstallState(state.slice(0, -1) + "0", cookie, USER)).toBe(false);
+    // Always change the last hex char so the tampered state never equals the real one.
+    const tampered = state.slice(0, -1) + (state.endsWith("0") ? "1" : "0");
+    expect(tampered).not.toBe(state);
+    expect(verifyInstallState(tampered, cookie, USER)).toBe(false);
     expect(verifyInstallState(state, `${USER}.${state}x`, USER)).toBe(false);
     expect(verifyInstallState(state, state, USER)).toBe(false); // no user part
     expect(verifyInstallState(state, `${USER}.`, USER)).toBe(false);
