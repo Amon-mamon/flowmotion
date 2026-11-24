@@ -1,29 +1,24 @@
 "use client";
 
 import {
-  ArrowRightIcon,
   CalendarClockIcon,
   HandIcon,
   KeyRoundIcon,
   ListChecksIcon,
-  Loader2Icon,
   WebhookIcon,
-  WorkflowIcon,
   type LucideIcon,
 } from "lucide-react";
-import Link from "next/link";
-import { useState } from "react";
 
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { COPY, TRIGGER_LABEL, recommendationsFoundText } from "@/features/analysis/copy";
 import { ListSkeleton } from "@/features/analysis/components/section-states";
 import { RiskBadge } from "@/features/analysis/components/risk-badge";
 import { useRecommendations } from "@/features/analysis/queries";
 import type { Recommendation, TriggerKind } from "@/features/analysis/schemas";
-import { cn } from "@/lib/utils";
+import { RecommendationAction } from "@/features/flows/components/recommendation-action";
+import { FLOW_COPY } from "@/features/flows/copy";
 
 const TRIGGER_ICON: Readonly<Record<TriggerKind, LucideIcon>> = {
   webhook: WebhookIcon,
@@ -31,44 +26,19 @@ const TRIGGER_ICON: Readonly<Record<TriggerKind, LucideIcon>> = {
   manual: HandIcon,
 };
 
-function RecommendationCard({
-  recommendation: rec,
-  checked,
-  onToggle,
-}: {
-  recommendation: Recommendation;
-  checked: boolean;
-  onToggle: () => void;
-}) {
+/** One recommendation: no checkbox and no selected state (D-42); each card starts its own flow. */
+function RecommendationCard({ recommendation: rec }: { recommendation: Recommendation }) {
   const TriggerIcon = TRIGGER_ICON[rec.triggerKind];
-  const selectable = rec.status === "new";
-  const checkboxId = `rec-${rec.id}`;
   const confidence = Math.round(rec.confidence * 100);
 
   return (
     <li
       data-recommendation={rec.id}
-      data-selected={checked ? "true" : undefined}
-      className={cn(
-        "flex flex-col gap-3 rounded-xl border bg-card p-4 transition-colors",
-        checked ? "border-primary" : "border-border",
-      )}
+      className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
     >
-      <div className="flex items-start gap-3">
-        <input
-          id={checkboxId}
-          type="checkbox"
-          className="mt-1 size-4 shrink-0 accent-primary disabled:opacity-50"
-          checked={checked}
-          disabled={!selectable}
-          onChange={onToggle}
-        />
-        <div className="flex min-w-0 flex-col gap-1">
-          <label htmlFor={checkboxId} className="cursor-pointer text-base font-medium leading-snug">
-            {rec.title}
-          </label>
-          <p className="text-sm text-muted-foreground">{rec.description}</p>
-        </div>
+      <div className="flex min-w-0 flex-col gap-1">
+        <h3 className="text-base leading-snug font-medium">{rec.title}</h3>
+        <p className="text-sm text-muted-foreground">{rec.description}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -78,12 +48,6 @@ function RecommendationCard({
         </Badge>
         <Badge variant="outline">{confidence}% confidence</Badge>
         <RiskBadge risk={rec.riskLevel} />
-        {rec.status === "selected" ? (
-          <Badge variant="secondary">
-            <Loader2Icon aria-hidden="true" className="animate-spin" />
-            Generating
-          </Badge>
-        ) : null}
       </div>
 
       <dl className="grid gap-2 text-sm sm:grid-cols-2">
@@ -129,23 +93,13 @@ function RecommendationCard({
         {rec.rationale}
       </p>
 
-      {rec.status === "generated" && rec.flowId ? (
-        <Link
-          href={`/flows/${encodeURIComponent(rec.flowId)}`}
-          className="inline-flex w-fit items-center gap-1 text-sm text-primary underline-offset-4 hover:underline"
-        >
-          Open flow
-          <ArrowRightIcon aria-hidden="true" className="size-4" />
-        </Link>
-      ) : null}
+      <RecommendationAction recommendation={rec} />
     </li>
   );
 }
 
-/** Selectable recommendation cards plus the (Phase 2: disabled) Generate button. */
+/** Recommendation cards, each with its own action area, plus the helper text under the list. */
 export function RecommendationsList({ recommendations }: { recommendations: Recommendation[] }) {
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
-
   if (recommendations.length === 0) {
     return (
       <EmptyState
@@ -156,41 +110,16 @@ export function RecommendationsList({ recommendations }: { recommendations: Reco
     );
   }
 
-  const toggle = (id: string) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
   return (
     <div className="flex flex-col gap-4">
       <ul className="flex flex-col gap-3">
         {recommendations.map((rec) => (
-          <RecommendationCard
-            key={rec.id}
-            recommendation={rec}
-            checked={selected.has(rec.id)}
-            onToggle={() => toggle(rec.id)}
-          />
+          <RecommendationCard key={rec.id} recommendation={rec} />
         ))}
       </ul>
-      <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm" aria-live="polite" data-testid="selected-count">
-          {selected.size} selected
-        </p>
-        <div className="flex flex-col items-start gap-1 sm:items-end">
-          {/* Phase 3 wires generation; the button stays disabled in Phase 2. */}
-          <Button type="button" disabled aria-describedby="generate-hint">
-            <WorkflowIcon aria-hidden="true" />
-            Generate
-          </Button>
-          <span id="generate-hint" className="text-xs text-muted-foreground">
-            {COPY.generateHint}
-          </span>
-        </div>
-      </div>
+      <p className="text-sm text-muted-foreground" data-testid="generate-helper">
+        {FLOW_COPY.generateHelper}
+      </p>
     </div>
   );
 }

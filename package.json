@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:worker-deno": "node scripts/check-worker-deno.mjs"
+    "check:worker-deno": "node scripts/check-worker-deno.mjs",
+    "catalog:generate": "node scripts/generate-node-catalog.mjs",
+    "test:n8n-import": "node scripts/n8n-import-test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",

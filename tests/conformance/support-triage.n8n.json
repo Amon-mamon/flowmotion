@@ -1,0 +1,274 @@
+{
+  "name": "Support ticket triage",
+  "nodes": [
+    {
+      "id": "19f37861-9baf-4b11-99d1-f381416c64b1",
+      "name": "Ticket Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "support-ticket",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "cce02215-b403-4fe5-9bf4-0cb5275e9185",
+      "name": "Route Priority",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.5,
+      "position": [
+        470,
+        300
+      ],
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "e1c774e2-e405-4f52-aa7b-bcc2c3124a32",
+                    "leftValue": "={{ $json.body.priority }}",
+                    "rightValue": "high",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": false
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "e1c774e2-e405-4f52-aa7b-bcc2c3124a32",
+                    "leftValue": "={{ $json.body.priority }}",
+                    "rightValue": "low",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": false
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "e1c774e2-e405-4f52-aa7b-bcc2c3124a32",
+                    "leftValue": "={{ $json.body.priority }}",
+                    "rightValue": 3,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": false
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      }
+    },
+    {
+      "id": "5e067307-8a0b-4d17-b67c-4e27348e0337",
+      "name": "Alert On Call",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        690,
+        300
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "=Urgent ticket: {{ $json.body.subject }}",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "fdec2637-5f89-49c7-9e6e-11572745c067",
+      "name": "Open Issue",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        910,
+        300
+      ],
+      "parameters": {
+        "resource": "issue",
+        "operation": "create",
+        "owner": {
+          "__rl": true,
+          "mode": "name",
+          "value": "YOUR_GITHUB_OWNER"
+        },
+        "repository": {
+          "__rl": true,
+          "mode": "name",
+          "value": "YOUR_GITHUB_REPO"
+        },
+        "title": "=Urgent: {{ $node[\"Ticket Webhook\"].json.body.subject }}",
+        "body": "Opened from a support ticket.",
+        "labels": [],
+        "assignees": []
+      }
+    },
+    {
+      "id": "cf967e7e-4b45-4d2e-8607-5f9e1007ae4e",
+      "name": "Post To Discord",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        690,
+        460
+      ],
+      "parameters": {
+        "authentication": "webhook",
+        "operation": "sendLegacy",
+        "content": "=New ticket: {{ $json.body.subject }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "4b59ecb1-182a-47a1-9088-33d1baf06d41",
+      "name": "Log In Notion",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        910,
+        460
+      ],
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "create",
+        "dataSourceId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_NOTION_DATABASE_ID"
+        },
+        "title": "={{ $node[\"Ticket Webhook\"].json.body.subject }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "fcd186b5-c072-4185-b041-869513ac2b65",
+      "name": "Ignore",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        690,
+        620
+      ],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Ticket Webhook": {
+      "main": [
+        [
+          {
+            "node": "Route Priority",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Priority": {
+      "main": [
+        [
+          {
+            "node": "Alert On Call",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post To Discord",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post To Discord",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignore",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert On Call": {
+      "main": [
+        [
+          {
+            "node": "Open Issue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post To Discord": {
+      "main": [
+        [
+          {
+            "node": "Log In Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -1,0 +1,275 @@
+{
+  "name": "Weekly lead import",
+  "nodes": [
+    {
+      "id": "a85f5018-5851-4948-809c-a9f87f4c6228",
+      "name": "Every Monday",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 6 * * 1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "8baa8ae3-cf43-4a73-8bba-c48369892b93",
+      "name": "Read Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        470,
+        300
+      ],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_LEADS_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "YOUR_LEADS_SHEET_NAME"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "92d1cead-cc4c-4b7d-91df-904d4415271d",
+      "name": "Signup As ISO",
+      "type": "n8n-nodes-base.dateTime",
+      "typeVersion": 2,
+      "position": [
+        690,
+        300
+      ],
+      "parameters": {
+        "operation": "formatDate",
+        "date": "={{ $json.signup_date }}",
+        "format": "custom",
+        "customFormat": "yyyy-MM-dd'T'HH:mm:ssZZ",
+        "outputFieldName": "signupIso",
+        "options": {}
+      }
+    },
+    {
+      "id": "65f02816-3451-4ce6-827e-2136c5670d86",
+      "name": "Signup Day",
+      "type": "n8n-nodes-base.dateTime",
+      "typeVersion": 2,
+      "position": [
+        910,
+        300
+      ],
+      "parameters": {
+        "operation": "formatDate",
+        "date": "={{ $json.signup_date }}",
+        "format": "yyyy-MM-dd",
+        "outputFieldName": "signupDay",
+        "options": {}
+      }
+    },
+    {
+      "id": "0c764eba-c5a9-4baa-a68b-71da5939754a",
+      "name": "Drop Repeats",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        1130,
+        300
+      ],
+      "parameters": {
+        "operation": "removeDuplicateInputItems",
+        "compare": "allFields",
+        "options": {}
+      }
+    },
+    {
+      "id": "2733cd85-c1d4-4795-b79c-f0a5893df6b5",
+      "name": "Insert Lead",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        1350,
+        300
+      ],
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "mode": "name",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "name",
+          "value": "leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "full_name": "={{ $json.name }}",
+            "signup_at": "={{ $json.signupIso }}",
+            "active": true,
+            "score": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "full_name",
+              "displayName": "full_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "signup_at",
+              "displayName": "signup_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "active",
+              "displayName": "active",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "aac1acbb-6e9f-4e0b-9f34-8d5bd8298dab",
+      "name": "Mirror Lead",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1570,
+        300
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "create",
+        "tableId": "leads_mirror",
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "full_name",
+              "fieldValue": "={{ $node[\"Drop Repeats\"].json.name }}"
+            },
+            {
+              "fieldId": "signup_day",
+              "fieldValue": "={{ $node[\"Drop Repeats\"].json.signupDay }}"
+            },
+            {
+              "fieldId": "imported",
+              "fieldValue": "true"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Monday": {
+      "main": [
+        [
+          {
+            "node": "Read Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Leads": {
+      "main": [
+        [
+          {
+            "node": "Signup As ISO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signup As ISO": {
+      "main": [
+        [
+          {
+            "node": "Signup Day",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signup Day": {
+      "main": [
+        [
+          {
+            "node": "Drop Repeats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Drop Repeats": {
+      "main": [
+        [
+          {
+            "node": "Insert Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Lead": {
+      "main": [
+        [
+          {
+            "node": "Mirror Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

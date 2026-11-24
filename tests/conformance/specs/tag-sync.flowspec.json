@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "name": "Signup tag sync",
+  "description": "Run by hand: reads signups from Supabase, splits their tags into unique rows, and saves them to Airtable and a sheet.",
+  "nodes": [
+    {
+      "key": "start",
+      "nodeType": "n8n-nodes-base.manualTrigger",
+      "label": "Start",
+      "params": {}
+    },
+    {
+      "key": "load_signups",
+      "nodeType": "n8n-nodes-base.supabase",
+      "label": "Load Signups",
+      "params": { "operation": "select", "table": "signups", "limit": 100 }
+    },
+    {
+      "key": "has_tags",
+      "nodeType": "n8n-nodes-base.if",
+      "label": "Has Tags",
+      "params": { "conditions": [{ "left": "{{ $json.tags }}", "op": "exists" }], "combine": "or" }
+    },
+    {
+      "key": "fail_empty",
+      "nodeType": "n8n-nodes-base.stopAndError",
+      "label": "Fail Empty",
+      "params": { "message": "Signup {{ $json.id }} has no tags" }
+    },
+    {
+      "key": "each_tag",
+      "nodeType": "n8n-nodes-base.splitOut",
+      "label": "Each Tag",
+      "params": { "field": "tags" }
+    },
+    {
+      "key": "unique_tags",
+      "nodeType": "n8n-nodes-base.removeDuplicates",
+      "label": "Unique Tags",
+      "params": { "fields": ["tags"] }
+    },
+    {
+      "key": "rename_tag",
+      "nodeType": "n8n-nodes-base.renameKeys",
+      "label": "Rename Tag",
+      "params": { "keys": [{ "from": "tags", "to": "tag" }] }
+    },
+    {
+      "key": "stamp",
+      "nodeType": "n8n-nodes-base.dateTime",
+      "label": "Stamp Sync Time",
+      "params": { "operation": "now", "as": "syncedAt" }
+    },
+    {
+      "key": "save_airtable",
+      "nodeType": "n8n-nodes-base.airtable",
+      "label": "Save To Airtable",
+      "params": {
+        "baseId": "YOUR_AIRTABLE_BASE_ID",
+        "table": "YOUR_AIRTABLE_TABLE_ID",
+        "fields": [
+          { "name": "Tag", "value": "{{ $json.tag }}" },
+          { "name": "SyncedAt", "value": "{{ $json.syncedAt }}" }
+        ]
+      }
+    },
+    {
+      "key": "log_sheet",
+      "nodeType": "n8n-nodes-base.googleSheets",
+      "label": "Log To Sheet",
+      "params": {
+        "operation": "append",
+        "documentId": "YOUR_SHEET_ID",
+        "sheetName": "YOUR_SHEET_NAME",
+        "columns": [
+          { "name": "tag", "value": "{{ $node[\"Stamp Sync Time\"].json.tag }}" },
+          { "name": "synced", "value": true }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    { "from": "start", "to": "load_signups" },
+    { "from": "load_signups", "to": "has_tags" },
+    { "from": "has_tags", "to": "each_tag", "output": 0 },
+    { "from": "has_tags", "to": "fail_empty", "output": 1 },
+    { "from": "each_tag", "to": "unique_tags" },
+    { "from": "unique_tags", "to": "rename_tag" },
+    { "from": "rename_tag", "to": "stamp" },
+    { "from": "stamp", "to": "save_airtable" },
+    { "from": "save_airtable", "to": "log_sheet" }
+  ],
+  "tests": {
+    "cases": [
+      {
+        "name": "Tags are split and saved",
+        "trigger": { "kind": "manual", "payload": {} },
+        "mocks": {
+          "load_signups": [{ "id": 1, "tags": ["beta", "newsletter", "beta"] }],
+          "save_airtable": { "id": "rec_1" },
+          "log_sheet": { "updatedRows": 1 }
+        },
+        "expect": {
+          "reachedNodes": ["start", "load_signups", "has_tags", "each_tag", "unique_tags", "save_airtable", "log_sheet"],
+          "notReachedNodes": ["fail_empty"]
+        }
+      },
+      {
+        "name": "A signup without tags stops the flow",
+        "trigger": { "kind": "manual", "payload": {} },
+        "mocks": { "load_signups": [{ "id": 2 }] },
+        "expect": { "reachedNodes": ["start", "load_signups", "has_tags", "fail_empty"], "notReachedNodes": ["each_tag"] }
+      }
+    ]
+  }
+}

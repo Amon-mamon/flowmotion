@@ -30,8 +30,6 @@ export const COPY = {
   noFindings: "No secrets found in the files we read.",
   noSignals: "No automation signals found.",
   noRecommendations: "No automations found",
-  /** exact (design.md, Phase 2 Generate hint) */
-  generateHint: "Flow generation arrives in the next phase",
   notAnalyzed: "Not analyzed yet",
 } as const;
 

@@ -1,0 +1,356 @@
+{
+  "name": "Signup tag sync",
+  "nodes": [
+    {
+      "id": "523ebca5-c032-4df5-afc3-a70559bb8855",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "87f7991d-d209-4ced-af29-a7bd2efd000d",
+      "name": "Load Signups",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        470,
+        300
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "getAll",
+        "tableId": "signups",
+        "returnAll": false,
+        "limit": 100,
+        "filterType": "none"
+      }
+    },
+    {
+      "id": "92afaaef-bed0-405f-bd7e-8d0fd4de21ff",
+      "name": "Has Tags",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        690,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "e1c774e2-e405-4f52-aa7b-bcc2c3124a32",
+              "leftValue": "={{ $json.tags }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "365745fd-fe71-4a6d-8de5-ec1d36a9438d",
+      "name": "Fail Empty",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        910,
+        300
+      ],
+      "parameters": {
+        "errorType": "errorMessage",
+        "errorMessage": "=Signup {{ $json.id }} has no tags"
+      }
+    },
+    {
+      "id": "5c0345c9-89aa-4bb9-94d9-0269d73168d9",
+      "name": "Each Tag",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1.1,
+      "position": [
+        910,
+        460
+      ],
+      "parameters": {
+        "fieldToSplitOut": "tags",
+        "include": "noOtherFields",
+        "options": {}
+      }
+    },
+    {
+      "id": "8f60e1d4-5c81-4be4-9d74-5a74e9f19d84",
+      "name": "Unique Tags",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        1130,
+        300
+      ],
+      "parameters": {
+        "operation": "removeDuplicateInputItems",
+        "compare": "selectedFields",
+        "fieldsToCompare": "tags",
+        "options": {}
+      }
+    },
+    {
+      "id": "6261c66e-593b-467e-ae69-7e8e67b35b9e",
+      "name": "Rename Tag",
+      "type": "n8n-nodes-base.renameKeys",
+      "typeVersion": 1,
+      "position": [
+        1350,
+        300
+      ],
+      "parameters": {
+        "keys": {
+          "key": [
+            {
+              "currentKey": "tags",
+              "newKey": "tag"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "5c862f7e-ca29-4eee-ba0c-acde63b3494e",
+      "name": "Stamp Sync Time",
+      "type": "n8n-nodes-base.dateTime",
+      "typeVersion": 2,
+      "position": [
+        1570,
+        300
+      ],
+      "parameters": {
+        "operation": "getCurrentDate",
+        "includeTime": true,
+        "outputFieldName": "syncedAt",
+        "options": {}
+      }
+    },
+    {
+      "id": "d3213d5b-77ea-4d4b-94a4-2dfb056b10eb",
+      "name": "Save To Airtable",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1790,
+        300
+      ],
+      "parameters": {
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_TABLE_ID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Tag": "={{ $json.tag }}",
+            "SyncedAt": "={{ $json.syncedAt }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Tag",
+              "displayName": "Tag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "SyncedAt",
+              "displayName": "SyncedAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c7789a43-b757-4cb3-b26f-83e3a7f144d3",
+      "name": "Log To Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2010,
+        300
+      ],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "YOUR_SHEET_NAME"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tag": "={{ $node[\"Stamp Sync Time\"].json.tag }}",
+            "synced": true
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "tag",
+              "displayName": "tag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "synced",
+              "displayName": "synced",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Load Signups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Signups": {
+      "main": [
+        [
+          {
+            "node": "Has Tags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Tags": {
+      "main": [
+        [
+          {
+            "node": "Each Tag",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fail Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Each Tag": {
+      "main": [
+        [
+          {
+            "node": "Unique Tags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unique Tags": {
+      "main": [
+        [
+          {
+            "node": "Rename Tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rename Tag": {
+      "main": [
+        [
+          {
+            "node": "Stamp Sync Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stamp Sync Time": {
+      "main": [
+        [
+          {
+            "node": "Save To Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save To Airtable": {
+      "main": [
+        [
+          {
+            "node": "Log To Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

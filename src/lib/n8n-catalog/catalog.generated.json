@@ -1,0 +1,7451 @@
+{
+  "n8nVersion": "2.49.5",
+  "nodes": {
+    "n8n-nodes-base.aggregate": {
+      "credentials": [],
+      "displayName": "Aggregate",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "aggregate",
+          "options": [
+            "aggregateAllItemData",
+            "aggregateIndividualFields"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "destinationFieldName",
+          "type": "string"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "fieldToAggregate",
+                  "type": "string"
+                },
+                {
+                  "name": "outputFieldName",
+                  "type": "string"
+                },
+                {
+                  "name": "renameField",
+                  "type": "boolean"
+                }
+              ],
+              "name": "fieldToAggregate",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "fieldsToAggregate",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "fieldsToExclude",
+          "type": "string"
+        },
+        {
+          "name": "fieldsToInclude",
+          "type": "string"
+        },
+        {
+          "name": "include",
+          "options": [
+            "allFields",
+            "allFieldsExcept",
+            "specifiedFields"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "name": "disableDotNotation",
+              "type": "boolean"
+            },
+            {
+              "name": "includeBinaries",
+              "type": "boolean"
+            },
+            {
+              "name": "keepMissing",
+              "type": "boolean"
+            },
+            {
+              "name": "keepOnlyUnique",
+              "type": "boolean"
+            },
+            {
+              "name": "mergeLists",
+              "type": "boolean"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        }
+      ],
+      "typeVersion": 1
+    },
+    "n8n-nodes-base.airtable": {
+      "credentials": [
+        "airtableOAuth2Api",
+        "airtableTokenApi"
+      ],
+      "displayName": "Airtable",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "authentication",
+          "options": [
+            "airtableOAuth2Api",
+            "airtableTokenApi"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "base",
+          "type": "resourceLocator"
+        },
+        {
+          "name": "columns",
+          "type": "resourceMapper"
+        },
+        {
+          "name": "filterByFormula",
+          "type": "string"
+        },
+        {
+          "name": "id",
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "type": "number"
+        },
+        {
+          "name": "operation",
+          "options": [
+            "create",
+            "deleteRecord",
+            "get",
+            "getMany",
+            "getSchema",
+            "search",
+            "update",
+            "upsert"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "name": "downloadFields",
+              "type": "multiOptions"
+            },
+            {
+              "name": "fields",
+              "type": "multiOptions"
+            },
+            {
+              "name": "ignoreFields",
+              "type": "string"
+            },
+            {
+              "name": "permissionLevel",
+              "options": [
+                "comment",
+                "create",
+                "edit",
+                "none",
+                "read"
+              ],
+              "type": "multiOptions"
+            },
+            {
+              "name": "typecast",
+              "type": "boolean"
+            },
+            {
+              "name": "updateAllMatches",
+              "type": "boolean"
+            },
+            {
+              "name": "view",
+              "type": "resourceLocator"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "name": "resource",
+          "options": [
+            "base",
+            "record"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "returnAll",
+          "type": "boolean"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "direction",
+                  "options": [
+                    "asc",
+                    "desc"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "field",
+                  "type": "options"
+                }
+              ],
+              "name": "property",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "sort",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "table",
+          "type": "resourceLocator"
+        }
+      ],
+      "typeVersion": 2.2
+    },
+    "n8n-nodes-base.dateTime": {
+      "credentials": [],
+      "displayName": "Date & Time",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "customFormat",
+          "type": "string"
+        },
+        {
+          "name": "date",
+          "type": "string"
+        },
+        {
+          "name": "duration",
+          "type": "number"
+        },
+        {
+          "name": "endDate",
+          "type": "string"
+        },
+        {
+          "name": "format",
+          "options": [
+            "MM-dd-yyyy",
+            "MM/dd/yyyy",
+            "MMMM dd yyyy",
+            "X",
+            "custom",
+            "x",
+            "yyyy-MM-dd",
+            "yyyy/MM/dd"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "includeTime",
+          "type": "boolean"
+        },
+        {
+          "name": "magnitude",
+          "type": "string"
+        },
+        {
+          "name": "mode",
+          "options": [
+            "roundDown",
+            "roundUp"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "operation",
+          "options": [
+            "addToDate",
+            "extractDate",
+            "formatDate",
+            "getCurrentDate",
+            "getTimeBetweenDates",
+            "roundDate",
+            "subtractFromDate"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "name": "fromFormat",
+              "type": "string"
+            },
+            {
+              "name": "includeInputFields",
+              "type": "boolean"
+            },
+            {
+              "name": "isoString",
+              "type": "boolean"
+            },
+            {
+              "name": "timezone",
+              "type": "boolean"
+            },
+            {
+              "name": "timezone",
+              "type": "string"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "name": "outputFieldName",
+          "type": "string"
+        },
+        {
+          "name": "part",
+          "options": [
+            "day",
+            "hour",
+            "minute",
+            "month",
+            "second",
+            "week",
+            "year"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "startDate",
+          "type": "string"
+        },
+        {
+          "name": "timeUnit",
+          "options": [
+            "days",
+            "hours",
+            "milliseconds",
+            "minutes",
+            "months",
+            "quarters",
+            "seconds",
+            "weeks",
+            "years"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "to",
+          "options": [
+            "month"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "toNearest",
+          "options": [
+            "day",
+            "hour",
+            "minute",
+            "month",
+            "second",
+            "week",
+            "year"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "units",
+          "options": [
+            "day",
+            "hour",
+            "millisecond",
+            "minute",
+            "month",
+            "second",
+            "week",
+            "year"
+          ],
+          "type": "multiOptions"
+        }
+      ],
+      "typeVersion": 2
+    },
+    "n8n-nodes-base.discord": {
+      "credentials": [
+        "discordBotApi",
+        "discordOAuth2Api",
+        "discordWebhookApi"
+      ],
+      "displayName": "Discord",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "after",
+          "type": "string"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "approvalType",
+                  "options": [
+                    "double",
+                    "single"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "approveLabel",
+                  "type": "string"
+                },
+                {
+                  "name": "disapproveLabel",
+                  "type": "string"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "approvalOptions",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "authentication",
+          "options": [
+            "botToken",
+            "oAuth2",
+            "webhook"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "channelId",
+          "type": "resourceLocator"
+        },
+        {
+          "name": "content",
+          "type": "string"
+        },
+        {
+          "name": "defineForm",
+          "options": [
+            "fields",
+            "json"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "deleteMessageSeconds",
+          "options": [
+            0,
+            3600,
+            21600,
+            43200,
+            86400,
+            259200,
+            604800
+          ],
+          "type": "options"
+        },
+        {
+          "name": "duration",
+          "options": [
+            60,
+            300,
+            3600,
+            86400,
+            604800,
+            2419200,
+            "remove"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "author",
+                  "type": "string"
+                },
+                {
+                  "name": "color",
+                  "type": "color"
+                },
+                {
+                  "name": "description",
+                  "type": "string"
+                },
+                {
+                  "name": "image",
+                  "type": "string"
+                },
+                {
+                  "name": "inputMethod",
+                  "options": [
+                    "fields",
+                    "json"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "json",
+                  "type": "json"
+                },
+                {
+                  "name": "thumbnail",
+                  "type": "string"
+                },
+                {
+                  "name": "timestamp",
+                  "type": "dateTime"
+                },
+                {
+                  "name": "title",
+                  "type": "string"
+                },
+                {
+                  "name": "url",
+                  "type": "string"
+                },
+                {
+                  "name": "video",
+                  "type": "string"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "embeds",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "emoji",
+          "type": "string"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "inputFieldName",
+                  "type": "string"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "files",
+          "type": "fixedCollection"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "acceptFileTypes",
+                  "type": "string"
+                },
+                {
+                  "name": "defaultValue",
+                  "type": "dateTime"
+                },
+                {
+                  "name": "defaultValue",
+                  "type": "string"
+                },
+                {
+                  "name": "elementName",
+                  "type": "string"
+                },
+                {
+                  "name": "fieldLabel",
+                  "type": "string"
+                },
+                {
+                  "name": "fieldName",
+                  "type": "string"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "name": "option",
+                          "type": "string"
+                        }
+                      ],
+                      "name": "values",
+                      "type": "fixedCollectionGroup"
+                    }
+                  ],
+                  "name": "fieldOptions",
+                  "type": "fixedCollection"
+                },
+                {
+                  "name": "fieldType",
+                  "options": [
+                    "checkbox",
+                    "date",
+                    "dropdown",
+                    "email",
+                    "file",
+                    "hiddenField",
+                    "html",
+                    "number",
+                    "password",
+                    "radio",
+                    "text",
+                    "textarea"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "fieldValue",
+                  "type": "string"
+                },
+                {
+                  "name": "html",
+                  "type": "string"
+                },
+                {
+                  "name": "limitSelection",
+                  "options": [
+                    "exact",
+                    "range",
+                    "unlimited"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "maxSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "minSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "multipleFiles",
+                  "type": "boolean"
+                },
+                {
+                  "name": "multiselect",
+                  "type": "boolean"
+                },
+                {
+                  "name": "numberOfSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "placeholder",
+                  "type": "string"
+                },
+                {
+                  "name": "requiredField",
+                  "type": "boolean"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "formFields",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "guildId",
+          "type": "resourceLocator"
+        },
+        {
+          "name": "jsonOutput",
+          "type": "json"
+        },
+        {
+          "name": "limit",
+          "type": "number"
+        },
+        {
+          "name": "message",
+          "type": "string"
+        },
+        {
+          "name": "messageId",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "operation",
+          "options": [
+            "ban",
+            "create",
+            "deleteChannel",
+            "deleteMessage",
+            "get",
+            "getAll",
+            "kick",
+            "react",
+            "roleAdd",
+            "roleRemove",
+            "send",
+            "sendAndWait",
+            "sendLegacy",
+            "timeout",
+            "unban",
+            "update"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "name": "appendAttribution",
+              "type": "boolean"
+            },
+            {
+              "name": "avatar_url",
+              "type": "string"
+            },
+            {
+              "name": "bitrate",
+              "type": "number"
+            },
+            {
+              "name": "categoryId",
+              "type": "resourceLocator"
+            },
+            {
+              "name": "filter",
+              "options": [
+                0,
+                2,
+                4
+              ],
+              "type": "multiOptions"
+            },
+            {
+              "name": "flags",
+              "options": [
+                "SUPPRESS_EMBEDS",
+                "SUPPRESS_NOTIFICATIONS"
+              ],
+              "type": "multiOptions"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "limitType",
+                      "options": [
+                        "afterTimeInterval",
+                        "atSpecifiedTime"
+                      ],
+                      "type": "options"
+                    },
+                    {
+                      "name": "maxDateAndTime",
+                      "type": "dateTime"
+                    },
+                    {
+                      "name": "resumeAmount",
+                      "type": "number"
+                    },
+                    {
+                      "name": "resumeUnit",
+                      "options": [
+                        "days",
+                        "hours",
+                        "minutes"
+                      ],
+                      "type": "options"
+                    }
+                  ],
+                  "name": "values",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "limitWaitTime",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "messageButtonLabel",
+              "type": "string"
+            },
+            {
+              "name": "message_reference",
+              "type": "string"
+            },
+            {
+              "name": "nsfw",
+              "type": "boolean"
+            },
+            {
+              "name": "position",
+              "type": "number"
+            },
+            {
+              "name": "rate_limit_per_user",
+              "type": "number"
+            },
+            {
+              "name": "responseFormButtonLabel",
+              "type": "string"
+            },
+            {
+              "name": "responseFormCustomCss",
+              "type": "string"
+            },
+            {
+              "name": "responseFormDescription",
+              "type": "string"
+            },
+            {
+              "name": "responseFormTitle",
+              "type": "string"
+            },
+            {
+              "name": "simplify",
+              "type": "boolean"
+            },
+            {
+              "name": "topic",
+              "type": "string"
+            },
+            {
+              "name": "tts",
+              "type": "boolean"
+            },
+            {
+              "name": "user_limit",
+              "type": "number"
+            },
+            {
+              "name": "username",
+              "type": "string"
+            },
+            {
+              "name": "wait",
+              "type": "boolean"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "name": "reason",
+          "options": [
+            "compromised",
+            "other",
+            "rule_break",
+            "suspicious_spam"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "reasonCustom",
+          "type": "string"
+        },
+        {
+          "name": "resource",
+          "options": [
+            "channel",
+            "member",
+            "message"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "responseType",
+          "options": [
+            "approval",
+            "customForm",
+            "freeText"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "returnAll",
+          "type": "boolean"
+        },
+        {
+          "name": "role",
+          "type": "multiOptions"
+        },
+        {
+          "name": "sendTo",
+          "options": [
+            "channel",
+            "user"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "type",
+          "options": [
+            "0",
+            "2",
+            "4"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "userId",
+          "type": "resourceLocator"
+        }
+      ],
+      "typeVersion": 2
+    },
+    "n8n-nodes-base.emailSend": {
+      "credentials": [
+        "smtp"
+      ],
+      "displayName": "Send Email",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "approvalType",
+                  "options": [
+                    "double",
+                    "single"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "approveLabel",
+                  "type": "string"
+                },
+                {
+                  "name": "buttonApprovalStyle",
+                  "options": [
+                    "primary",
+                    "secondary"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "buttonDisapprovalStyle",
+                  "options": [
+                    "primary",
+                    "secondary"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "disapproveLabel",
+                  "type": "string"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "approvalOptions",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "defineForm",
+          "options": [
+            "fields",
+            "json"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "emailFormat",
+          "options": [
+            "both",
+            "html",
+            "text"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "acceptFileTypes",
+                  "type": "string"
+                },
+                {
+                  "name": "defaultValue",
+                  "type": "dateTime"
+                },
+                {
+                  "name": "defaultValue",
+                  "type": "string"
+                },
+                {
+                  "name": "elementName",
+                  "type": "string"
+                },
+                {
+                  "name": "fieldLabel",
+                  "type": "string"
+                },
+                {
+                  "name": "fieldName",
+                  "type": "string"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "name": "option",
+                          "type": "string"
+                        }
+                      ],
+                      "name": "values",
+                      "type": "fixedCollectionGroup"
+                    }
+                  ],
+                  "name": "fieldOptions",
+                  "type": "fixedCollection"
+                },
+                {
+                  "name": "fieldType",
+                  "options": [
+                    "checkbox",
+                    "date",
+                    "dropdown",
+                    "email",
+                    "file",
+                    "hiddenField",
+                    "html",
+                    "number",
+                    "password",
+                    "radio",
+                    "text",
+                    "textarea"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "fieldValue",
+                  "type": "string"
+                },
+                {
+                  "name": "html",
+                  "type": "string"
+                },
+                {
+                  "name": "limitSelection",
+                  "options": [
+                    "exact",
+                    "range",
+                    "unlimited"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "maxSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "minSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "multipleFiles",
+                  "type": "boolean"
+                },
+                {
+                  "name": "multiselect",
+                  "type": "boolean"
+                },
+                {
+                  "name": "numberOfSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "placeholder",
+                  "type": "string"
+                },
+                {
+                  "name": "requiredField",
+                  "type": "boolean"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "formFields",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "fromEmail",
+          "type": "string"
+        },
+        {
+          "name": "html",
+          "type": "string"
+        },
+        {
+          "name": "jsonOutput",
+          "type": "json"
+        },
+        {
+          "name": "message",
+          "type": "string"
+        },
+        {
+          "name": "operation",
+          "options": [
+            "send",
+            "sendAndWait"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "name": "allowUnauthorizedCerts",
+              "type": "boolean"
+            },
+            {
+              "name": "appendAttribution",
+              "type": "boolean"
+            },
+            {
+              "name": "attachments",
+              "type": "string"
+            },
+            {
+              "name": "bccEmail",
+              "type": "string"
+            },
+            {
+              "name": "ccEmail",
+              "type": "string"
+            },
+            {
+              "name": "fileAttachments",
+              "type": "string"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "limitType",
+                      "options": [
+                        "afterTimeInterval",
+                        "atSpecifiedTime"
+                      ],
+                      "type": "options"
+                    },
+                    {
+                      "name": "maxDateAndTime",
+                      "type": "dateTime"
+                    },
+                    {
+                      "name": "resumeAmount",
+                      "type": "number"
+                    },
+                    {
+                      "name": "resumeUnit",
+                      "options": [
+                        "days",
+                        "hours",
+                        "minutes"
+                      ],
+                      "type": "options"
+                    }
+                  ],
+                  "name": "values",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "limitWaitTime",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "messageButtonLabel",
+              "type": "string"
+            },
+            {
+              "name": "replyTo",
+              "type": "string"
+            },
+            {
+              "name": "responseFormButtonLabel",
+              "type": "string"
+            },
+            {
+              "name": "responseFormCustomCss",
+              "type": "string"
+            },
+            {
+              "name": "responseFormDescription",
+              "type": "string"
+            },
+            {
+              "name": "responseFormTitle",
+              "type": "string"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "name": "resource",
+          "type": "hidden"
+        },
+        {
+          "name": "responseType",
+          "options": [
+            "approval",
+            "customForm",
+            "freeText"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "subject",
+          "type": "string"
+        },
+        {
+          "name": "text",
+          "type": "string"
+        },
+        {
+          "name": "toEmail",
+          "type": "string"
+        }
+      ],
+      "typeVersion": 2.1
+    },
+    "n8n-nodes-base.filter": {
+      "credentials": [],
+      "displayName": "Filter",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "conditions",
+          "type": "filter"
+        },
+        {
+          "name": "looseTypeValidation",
+          "type": "boolean"
+        },
+        {
+          "children": [
+            {
+              "name": "ignoreCase",
+              "type": "boolean"
+            },
+            {
+              "name": "looseTypeValidation",
+              "type": "boolean"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        }
+      ],
+      "typeVersion": 2.4
+    },
+    "n8n-nodes-base.github": {
+      "credentials": [
+        "githubApi",
+        "githubAppApi",
+        "githubOAuth2Api"
+      ],
+      "displayName": "GitHub",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "children": [
+            {
+              "name": "body",
+              "type": "string"
+            },
+            {
+              "name": "commitId",
+              "type": "string"
+            },
+            {
+              "name": "draft",
+              "type": "boolean"
+            },
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "prerelease",
+              "type": "boolean"
+            },
+            {
+              "name": "tag_name",
+              "type": "string"
+            },
+            {
+              "name": "target_commitish",
+              "type": "string"
+            }
+          ],
+          "name": "additionalFields",
+          "type": "collection"
+        },
+        {
+          "children": [
+            {
+              "name": "reference",
+              "type": "string"
+            }
+          ],
+          "name": "additionalParameters",
+          "type": "collection"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "email",
+                  "type": "string"
+                },
+                {
+                  "name": "name",
+                  "type": "string"
+                }
+              ],
+              "name": "author",
+              "type": "fixedCollectionGroup"
+            },
+            {
+              "children": [
+                {
+                  "name": "branch",
+                  "type": "string"
+                }
+              ],
+              "name": "branch",
+              "type": "fixedCollectionGroup"
+            },
+            {
+              "children": [
+                {
+                  "name": "email",
+                  "type": "string"
+                },
+                {
+                  "name": "name",
+                  "type": "string"
+                }
+              ],
+              "name": "committer",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "additionalParameters",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "asBinaryProperty",
+          "type": "boolean"
+        },
+        {
+          "children": [
+            {
+              "name": "assignee",
+              "type": "string"
+            }
+          ],
+          "name": "assignees",
+          "type": "collection"
+        },
+        {
+          "name": "authentication",
+          "options": [
+            "accessToken",
+            "githubAppApi",
+            "oAuth2"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "base",
+          "type": "string"
+        },
+        {
+          "name": "binaryData",
+          "type": "boolean"
+        },
+        {
+          "name": "binaryPropertyName",
+          "type": "string"
+        },
+        {
+          "name": "body",
+          "type": "string"
+        },
+        {
+          "name": "commentId",
+          "type": "number"
+        },
+        {
+          "name": "commitMessage",
+          "type": "string"
+        },
+        {
+          "name": "commitTitle",
+          "type": "string"
+        },
+        {
+          "name": "draft",
+          "type": "boolean"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "assignee",
+                  "type": "string"
+                }
+              ],
+              "name": "assignees",
+              "type": "collection"
+            },
+            {
+              "name": "base",
+              "type": "string"
+            },
+            {
+              "name": "body",
+              "type": "string"
+            },
+            {
+              "children": [
+                {
+                  "name": "label",
+                  "type": "string"
+                }
+              ],
+              "name": "labels",
+              "type": "collection"
+            },
+            {
+              "name": "state",
+              "options": [
+                "closed",
+                "open"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "state_reason",
+              "options": [
+                "completed",
+                "not_planned",
+                "reopened"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "title",
+              "type": "string"
+            }
+          ],
+          "name": "editFields",
+          "type": "collection"
+        },
+        {
+          "name": "email",
+          "type": "string"
+        },
+        {
+          "name": "event",
+          "options": [
+            "approve",
+            "comment",
+            "pending",
+            "requestChanges"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "fileContent",
+          "type": "string"
+        },
+        {
+          "name": "filePath",
+          "type": "string"
+        },
+        {
+          "children": [
+            {
+              "name": "assignee",
+              "type": "string"
+            },
+            {
+              "name": "creator",
+              "type": "string"
+            },
+            {
+              "name": "direction",
+              "options": [
+                "asc",
+                "desc"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "labels",
+              "type": "string"
+            },
+            {
+              "name": "mentioned",
+              "type": "string"
+            },
+            {
+              "name": "since",
+              "type": "dateTime"
+            },
+            {
+              "name": "sort",
+              "options": [
+                "comments",
+                "created",
+                "updated"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "state",
+              "options": [
+                "all",
+                "closed",
+                "open"
+              ],
+              "type": "options"
+            }
+          ],
+          "name": "getRepositoryIssuesFilters",
+          "type": "collection"
+        },
+        {
+          "children": [
+            {
+              "name": "direction",
+              "options": [
+                "asc",
+                "desc"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "sort",
+              "options": [
+                "created",
+                "long-running",
+                "popularity",
+                "updated"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "state",
+              "options": [
+                "all",
+                "closed",
+                "open"
+              ],
+              "type": "options"
+            }
+          ],
+          "name": "getRepositoryPullRequestsFilters",
+          "type": "collection"
+        },
+        {
+          "children": [
+            {
+              "name": "direction",
+              "options": [
+                "asc",
+                "desc"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "labels",
+              "type": "string"
+            },
+            {
+              "name": "mentioned",
+              "type": "string"
+            },
+            {
+              "name": "since",
+              "type": "dateTime"
+            },
+            {
+              "name": "sort",
+              "options": [
+                "comments",
+                "created",
+                "updated"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "state",
+              "options": [
+                "all",
+                "closed",
+                "open"
+              ],
+              "type": "options"
+            }
+          ],
+          "name": "getUserIssuesFilters",
+          "type": "collection"
+        },
+        {
+          "name": "head",
+          "type": "string"
+        },
+        {
+          "name": "inputs",
+          "type": "json"
+        },
+        {
+          "name": "issueNumber",
+          "type": "number"
+        },
+        {
+          "children": [
+            {
+              "name": "label",
+              "type": "string"
+            }
+          ],
+          "name": "labels",
+          "type": "collection"
+        },
+        {
+          "name": "limit",
+          "type": "number"
+        },
+        {
+          "name": "lockReason",
+          "options": [
+            "off-topic",
+            "resolved",
+            "spam",
+            "too heated"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "mergeMethod",
+          "options": [
+            "merge",
+            "rebase",
+            "squash"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "operation",
+          "options": [
+            "close",
+            "create",
+            "createComment",
+            "createOrUpdate",
+            "delete",
+            "disable",
+            "dispatch",
+            "dispatchAndWait",
+            "edit",
+            "editComment",
+            "enable",
+            "get",
+            "getAll",
+            "getDiff",
+            "getIssues",
+            "getLicense",
+            "getMembers",
+            "getPatch",
+            "getProfile",
+            "getPullRequests",
+            "getRepositories",
+            "getUsage",
+            "getUserIssues",
+            "invite",
+            "list",
+            "listPopularPaths",
+            "listReferrers",
+            "lock",
+            "merge",
+            "reopen",
+            "update"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "limitType",
+                      "options": [
+                        "afterTimeInterval",
+                        "atSpecifiedTime"
+                      ],
+                      "type": "options"
+                    },
+                    {
+                      "name": "maxDateAndTime",
+                      "type": "dateTime"
+                    },
+                    {
+                      "name": "resumeAmount",
+                      "type": "number"
+                    },
+                    {
+                      "name": "resumeUnit",
+                      "options": [
+                        "days",
+                        "hours",
+                        "minutes"
+                      ],
+                      "type": "options"
+                    }
+                  ],
+                  "name": "values",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "limitWaitTime",
+              "type": "fixedCollection"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "name": "organization",
+          "type": "string"
+        },
+        {
+          "name": "owner",
+          "type": "resourceLocator"
+        },
+        {
+          "name": "pullRequestNumber",
+          "type": "number"
+        },
+        {
+          "name": "ref",
+          "type": "resourceLocator"
+        },
+        {
+          "name": "ref",
+          "type": "string"
+        },
+        {
+          "name": "releaseTag",
+          "type": "string"
+        },
+        {
+          "name": "release_id",
+          "type": "string"
+        },
+        {
+          "name": "repository",
+          "type": "resourceLocator"
+        },
+        {
+          "name": "resource",
+          "options": [
+            "file",
+            "issue",
+            "organization",
+            "pullRequest",
+            "release",
+            "repository",
+            "review",
+            "secret",
+            "user",
+            "workflow"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "returnAll",
+          "type": "boolean"
+        },
+        {
+          "name": "reviewId",
+          "type": "string"
+        },
+        {
+          "name": "secretName",
+          "type": "string"
+        },
+        {
+          "name": "secretValue",
+          "type": "string"
+        },
+        {
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "name": "workflowId",
+          "type": "resourceLocator"
+        }
+      ],
+      "typeVersion": 1.1
+    },
+    "n8n-nodes-base.gmail": {
+      "credentials": [
+        "gmailOAuth2",
+        "googleApi"
+      ],
+      "displayName": "Gmail",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "approvalType",
+                  "options": [
+                    "double",
+                    "single"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "approveLabel",
+                  "type": "string"
+                },
+                {
+                  "name": "buttonApprovalStyle",
+                  "options": [
+                    "primary",
+                    "secondary"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "buttonDisapprovalStyle",
+                  "options": [
+                    "primary",
+                    "secondary"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "disapproveLabel",
+                  "type": "string"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "approvalOptions",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "authentication",
+          "options": [
+            "oAuth2",
+            "serviceAccount"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "defineForm",
+          "options": [
+            "fields",
+            "json"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "emailType",
+          "options": [
+            "html",
+            "text"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "name": "includeSpamTrash",
+              "type": "boolean"
+            },
+            {
+              "name": "labelIds",
+              "type": "multiOptions"
+            },
+            {
+              "name": "q",
+              "type": "string"
+            },
+            {
+              "name": "readStatus",
+              "options": [
+                "both",
+                "read",
+                "unread"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "receivedAfter",
+              "type": "dateTime"
+            },
+            {
+              "name": "receivedBefore",
+              "type": "dateTime"
+            },
+            {
+              "name": "sender",
+              "type": "string"
+            }
+          ],
+          "name": "filters",
+          "type": "collection"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "acceptFileTypes",
+                  "type": "string"
+                },
+                {
+                  "name": "defaultValue",
+                  "type": "dateTime"
+                },
+                {
+                  "name": "defaultValue",
+                  "type": "string"
+                },
+                {
+                  "name": "elementName",
+                  "type": "string"
+                },
+                {
+                  "name": "fieldLabel",
+                  "type": "string"
+                },
+                {
+                  "name": "fieldName",
+                  "type": "string"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "name": "option",
+                          "type": "string"
+                        }
+                      ],
+                      "name": "values",
+                      "type": "fixedCollectionGroup"
+                    }
+                  ],
+                  "name": "fieldOptions",
+                  "type": "fixedCollection"
+                },
+                {
+                  "name": "fieldType",
+                  "options": [
+                    "checkbox",
+                    "date",
+                    "dropdown",
+                    "email",
+                    "file",
+                    "hiddenField",
+                    "html",
+                    "number",
+                    "password",
+                    "radio",
+                    "text",
+                    "textarea"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "fieldValue",
+                  "type": "string"
+                },
+                {
+                  "name": "html",
+                  "type": "string"
+                },
+                {
+                  "name": "limitSelection",
+                  "options": [
+                    "exact",
+                    "range",
+                    "unlimited"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "maxSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "minSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "multipleFiles",
+                  "type": "boolean"
+                },
+                {
+                  "name": "multiselect",
+                  "type": "boolean"
+                },
+                {
+                  "name": "numberOfSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "placeholder",
+                  "type": "string"
+                },
+                {
+                  "name": "requiredField",
+                  "type": "boolean"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "formFields",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "jsonOutput",
+          "type": "json"
+        },
+        {
+          "name": "labelId",
+          "type": "string"
+        },
+        {
+          "name": "labelIds",
+          "type": "multiOptions"
+        },
+        {
+          "name": "limit",
+          "type": "number"
+        },
+        {
+          "name": "message",
+          "type": "string"
+        },
+        {
+          "name": "messageId",
+          "type": "options"
+        },
+        {
+          "name": "messageId",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "operation",
+          "options": [
+            "addLabels",
+            "create",
+            "delete",
+            "get",
+            "getAll",
+            "markAsRead",
+            "markAsUnread",
+            "removeLabels",
+            "reply",
+            "send",
+            "sendAndWait",
+            "trash",
+            "untrash"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "name": "appendAttribution",
+              "type": "boolean"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "property",
+                      "type": "string"
+                    }
+                  ],
+                  "name": "attachmentsBinary",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "attachmentsUi",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "bccList",
+              "type": "string"
+            },
+            {
+              "name": "ccList",
+              "type": "string"
+            },
+            {
+              "name": "dataPropertyAttachmentsPrefixName",
+              "type": "string"
+            },
+            {
+              "name": "downloadAttachments",
+              "type": "boolean"
+            },
+            {
+              "name": "fromAlias",
+              "type": "options"
+            },
+            {
+              "name": "includeSpamTrash",
+              "type": "boolean"
+            },
+            {
+              "name": "labelListVisibility",
+              "options": [
+                "labelHide",
+                "labelShow",
+                "labelShowIfUnread"
+              ],
+              "type": "options"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "limitType",
+                      "options": [
+                        "afterTimeInterval",
+                        "atSpecifiedTime"
+                      ],
+                      "type": "options"
+                    },
+                    {
+                      "name": "maxDateAndTime",
+                      "type": "dateTime"
+                    },
+                    {
+                      "name": "resumeAmount",
+                      "type": "number"
+                    },
+                    {
+                      "name": "resumeUnit",
+                      "options": [
+                        "days",
+                        "hours",
+                        "minutes"
+                      ],
+                      "type": "options"
+                    }
+                  ],
+                  "name": "values",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "limitWaitTime",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "messageButtonLabel",
+              "type": "string"
+            },
+            {
+              "name": "messageListVisibility",
+              "options": [
+                "hide",
+                "show"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "replyTo",
+              "type": "string"
+            },
+            {
+              "name": "replyToRecipientsOnly",
+              "type": "boolean"
+            },
+            {
+              "name": "replyToSenderOnly",
+              "type": "boolean"
+            },
+            {
+              "name": "responseFormButtonLabel",
+              "type": "string"
+            },
+            {
+              "name": "responseFormCustomCss",
+              "type": "string"
+            },
+            {
+              "name": "responseFormDescription",
+              "type": "string"
+            },
+            {
+              "name": "responseFormTitle",
+              "type": "string"
+            },
+            {
+              "name": "returnOnlyMessages",
+              "type": "boolean"
+            },
+            {
+              "name": "sendTo",
+              "type": "string"
+            },
+            {
+              "name": "senderName",
+              "type": "string"
+            },
+            {
+              "name": "threadId",
+              "type": "string"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "name": "resource",
+          "options": [
+            "draft",
+            "label",
+            "message",
+            "thread"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "responseType",
+          "options": [
+            "approval",
+            "customForm",
+            "freeText"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "returnAll",
+          "type": "boolean"
+        },
+        {
+          "name": "sendTo",
+          "type": "string"
+        },
+        {
+          "name": "simple",
+          "type": "boolean"
+        },
+        {
+          "name": "subject",
+          "type": "string"
+        },
+        {
+          "name": "threadId",
+          "type": "string"
+        }
+      ],
+      "typeVersion": 2.2
+    },
+    "n8n-nodes-base.googleSheets": {
+      "credentials": [
+        "googleApi",
+        "googleSheetsOAuth2Api"
+      ],
+      "displayName": "Google Sheets",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "authentication",
+          "options": [
+            "oAuth2",
+            "serviceAccount"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "clear",
+          "options": [
+            "specificColumns",
+            "specificRange",
+            "specificRows",
+            "wholeSheet"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "columnToMatchOn",
+          "type": "options"
+        },
+        {
+          "name": "columns",
+          "type": "resourceMapper"
+        },
+        {
+          "name": "columnsToDelete",
+          "type": "number"
+        },
+        {
+          "name": "combineFilters",
+          "options": [
+            "AND",
+            "OR"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "dataMode",
+          "options": [
+            "autoMapInputData",
+            "defineBelow",
+            "nothing"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "documentId",
+          "type": "resourceLocator"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "fieldId",
+                  "type": "options"
+                },
+                {
+                  "name": "fieldValue",
+                  "type": "string"
+                }
+              ],
+              "name": "fieldValues",
+              "type": "fixedCollectionGroup"
+            },
+            {
+              "children": [
+                {
+                  "name": "column",
+                  "type": "options"
+                },
+                {
+                  "name": "columnName",
+                  "type": "string"
+                },
+                {
+                  "name": "fieldValue",
+                  "type": "string"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "fieldsUi",
+          "type": "fixedCollection"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "lookupColumn",
+                  "type": "options"
+                },
+                {
+                  "name": "lookupValue",
+                  "type": "string"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "filtersUI",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "keepFirstRow",
+          "type": "boolean"
+        },
+        {
+          "name": "numberToDelete",
+          "type": "number"
+        },
+        {
+          "name": "operation",
+          "options": [
+            "append",
+            "appendOrUpdate",
+            "clear",
+            "create",
+            "delete",
+            "deleteSpreadsheet",
+            "read",
+            "remove",
+            "update"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "name": "autoRecalc",
+              "options": [
+                "",
+                "HOUR",
+                "MINUTE",
+                "ON_CHANGE"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "cellFormat",
+              "options": [
+                "RAW",
+                "USER_ENTERED"
+              ],
+              "type": "options"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "firstDataRow",
+                      "type": "number"
+                    },
+                    {
+                      "name": "headerRow",
+                      "type": "number"
+                    },
+                    {
+                      "name": "range",
+                      "type": "string"
+                    },
+                    {
+                      "name": "rangeDefinition",
+                      "options": [
+                        "detectAutomatically",
+                        "specifyRange",
+                        "specifyRangeA1"
+                      ],
+                      "type": "options"
+                    },
+                    {
+                      "name": "readRowsUntil",
+                      "options": [
+                        "firstEmptyRow",
+                        "lastRowInSheet"
+                      ],
+                      "type": "options"
+                    }
+                  ],
+                  "name": "values",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "dataLocationOnSheet",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "handlingExtraData",
+              "options": [
+                "error",
+                "ignoreIt",
+                "insertInNewColumn"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "hidden",
+              "type": "boolean"
+            },
+            {
+              "name": "index",
+              "type": "number"
+            },
+            {
+              "name": "locale",
+              "type": "string"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "firstDataRow",
+                      "type": "number"
+                    },
+                    {
+                      "name": "headerRow",
+                      "type": "number"
+                    }
+                  ],
+                  "name": "values",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "locationDefine",
+              "type": "fixedCollection"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "date",
+                      "options": [
+                        "FORMATTED_STRING",
+                        "SERIAL_NUMBER"
+                      ],
+                      "type": "options"
+                    },
+                    {
+                      "name": "general",
+                      "options": [
+                        "FORMATTED_VALUE",
+                        "FORMULA",
+                        "UNFORMATTED_VALUE"
+                      ],
+                      "type": "options"
+                    }
+                  ],
+                  "name": "values",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "outputFormatting",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "returnAllMatches",
+              "options": [
+                "returnAllMatches",
+                "returnFirstMatch"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "returnFirstMatch",
+              "type": "boolean"
+            },
+            {
+              "name": "rightToLeft",
+              "type": "boolean"
+            },
+            {
+              "name": "sheetId",
+              "type": "number"
+            },
+            {
+              "name": "tabColor",
+              "type": "color"
+            },
+            {
+              "name": "useAppend",
+              "type": "boolean"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "name": "range",
+          "type": "string"
+        },
+        {
+          "name": "resource",
+          "options": [
+            "sheet",
+            "spreadsheet"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "rowsToDelete",
+          "type": "number"
+        },
+        {
+          "name": "sheetName",
+          "type": "resourceLocator"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "hidden",
+                  "type": "boolean"
+                },
+                {
+                  "name": "title",
+                  "type": "string"
+                }
+              ],
+              "name": "sheetValues",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "sheetsUi",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "startIndex",
+          "type": "number"
+        },
+        {
+          "name": "startIndex",
+          "type": "string"
+        },
+        {
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "name": "toDelete",
+          "options": [
+            "columns",
+            "rows"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "valueToMatchOn",
+          "type": "string"
+        }
+      ],
+      "typeVersion": 4.7
+    },
+    "n8n-nodes-base.httpRequest": {
+      "credentials": [
+        "httpSslAuth"
+      ],
+      "displayName": "HTTP Request",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "authentication",
+          "options": [
+            "genericCredentialType",
+            "none",
+            "predefinedCredentialType"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "body",
+          "type": "string"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "inputDataFieldName",
+                  "type": "string"
+                },
+                {
+                  "name": "name",
+                  "type": "string"
+                },
+                {
+                  "name": "parameterType",
+                  "options": [
+                    "formBinaryData",
+                    "formData"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "value",
+                  "type": "string"
+                }
+              ],
+              "name": "parameters",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "bodyParameters",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "contentType",
+          "options": [
+            "binaryData",
+            "form-urlencoded",
+            "json",
+            "multipart-form-data",
+            "raw"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "cssSelector",
+          "type": "string"
+        },
+        {
+          "name": "curlImport",
+          "type": "curlImport"
+        },
+        {
+          "name": "dataField",
+          "type": "string"
+        },
+        {
+          "name": "elementsToOmit",
+          "type": "string"
+        },
+        {
+          "name": "fields",
+          "type": "string"
+        },
+        {
+          "name": "fieldsToInclude",
+          "options": [
+            "all",
+            "except",
+            "selected"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "genericAuthType",
+          "type": "credentialsSelect"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "name",
+                  "type": "string"
+                },
+                {
+                  "name": "value",
+                  "type": "string"
+                }
+              ],
+              "name": "parameters",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "headerParameters",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "inputDataFieldName",
+          "type": "string"
+        },
+        {
+          "name": "jsonBody",
+          "type": "json"
+        },
+        {
+          "name": "jsonHeaders",
+          "type": "json"
+        },
+        {
+          "name": "jsonQuery",
+          "type": "json"
+        },
+        {
+          "name": "maxLength",
+          "type": "number"
+        },
+        {
+          "name": "method",
+          "options": [
+            "COPY",
+            "DELETE",
+            "GET",
+            "HEAD",
+            "MKCOL",
+            "MOVE",
+            "OPTIONS",
+            "PATCH",
+            "POST",
+            "PROPFIND",
+            "PUT",
+            "REPORT"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "nodeCredentialType",
+          "type": "credentialsSelect"
+        },
+        {
+          "name": "onlyContent",
+          "type": "boolean"
+        },
+        {
+          "name": "optimizeResponse",
+          "type": "boolean"
+        },
+        {
+          "children": [
+            {
+              "name": "allowUnauthorizedCerts",
+              "type": "boolean"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "batchInterval",
+                      "type": "number"
+                    },
+                    {
+                      "name": "batchSize",
+                      "type": "number"
+                    }
+                  ],
+                  "name": "batch",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "batching",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "lowercaseHeaders",
+              "type": "boolean"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "completeExpression",
+                      "type": "string"
+                    },
+                    {
+                      "name": "limitPagesFetched",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "maxRequests",
+                      "type": "number"
+                    },
+                    {
+                      "name": "nextURL",
+                      "type": "string"
+                    },
+                    {
+                      "name": "paginationCompleteWhen",
+                      "options": [
+                        "other",
+                        "receiveSpecificStatusCodes",
+                        "responseIsEmpty"
+                      ],
+                      "type": "options"
+                    },
+                    {
+                      "name": "paginationMode",
+                      "options": [
+                        "off",
+                        "responseContainsNextURL",
+                        "updateAParameterInEachRequest"
+                      ],
+                      "type": "options"
+                    },
+                    {
+                      "children": [
+                        {
+                          "children": [
+                            {
+                              "name": "name",
+                              "type": "string"
+                            },
+                            {
+                              "name": "type",
+                              "options": [
+                                "body",
+                                "headers",
+                                "qs"
+                              ],
+                              "type": "options"
+                            },
+                            {
+                              "name": "value",
+                              "type": "string"
+                            }
+                          ],
+                          "name": "parameters",
+                          "type": "fixedCollectionGroup"
+                        }
+                      ],
+                      "name": "parameters",
+                      "type": "fixedCollection"
+                    },
+                    {
+                      "name": "requestInterval",
+                      "type": "number"
+                    },
+                    {
+                      "name": "statusCodesWhenComplete",
+                      "type": "string"
+                    }
+                  ],
+                  "name": "pagination",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "pagination",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "proxy",
+              "type": "string"
+            },
+            {
+              "name": "queryParameterArrays",
+              "options": [
+                "brackets",
+                "indices",
+                "repeat"
+              ],
+              "type": "options"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "followRedirects",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "maxRedirects",
+                      "type": "number"
+                    }
+                  ],
+                  "name": "redirect",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "redirect",
+              "type": "fixedCollection"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "fullResponse",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "neverError",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "outputPropertyName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "responseFormat",
+                      "options": [
+                        "autodetect",
+                        "file",
+                        "json",
+                        "text"
+                      ],
+                      "type": "options"
+                    }
+                  ],
+                  "name": "response",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "response",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "sendCredentialsOnCrossOriginRedirect",
+              "type": "boolean"
+            },
+            {
+              "name": "timeout",
+              "type": "number"
+            },
+            {
+              "name": "webdavMethods",
+              "type": "boolean"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "name": "provideSslCertificates",
+          "type": "boolean"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "name",
+                  "type": "string"
+                },
+                {
+                  "name": "value",
+                  "type": "string"
+                }
+              ],
+              "name": "parameters",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "queryParameters",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "rawContentType",
+          "type": "string"
+        },
+        {
+          "name": "responseType",
+          "options": [
+            "html",
+            "json",
+            "text"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "sendBody",
+          "type": "boolean"
+        },
+        {
+          "name": "sendHeaders",
+          "type": "boolean"
+        },
+        {
+          "name": "sendQuery",
+          "type": "boolean"
+        },
+        {
+          "name": "specifyBody",
+          "options": [
+            "json",
+            "keypair",
+            "string"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "specifyHeaders",
+          "options": [
+            "json",
+            "keypair"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "specifyQuery",
+          "options": [
+            "json",
+            "keypair"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "sslCertificate",
+          "type": "credentials"
+        },
+        {
+          "name": "truncateResponse",
+          "type": "boolean"
+        },
+        {
+          "name": "url",
+          "type": "string"
+        }
+      ],
+      "typeVersion": 4.5
+    },
+    "n8n-nodes-base.if": {
+      "credentials": [],
+      "displayName": "If",
+      "inputs": 1,
+      "outputs": 2,
+      "properties": [
+        {
+          "name": "conditions",
+          "type": "filter"
+        },
+        {
+          "name": "looseTypeValidation",
+          "type": "boolean"
+        },
+        {
+          "children": [
+            {
+              "name": "ignoreCase",
+              "type": "boolean"
+            },
+            {
+              "name": "looseTypeValidation",
+              "type": "boolean"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        }
+      ],
+      "typeVersion": 2.4
+    },
+    "n8n-nodes-base.limit": {
+      "credentials": [],
+      "displayName": "Limit",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "keep",
+          "options": [
+            "firstItems",
+            "lastItems"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "maxItems",
+          "type": "number"
+        }
+      ],
+      "typeVersion": 1
+    },
+    "n8n-nodes-base.manualTrigger": {
+      "credentials": [],
+      "displayName": "Manual Trigger",
+      "inputs": 0,
+      "outputs": 1,
+      "properties": [],
+      "typeVersion": 1
+    },
+    "n8n-nodes-base.merge": {
+      "credentials": [],
+      "displayName": "Merge",
+      "inputs": "dynamic",
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "advanced",
+          "type": "boolean"
+        },
+        {
+          "name": "chooseBranchMode",
+          "options": [
+            "waitForAll"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "combineBy",
+          "options": [
+            "combineAll",
+            "combineByFields",
+            "combineByPosition"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "fieldsToMatchString",
+          "type": "string"
+        },
+        {
+          "name": "joinMode",
+          "options": [
+            "enrichInput1",
+            "enrichInput2",
+            "keepEverything",
+            "keepMatches",
+            "keepNonMatches"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "field1",
+                  "type": "string"
+                },
+                {
+                  "name": "field2",
+                  "type": "string"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "mergeByFields",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "mode",
+          "options": [
+            "append",
+            "chooseBranch",
+            "combine",
+            "combineBySql"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "numberInputs",
+          "options": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "mergeMode",
+                      "options": [
+                        "deepMerge",
+                        "shallowMerge"
+                      ],
+                      "type": "options"
+                    },
+                    {
+                      "name": "overrideEmpty",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "resolveClash",
+                      "type": "options"
+                    }
+                  ],
+                  "name": "values",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "clashHandling",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "disableDotNotation",
+              "type": "boolean"
+            },
+            {
+              "name": "emptyQueryResult",
+              "options": [
+                "empty",
+                "success"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "fuzzyCompare",
+              "type": "boolean"
+            },
+            {
+              "name": "includeUnpaired",
+              "type": "boolean"
+            },
+            {
+              "name": "multipleMatches",
+              "options": [
+                "all",
+                "first"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "queryParameters",
+              "type": "string"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "name": "output",
+          "options": [
+            "empty",
+            "specifiedInput"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "outputDataFrom",
+          "options": [
+            "both",
+            "input1",
+            "input2"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "query",
+          "type": "string"
+        },
+        {
+          "name": "useDataOfInput",
+          "type": "options"
+        }
+      ],
+      "typeVersion": 3.2
+    },
+    "n8n-nodes-base.noOp": {
+      "credentials": [],
+      "displayName": "No Operation, do nothing",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "emptyGroupAnchor",
+          "type": "hidden"
+        }
+      ],
+      "typeVersion": 1
+    },
+    "n8n-nodes-base.notion": {
+      "credentials": [
+        "notionApi",
+        "notionOAuth2Api"
+      ],
+      "displayName": "Notion",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "Credentials",
+          "type": "credentials"
+        },
+        {
+          "name": "afterBlockId",
+          "type": "string"
+        },
+        {
+          "name": "authentication",
+          "options": [
+            "apiKey",
+            "oAuth2"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "blockId",
+          "type": "resourceLocator"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "checked",
+                  "type": "boolean"
+                },
+                {
+                  "name": "richText",
+                  "type": "boolean"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "children": [
+                            {
+                              "name": "bold",
+                              "type": "boolean"
+                            },
+                            {
+                              "name": "code",
+                              "type": "boolean"
+                            },
+                            {
+                              "name": "color",
+                              "options": [
+                                "blue",
+                                "blue_background",
+                                "brown",
+                                "brown_background",
+                                "default",
+                                "gray",
+                                "gray_background",
+                                "green",
+                                "green_background",
+                                "orange",
+                                "orange_background",
+                                "pink",
+                                "pink_background",
+                                "purple",
+                                "purple_background",
+                                "red",
+                                "red_background",
+                                "yellow",
+                                "yellow_background"
+                              ],
+                              "type": "options"
+                            },
+                            {
+                              "name": "italic",
+                              "type": "boolean"
+                            },
+                            {
+                              "name": "strikethrough",
+                              "type": "boolean"
+                            },
+                            {
+                              "name": "underline",
+                              "type": "boolean"
+                            }
+                          ],
+                          "name": "annotationUi",
+                          "type": "collection"
+                        },
+                        {
+                          "name": "database",
+                          "type": "resourceLocator"
+                        },
+                        {
+                          "name": "date",
+                          "type": "dateTime"
+                        },
+                        {
+                          "name": "dateEnd",
+                          "type": "dateTime"
+                        },
+                        {
+                          "name": "dateStart",
+                          "type": "dateTime"
+                        },
+                        {
+                          "name": "expression",
+                          "type": "string"
+                        },
+                        {
+                          "name": "isLink",
+                          "type": "boolean"
+                        },
+                        {
+                          "name": "mentionType",
+                          "options": [
+                            "database",
+                            "date",
+                            "page",
+                            "user"
+                          ],
+                          "type": "options"
+                        },
+                        {
+                          "name": "page",
+                          "type": "string"
+                        },
+                        {
+                          "name": "range",
+                          "type": "boolean"
+                        },
+                        {
+                          "name": "text",
+                          "type": "string"
+                        },
+                        {
+                          "name": "textLink",
+                          "type": "string"
+                        },
+                        {
+                          "name": "textType",
+                          "options": [
+                            "equation",
+                            "mention",
+                            "text"
+                          ],
+                          "type": "options"
+                        },
+                        {
+                          "name": "user",
+                          "type": "options"
+                        }
+                      ],
+                      "name": "text",
+                      "type": "fixedCollectionGroup"
+                    }
+                  ],
+                  "name": "text",
+                  "type": "fixedCollection"
+                },
+                {
+                  "name": "textContent",
+                  "type": "string"
+                },
+                {
+                  "name": "title",
+                  "type": "string"
+                },
+                {
+                  "name": "type",
+                  "type": "options"
+                },
+                {
+                  "name": "url",
+                  "type": "string"
+                }
+              ],
+              "name": "blockValues",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "blockUi",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "blocksJson",
+          "type": "string"
+        },
+        {
+          "name": "contentType",
+          "options": [
+            "blockUi",
+            "json",
+            "markdown"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "newString",
+                  "type": "string"
+                },
+                {
+                  "name": "oldString",
+                  "type": "string"
+                },
+                {
+                  "name": "replaceAllMatches",
+                  "type": "boolean"
+                }
+              ],
+              "name": "updates",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "contentUpdates",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "dataSourceId",
+          "type": "resourceLocator"
+        },
+        {
+          "name": "databaseId",
+          "type": "resourceLocator"
+        },
+        {
+          "name": "fetchNestedBlocks",
+          "type": "boolean"
+        },
+        {
+          "name": "filterJson",
+          "type": "json"
+        },
+        {
+          "name": "filterType",
+          "options": [
+            "json",
+            "manual",
+            "none"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "checkboxValue",
+                  "type": "boolean"
+                },
+                {
+                  "name": "condition",
+                  "options": [
+                    "after",
+                    "before",
+                    "contains",
+                    "does_not_contain",
+                    "does_not_equal",
+                    "ends_with",
+                    "equals",
+                    "greater_than",
+                    "greater_than_or_equal_to",
+                    "is_empty",
+                    "is_not_empty",
+                    "less_than",
+                    "less_than_or_equal_to",
+                    "next_month",
+                    "next_week",
+                    "next_year",
+                    "on_or_after",
+                    "on_or_before",
+                    "past_month",
+                    "past_week",
+                    "past_year",
+                    "starts_with",
+                    "status",
+                    "this_week"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "dateValue",
+                  "type": "string"
+                },
+                {
+                  "name": "key",
+                  "type": "options"
+                },
+                {
+                  "name": "numberValue",
+                  "type": "number"
+                },
+                {
+                  "name": "optionValue",
+                  "type": "string"
+                },
+                {
+                  "name": "peopleValue",
+                  "type": "string"
+                },
+                {
+                  "name": "relationValue",
+                  "type": "string"
+                },
+                {
+                  "name": "returnType",
+                  "options": [
+                    "checkbox",
+                    "date",
+                    "number",
+                    "string"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "richTextValue",
+                  "type": "string"
+                },
+                {
+                  "name": "rollupJson",
+                  "type": "json"
+                },
+                {
+                  "name": "type",
+                  "type": "hidden"
+                },
+                {
+                  "name": "verificationStatus",
+                  "options": [
+                    "expired",
+                    "none",
+                    "verified"
+                  ],
+                  "type": "options"
+                }
+              ],
+              "name": "conditions",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "filters",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "includeTranscript",
+          "type": "boolean"
+        },
+        {
+          "name": "limit",
+          "type": "number"
+        },
+        {
+          "name": "markdown",
+          "type": "string"
+        },
+        {
+          "name": "markdownUpdateType",
+          "options": [
+            "replace_content",
+            "update_content"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "matchType",
+          "options": [
+            "allFilters",
+            "anyFilter"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "operation",
+          "options": [
+            "append",
+            "archive",
+            "create",
+            "get",
+            "getAll",
+            "getMarkdown",
+            "search",
+            "update",
+            "updateMarkdown"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "name": "downloadFiles",
+              "type": "boolean"
+            },
+            {
+              "name": "icon",
+              "type": "string"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "direction",
+                      "options": [
+                        "ascending",
+                        "descending"
+                      ],
+                      "type": "options"
+                    },
+                    {
+                      "name": "key",
+                      "options": [
+                        "created_time",
+                        "last_edited_time"
+                      ],
+                      "type": "options"
+                    },
+                    {
+                      "name": "timestamp",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "timestamp",
+                      "options": [
+                        "last_edited_time"
+                      ],
+                      "type": "options"
+                    },
+                    {
+                      "name": "type",
+                      "type": "hidden"
+                    }
+                  ],
+                  "name": "sortValue",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "sort",
+              "type": "fixedCollection"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "name": "pageId",
+          "type": "resourceLocator"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "checkboxValue",
+                  "type": "boolean"
+                },
+                {
+                  "name": "date",
+                  "type": "dateTime"
+                },
+                {
+                  "name": "dateEnd",
+                  "type": "dateTime"
+                },
+                {
+                  "name": "dateStart",
+                  "type": "dateTime"
+                },
+                {
+                  "name": "emailValue",
+                  "type": "string"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "name": "name",
+                          "type": "string"
+                        },
+                        {
+                          "name": "url",
+                          "type": "string"
+                        }
+                      ],
+                      "name": "fileUrl",
+                      "type": "fixedCollectionGroup"
+                    }
+                  ],
+                  "name": "fileUrls",
+                  "type": "fixedCollection"
+                },
+                {
+                  "name": "ignoreIfEmpty",
+                  "type": "boolean"
+                },
+                {
+                  "name": "includeTime",
+                  "type": "boolean"
+                },
+                {
+                  "name": "key",
+                  "type": "options"
+                },
+                {
+                  "name": "multiSelectValue",
+                  "type": "string"
+                },
+                {
+                  "name": "numberValue",
+                  "type": "number"
+                },
+                {
+                  "name": "peopleValue",
+                  "type": "multiOptions"
+                },
+                {
+                  "name": "phoneValue",
+                  "type": "string"
+                },
+                {
+                  "name": "range",
+                  "type": "boolean"
+                },
+                {
+                  "name": "relationValue",
+                  "type": "string"
+                },
+                {
+                  "name": "selectValue",
+                  "type": "options"
+                },
+                {
+                  "name": "statusValue",
+                  "type": "options"
+                },
+                {
+                  "name": "textContent",
+                  "type": "string"
+                },
+                {
+                  "name": "timezone",
+                  "type": "options"
+                },
+                {
+                  "name": "title",
+                  "type": "string"
+                },
+                {
+                  "name": "type",
+                  "type": "hidden"
+                },
+                {
+                  "name": "urlValue",
+                  "type": "string"
+                }
+              ],
+              "name": "propertyValues",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "propertiesUi",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "resource",
+          "options": [
+            "block",
+            "dataSource",
+            "database",
+            "databasePage",
+            "page",
+            "user"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "returnAll",
+          "type": "boolean"
+        },
+        {
+          "name": "simple",
+          "type": "boolean"
+        },
+        {
+          "name": "simplifyOutput",
+          "type": "boolean"
+        },
+        {
+          "name": "text",
+          "type": "string"
+        },
+        {
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "name": "userId",
+          "type": "string"
+        }
+      ],
+      "typeVersion": 3
+    },
+    "n8n-nodes-base.postgres": {
+      "credentials": [
+        "postgres"
+      ],
+      "displayName": "Postgres",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "columnToMatchOn",
+          "type": "options"
+        },
+        {
+          "name": "columns",
+          "type": "resourceMapper"
+        },
+        {
+          "name": "combineConditions",
+          "options": [
+            "AND",
+            "OR"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "dataMode",
+          "options": [
+            "autoMapInputData",
+            "defineBelow"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "deleteCommand",
+          "options": [
+            "delete",
+            "drop",
+            "truncate"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "limit",
+          "type": "number"
+        },
+        {
+          "name": "operation",
+          "options": [
+            "deleteTable",
+            "executeQuery",
+            "insert",
+            "select",
+            "update",
+            "upsert"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "name": "cascade",
+              "type": "boolean"
+            },
+            {
+              "name": "connectionTimeout",
+              "type": "number"
+            },
+            {
+              "name": "delayClosingIdleConnection",
+              "type": "number"
+            },
+            {
+              "name": "largeNumbersOutput",
+              "options": [
+                "numbers",
+                "text"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "outputColumns",
+              "type": "multiOptions"
+            },
+            {
+              "name": "queryBatching",
+              "options": [
+                "independently",
+                "single",
+                "transaction"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "queryReplacement",
+              "type": "string"
+            },
+            {
+              "name": "replaceEmptyStrings",
+              "type": "boolean"
+            },
+            {
+              "name": "skipOnConflict",
+              "type": "boolean"
+            },
+            {
+              "name": "treatQueryParametersInSingleQuotesAsText",
+              "type": "boolean"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "name": "query",
+          "type": "string"
+        },
+        {
+          "name": "resource",
+          "type": "hidden"
+        },
+        {
+          "name": "restartSequences",
+          "type": "boolean"
+        },
+        {
+          "name": "returnAll",
+          "type": "boolean"
+        },
+        {
+          "name": "schema",
+          "type": "resourceLocator"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "column",
+                  "type": "options"
+                },
+                {
+                  "name": "direction",
+                  "options": [
+                    "ASC",
+                    "DESC"
+                  ],
+                  "type": "options"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "sort",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "table",
+          "type": "resourceLocator"
+        },
+        {
+          "name": "valueToMatchOn",
+          "type": "string"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "column",
+                  "type": "options"
+                },
+                {
+                  "name": "value",
+                  "type": "string"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "valuesToSend",
+          "type": "fixedCollection"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "column",
+                  "type": "options"
+                },
+                {
+                  "name": "condition",
+                  "options": [
+                    "!=",
+                    "<",
+                    "<=",
+                    ">",
+                    ">=",
+                    "IS NOT NULL",
+                    "IS NULL",
+                    "LIKE",
+                    "equal"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "value",
+                  "type": "string"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "where",
+          "type": "fixedCollection"
+        }
+      ],
+      "typeVersion": 2.8
+    },
+    "n8n-nodes-base.removeDuplicates": {
+      "credentials": [],
+      "displayName": "Remove Duplicates",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "compare",
+          "options": [
+            "allFields",
+            "allFieldsExcept",
+            "selectedFields"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "dateDedupeValue",
+          "type": "dateTime"
+        },
+        {
+          "name": "dedupeValue",
+          "type": "string"
+        },
+        {
+          "name": "fieldsToCompare",
+          "type": "string"
+        },
+        {
+          "name": "fieldsToExclude",
+          "type": "string"
+        },
+        {
+          "name": "incrementalDedupeValue",
+          "type": "number"
+        },
+        {
+          "name": "logic",
+          "options": [
+            "removeItemsUpToStoredDate",
+            "removeItemsUpToStoredIncrementalKey",
+            "removeItemsWithAlreadySeenKeyValues"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "mode",
+          "options": [
+            "cleanDatabase"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "operation",
+          "options": [
+            "clearDeduplicationHistory",
+            "removeDuplicateInputItems",
+            "removeItemsSeenInPreviousExecutions"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "name": "disableDotNotation",
+              "type": "boolean"
+            },
+            {
+              "name": "historySize",
+              "type": "number"
+            },
+            {
+              "name": "removeOtherFields",
+              "type": "boolean"
+            },
+            {
+              "name": "scope",
+              "options": [
+                "node",
+                "workflow"
+              ],
+              "type": "options"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        }
+      ],
+      "typeVersion": 2
+    },
+    "n8n-nodes-base.renameKeys": {
+      "credentials": [],
+      "displayName": "Rename Keys",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "name": "caseInsensitive",
+                          "type": "boolean"
+                        },
+                        {
+                          "name": "depth",
+                          "type": "number"
+                        }
+                      ],
+                      "name": "options",
+                      "type": "collection"
+                    },
+                    {
+                      "name": "replaceRegex",
+                      "type": "string"
+                    },
+                    {
+                      "name": "searchRegex",
+                      "type": "string"
+                    }
+                  ],
+                  "name": "replacements",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "regexReplacement",
+              "type": "fixedCollection"
+            }
+          ],
+          "name": "additionalOptions",
+          "type": "collection"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "currentKey",
+                  "type": "string"
+                },
+                {
+                  "name": "newKey",
+                  "type": "string"
+                }
+              ],
+              "name": "key",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "keys",
+          "type": "fixedCollection"
+        }
+      ],
+      "typeVersion": 1
+    },
+    "n8n-nodes-base.respondToWebhook": {
+      "credentials": [
+        "jwtAuth"
+      ],
+      "displayName": "Respond to Webhook",
+      "inputs": 1,
+      "outputs": "dynamic",
+      "properties": [
+        {
+          "name": "credentials",
+          "type": "credentials"
+        },
+        {
+          "name": "enableResponseOutput",
+          "type": "boolean"
+        },
+        {
+          "name": "inputFieldName",
+          "type": "string"
+        },
+        {
+          "children": [
+            {
+              "name": "enableStreaming",
+              "type": "boolean"
+            },
+            {
+              "name": "responseCode",
+              "type": "number"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "value",
+                      "type": "string"
+                    }
+                  ],
+                  "name": "entries",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "responseHeaders",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "responseKey",
+              "type": "string"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "name": "payload",
+          "type": "json"
+        },
+        {
+          "name": "redirectURL",
+          "type": "string"
+        },
+        {
+          "name": "respondWith",
+          "options": [
+            "allIncomingItems",
+            "binary",
+            "firstIncomingItem",
+            "json",
+            "jwt",
+            "noData",
+            "redirect",
+            "text"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "responseBody",
+          "type": "json"
+        },
+        {
+          "name": "responseBody",
+          "type": "string"
+        },
+        {
+          "name": "responseDataSource",
+          "options": [
+            "automatically",
+            "set"
+          ],
+          "type": "options"
+        }
+      ],
+      "typeVersion": 1.5
+    },
+    "n8n-nodes-base.scheduleTrigger": {
+      "credentials": [],
+      "displayName": "Schedule Trigger",
+      "inputs": 0,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "misfireGraceSeconds",
+          "type": "number"
+        },
+        {
+          "name": "misfirePolicy",
+          "options": [
+            "coalesce",
+            "coalesce_owner",
+            "skip"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "daysInterval",
+                  "type": "number"
+                },
+                {
+                  "name": "expression",
+                  "type": "string"
+                },
+                {
+                  "name": "field",
+                  "options": [
+                    "cronExpression",
+                    "days",
+                    "hours",
+                    "minutes",
+                    "months",
+                    "seconds",
+                    "weeks"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "hoursInterval",
+                  "type": "number"
+                },
+                {
+                  "name": "minutesInterval",
+                  "type": "number"
+                },
+                {
+                  "name": "monthsInterval",
+                  "type": "number"
+                },
+                {
+                  "name": "secondsInterval",
+                  "type": "number"
+                },
+                {
+                  "name": "triggerAtDay",
+                  "options": [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4,
+                    5,
+                    6
+                  ],
+                  "type": "multiOptions"
+                },
+                {
+                  "name": "triggerAtDayOfMonth",
+                  "type": "number"
+                },
+                {
+                  "name": "triggerAtHour",
+                  "options": [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4,
+                    5,
+                    6,
+                    7,
+                    8,
+                    9,
+                    10,
+                    11,
+                    12,
+                    13,
+                    14,
+                    15,
+                    16,
+                    17,
+                    18,
+                    19,
+                    20,
+                    21,
+                    22,
+                    23
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "triggerAtMinute",
+                  "type": "number"
+                },
+                {
+                  "name": "weeksInterval",
+                  "type": "number"
+                }
+              ],
+              "name": "interval",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "rule",
+          "type": "fixedCollection"
+        }
+      ],
+      "typeVersion": 1.4
+    },
+    "n8n-nodes-base.set": {
+      "credentials": [],
+      "displayName": "Edit Fields (Set)",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "assignments",
+          "type": "assignmentCollection"
+        },
+        {
+          "name": "duplicateCount",
+          "type": "number"
+        },
+        {
+          "name": "duplicateItem",
+          "type": "boolean"
+        },
+        {
+          "name": "excludeFields",
+          "type": "string"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "arrayValue",
+                  "type": "string"
+                },
+                {
+                  "name": "booleanValue",
+                  "options": [
+                    "false",
+                    "true"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "name",
+                  "type": "string"
+                },
+                {
+                  "name": "numberValue",
+                  "type": "string"
+                },
+                {
+                  "name": "objectValue",
+                  "type": "json"
+                },
+                {
+                  "name": "stringValue",
+                  "type": "string"
+                },
+                {
+                  "name": "type",
+                  "options": [
+                    "arrayValue",
+                    "booleanValue",
+                    "numberValue",
+                    "objectValue",
+                    "stringValue"
+                  ],
+                  "type": "options"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "fields",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "include",
+          "options": [
+            "all",
+            "except",
+            "none",
+            "selected"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "includeFields",
+          "type": "string"
+        },
+        {
+          "name": "includeOtherFields",
+          "type": "boolean"
+        },
+        {
+          "name": "jsonOutput",
+          "type": "json"
+        },
+        {
+          "name": "mode",
+          "options": [
+            "manual",
+            "raw"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "name": "dotNotation",
+              "type": "boolean"
+            },
+            {
+              "name": "ignoreConversionErrors",
+              "type": "boolean"
+            },
+            {
+              "name": "includeBinary",
+              "type": "boolean"
+            },
+            {
+              "name": "stripBinary",
+              "type": "boolean"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        }
+      ],
+      "typeVersion": 3.5
+    },
+    "n8n-nodes-base.slack": {
+      "credentials": [
+        "slackApi",
+        "slackOAuth2Api"
+      ],
+      "displayName": "Slack",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "children": [
+            {
+              "name": "channelIds",
+              "type": "multiOptions"
+            },
+            {
+              "name": "description",
+              "type": "string"
+            },
+            {
+              "name": "handle",
+              "type": "string"
+            },
+            {
+              "name": "include_count",
+              "type": "boolean"
+            }
+          ],
+          "name": "Options",
+          "type": "collection"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "approvalType",
+                  "options": [
+                    "double",
+                    "single"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "approveLabel",
+                  "type": "string"
+                },
+                {
+                  "name": "buttonApprovalStyle",
+                  "options": [
+                    "primary",
+                    "secondary"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "buttonDisapprovalStyle",
+                  "options": [
+                    "primary",
+                    "secondary"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "disapproveLabel",
+                  "type": "string"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "approvalOptions",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "approvers",
+          "type": "multiOptions"
+        },
+        {
+          "children": [
+            {
+              "name": "author_icon",
+              "type": "string"
+            },
+            {
+              "name": "author_link",
+              "type": "string"
+            },
+            {
+              "name": "author_name",
+              "type": "string"
+            },
+            {
+              "name": "color",
+              "type": "color"
+            },
+            {
+              "name": "fallback",
+              "type": "string"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "short",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "title",
+                      "type": "string"
+                    },
+                    {
+                      "name": "value",
+                      "type": "string"
+                    }
+                  ],
+                  "name": "item",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "fields",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "footer",
+              "type": "string"
+            },
+            {
+              "name": "footer_icon",
+              "type": "string"
+            },
+            {
+              "name": "image_url",
+              "type": "string"
+            },
+            {
+              "name": "pretext",
+              "type": "string"
+            },
+            {
+              "name": "text",
+              "type": "string"
+            },
+            {
+              "name": "thumb_url",
+              "type": "string"
+            },
+            {
+              "name": "title",
+              "type": "string"
+            },
+            {
+              "name": "title_link",
+              "type": "string"
+            },
+            {
+              "name": "ts",
+              "type": "number"
+            }
+          ],
+          "name": "attachments",
+          "type": "collection"
+        },
+        {
+          "name": "authentication",
+          "options": [
+            "accessToken",
+            "oAuth2"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "binaryData",
+          "type": "boolean"
+        },
+        {
+          "name": "binaryPropertyName",
+          "type": "string"
+        },
+        {
+          "name": "blocksUi",
+          "type": "string"
+        },
+        {
+          "name": "captureResponder",
+          "type": "boolean"
+        },
+        {
+          "name": "channelId",
+          "type": "resourceLocator"
+        },
+        {
+          "name": "channelId",
+          "type": "string"
+        },
+        {
+          "name": "channelVisibility",
+          "options": [
+            "private",
+            "public"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "defineForm",
+          "options": [
+            "fields",
+            "json"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "email",
+          "type": "string"
+        },
+        {
+          "name": "fileContent",
+          "type": "string"
+        },
+        {
+          "name": "fileId",
+          "type": "string"
+        },
+        {
+          "children": [
+            {
+              "name": "channelId",
+              "type": "options"
+            },
+            {
+              "name": "channelId",
+              "type": "resourceLocator"
+            },
+            {
+              "name": "excludeArchived",
+              "type": "boolean"
+            },
+            {
+              "name": "inclusive",
+              "type": "boolean"
+            },
+            {
+              "name": "latest",
+              "type": "dateTime"
+            },
+            {
+              "name": "latest",
+              "type": "string"
+            },
+            {
+              "name": "oldest",
+              "type": "dateTime"
+            },
+            {
+              "name": "oldest",
+              "type": "string"
+            },
+            {
+              "name": "showFilesHidden",
+              "type": "boolean"
+            },
+            {
+              "name": "tsFrom",
+              "type": "string"
+            },
+            {
+              "name": "tsTo",
+              "type": "string"
+            },
+            {
+              "name": "types",
+              "options": [
+                "all",
+                "gdocs",
+                "im",
+                "images",
+                "mpim",
+                "pdfs",
+                "private_channel",
+                "public_channel",
+                "snippets",
+                "spaces",
+                "zips"
+              ],
+              "type": "multiOptions"
+            },
+            {
+              "name": "userId",
+              "type": "options"
+            }
+          ],
+          "name": "filters",
+          "type": "collection"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "acceptFileTypes",
+                  "type": "string"
+                },
+                {
+                  "name": "defaultValue",
+                  "type": "dateTime"
+                },
+                {
+                  "name": "defaultValue",
+                  "type": "string"
+                },
+                {
+                  "name": "elementName",
+                  "type": "string"
+                },
+                {
+                  "name": "fieldLabel",
+                  "type": "string"
+                },
+                {
+                  "name": "fieldName",
+                  "type": "string"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "name": "option",
+                          "type": "string"
+                        }
+                      ],
+                      "name": "values",
+                      "type": "fixedCollectionGroup"
+                    }
+                  ],
+                  "name": "fieldOptions",
+                  "type": "fixedCollection"
+                },
+                {
+                  "name": "fieldType",
+                  "options": [
+                    "checkbox",
+                    "date",
+                    "dropdown",
+                    "email",
+                    "file",
+                    "hiddenField",
+                    "html",
+                    "number",
+                    "password",
+                    "radio",
+                    "text",
+                    "textarea"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "fieldValue",
+                  "type": "string"
+                },
+                {
+                  "name": "html",
+                  "type": "string"
+                },
+                {
+                  "name": "limitSelection",
+                  "options": [
+                    "exact",
+                    "range",
+                    "unlimited"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "maxSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "minSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "multipleFiles",
+                  "type": "boolean"
+                },
+                {
+                  "name": "multiselect",
+                  "type": "boolean"
+                },
+                {
+                  "name": "numberOfSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "placeholder",
+                  "type": "string"
+                },
+                {
+                  "name": "requiredField",
+                  "type": "boolean"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "formFields",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "jsonOutput",
+          "type": "json"
+        },
+        {
+          "name": "limit",
+          "type": "number"
+        },
+        {
+          "name": "message",
+          "type": "string"
+        },
+        {
+          "name": "messageType",
+          "options": [
+            "attachment",
+            "block",
+            "text"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "operation",
+          "options": [
+            "add",
+            "archive",
+            "close",
+            "create",
+            "delete",
+            "deleteScheduled",
+            "disable",
+            "enable",
+            "get",
+            "getAll",
+            "getManyScheduled",
+            "getPermalink",
+            "getPresence",
+            "getProfile",
+            "getUsers",
+            "history",
+            "info",
+            "invite",
+            "join",
+            "kick",
+            "leave",
+            "lookupByEmail",
+            "member",
+            "open",
+            "post",
+            "remove",
+            "rename",
+            "replies",
+            "schedule",
+            "search",
+            "sendAndWait",
+            "setPurpose",
+            "setTopic",
+            "unarchive",
+            "update",
+            "updateProfile",
+            "updateUsers",
+            "upload"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "name": "include_count",
+              "type": "boolean"
+            }
+          ],
+          "name": "option",
+          "type": "collection"
+        },
+        {
+          "children": [
+            {
+              "name": "after",
+              "type": "dateTime"
+            },
+            {
+              "name": "appendAttribution",
+              "type": "boolean"
+            },
+            {
+              "name": "before",
+              "type": "dateTime"
+            },
+            {
+              "name": "channelId",
+              "type": "options"
+            },
+            {
+              "name": "channelId",
+              "type": "string"
+            },
+            {
+              "name": "channelIds",
+              "type": "multiOptions"
+            },
+            {
+              "name": "channelTypes",
+              "options": [
+                "im",
+                "mpim",
+                "private_channel",
+                "public_channel"
+              ],
+              "type": "multiOptions"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "alt",
+                      "type": "string"
+                    },
+                    {
+                      "name": "id",
+                      "type": "options"
+                    },
+                    {
+                      "name": "value",
+                      "type": "string"
+                    }
+                  ],
+                  "name": "customFieldValues",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "customFieldUi",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "email",
+              "type": "string"
+            },
+            {
+              "name": "fileComment",
+              "type": "string"
+            },
+            {
+              "name": "fileId",
+              "type": "string"
+            },
+            {
+              "name": "fileName",
+              "type": "string"
+            },
+            {
+              "name": "first_name",
+              "type": "string"
+            },
+            {
+              "name": "includeArchivedChannels",
+              "type": "boolean"
+            },
+            {
+              "name": "includeBots",
+              "type": "boolean"
+            },
+            {
+              "name": "includeMessageBlocks",
+              "type": "boolean"
+            },
+            {
+              "name": "includeNumMembers",
+              "type": "boolean"
+            },
+            {
+              "name": "include_count",
+              "type": "boolean"
+            },
+            {
+              "name": "include_disabled",
+              "type": "boolean"
+            },
+            {
+              "name": "include_users",
+              "type": "boolean"
+            },
+            {
+              "name": "initialComment",
+              "type": "string"
+            },
+            {
+              "name": "keywordSearchOnly",
+              "type": "boolean"
+            },
+            {
+              "name": "last_name",
+              "type": "string"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "limitType",
+                      "options": [
+                        "afterTimeInterval",
+                        "atSpecifiedTime"
+                      ],
+                      "type": "options"
+                    },
+                    {
+                      "name": "maxDateAndTime",
+                      "type": "dateTime"
+                    },
+                    {
+                      "name": "resumeAmount",
+                      "type": "number"
+                    },
+                    {
+                      "name": "resumeUnit",
+                      "options": [
+                        "days",
+                        "hours",
+                        "minutes"
+                      ],
+                      "type": "options"
+                    }
+                  ],
+                  "name": "values",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "limitWaitTime",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "messageButtonLabel",
+              "type": "string"
+            },
+            {
+              "name": "resolveData",
+              "type": "boolean"
+            },
+            {
+              "name": "responseFormButtonLabel",
+              "type": "string"
+            },
+            {
+              "name": "responseFormCustomCss",
+              "type": "string"
+            },
+            {
+              "name": "responseFormDescription",
+              "type": "string"
+            },
+            {
+              "name": "responseFormTitle",
+              "type": "string"
+            },
+            {
+              "name": "returnIm",
+              "type": "boolean"
+            },
+            {
+              "name": "searchChannel",
+              "type": "multiOptions"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "status_emoji",
+                      "type": "string"
+                    },
+                    {
+                      "name": "status_expiration",
+                      "type": "dateTime"
+                    },
+                    {
+                      "name": "status_text",
+                      "type": "string"
+                    }
+                  ],
+                  "name": "set_status",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "status",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "threadTs",
+              "type": "string"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "reply_broadcast",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "thread_ts",
+                      "type": "number"
+                    }
+                  ],
+                  "name": "replyValues",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "thread_ts",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "timestamp",
+              "type": "number"
+            },
+            {
+              "name": "title",
+              "type": "string"
+            },
+            {
+              "name": "user",
+              "type": "string"
+            },
+            {
+              "name": "users",
+              "type": "multiOptions"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "icon_emoji",
+                      "type": "string"
+                    },
+                    {
+                      "name": "icon_url",
+                      "type": "string"
+                    },
+                    {
+                      "name": "profilePhotoType",
+                      "options": [
+                        "emoji",
+                        "image"
+                      ],
+                      "type": "options"
+                    }
+                  ],
+                  "name": "imageValues",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "botProfile",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "ephemeral",
+              "type": "boolean"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "ephemeral",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "user",
+                      "type": "resourceLocator"
+                    }
+                  ],
+                  "name": "ephemeralValues",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "ephemeral",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "includeLinkToWorkflow",
+              "type": "boolean"
+            },
+            {
+              "name": "link_names",
+              "type": "boolean"
+            },
+            {
+              "name": "mrkdwn",
+              "type": "boolean"
+            },
+            {
+              "name": "sendAsUser",
+              "type": "string"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "reply_broadcast",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "thread_ts",
+                      "type": "number"
+                    }
+                  ],
+                  "name": "replyValues",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "thread_ts",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "unfurl_links",
+              "type": "boolean"
+            },
+            {
+              "name": "unfurl_media",
+              "type": "boolean"
+            }
+          ],
+          "name": "otherOptions",
+          "type": "collection"
+        },
+        {
+          "name": "postAt",
+          "type": "dateTime"
+        },
+        {
+          "name": "postDecisionBehavior",
+          "options": [
+            "keepMessage",
+            "removeButtons",
+            "showOutcome"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "purpose",
+          "type": "string"
+        },
+        {
+          "name": "query",
+          "type": "string"
+        },
+        {
+          "name": "resolveData",
+          "type": "boolean"
+        },
+        {
+          "name": "resource",
+          "options": [
+            "channel",
+            "file",
+            "message",
+            "reaction",
+            "star",
+            "user",
+            "userGroup"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "responseType",
+          "options": [
+            "approval",
+            "customForm",
+            "freeText"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "returnAll",
+          "type": "boolean"
+        },
+        {
+          "name": "scheduledMessageId",
+          "type": "string"
+        },
+        {
+          "name": "select",
+          "options": [
+            "channel",
+            "user"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "sort",
+          "options": [
+            "asc",
+            "desc",
+            "relevance"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "target",
+          "options": [
+            "file",
+            "message"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "text",
+          "type": "string"
+        },
+        {
+          "name": "timestamp",
+          "type": "number"
+        },
+        {
+          "name": "topic",
+          "type": "string"
+        },
+        {
+          "name": "ts",
+          "type": "number"
+        },
+        {
+          "name": "unauthorizedReplyText",
+          "type": "string"
+        },
+        {
+          "children": [
+            {
+              "name": "channels",
+              "type": "multiOptions"
+            },
+            {
+              "name": "description",
+              "type": "string"
+            },
+            {
+              "name": "handle",
+              "type": "string"
+            },
+            {
+              "name": "include_count",
+              "type": "boolean"
+            },
+            {
+              "name": "link_names",
+              "type": "boolean"
+            },
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "parse",
+              "options": [
+                "client",
+                "full",
+                "none"
+              ],
+              "type": "options"
+            }
+          ],
+          "name": "updateFields",
+          "type": "collection"
+        },
+        {
+          "name": "user",
+          "type": "resourceLocator"
+        },
+        {
+          "name": "userGroupId",
+          "type": "string"
+        },
+        {
+          "name": "userId",
+          "type": "options"
+        },
+        {
+          "name": "userIds",
+          "type": "multiOptions"
+        },
+        {
+          "name": "users",
+          "type": "multiOptions"
+        }
+      ],
+      "typeVersion": 2.7
+    },
+    "n8n-nodes-base.sort": {
+      "credentials": [],
+      "displayName": "Sort",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "code",
+          "type": "string"
+        },
+        {
+          "children": [
+            {
+              "name": "disableDotNotation",
+              "type": "boolean"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "fieldName",
+                  "type": "string"
+                },
+                {
+                  "name": "order",
+                  "options": [
+                    "ascending",
+                    "descending"
+                  ],
+                  "type": "options"
+                }
+              ],
+              "name": "sortField",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "sortFieldsUi",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "type",
+          "options": [
+            "code",
+            "random",
+            "simple"
+          ],
+          "type": "options"
+        }
+      ],
+      "typeVersion": 1
+    },
+    "n8n-nodes-base.splitInBatches": {
+      "credentials": [],
+      "displayName": "Loop Over Items (Split in Batches)",
+      "inputs": 1,
+      "outputs": 2,
+      "properties": [
+        {
+          "name": "batchSize",
+          "type": "number"
+        },
+        {
+          "children": [
+            {
+              "name": "reset",
+              "type": "boolean"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        }
+      ],
+      "typeVersion": 3
+    },
+    "n8n-nodes-base.splitOut": {
+      "credentials": [],
+      "displayName": "Split Out",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "fieldToSplitOut",
+          "type": "string"
+        },
+        {
+          "name": "fieldsToInclude",
+          "type": "string"
+        },
+        {
+          "name": "include",
+          "options": [
+            "allOtherFields",
+            "noOtherFields",
+            "selectedOtherFields"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "name": "destinationFieldName",
+              "type": "string"
+            },
+            {
+              "name": "disableDotNotation",
+              "type": "boolean"
+            },
+            {
+              "name": "includeBinary",
+              "type": "boolean"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        }
+      ],
+      "typeVersion": 1.1
+    },
+    "n8n-nodes-base.stopAndError": {
+      "credentials": [],
+      "displayName": "Stop and Error",
+      "inputs": 1,
+      "outputs": 0,
+      "properties": [
+        {
+          "name": "errorMessage",
+          "type": "string"
+        },
+        {
+          "name": "errorObject",
+          "type": "json"
+        },
+        {
+          "name": "errorType",
+          "options": [
+            "errorMessage",
+            "errorObject"
+          ],
+          "type": "options"
+        }
+      ],
+      "typeVersion": 1
+    },
+    "n8n-nodes-base.supabase": {
+      "credentials": [
+        "supabaseApi",
+        "supabaseOAuth2Api"
+      ],
+      "displayName": "Supabase",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "authentication",
+          "options": [
+            "oAuth2",
+            "secretKey"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "dataToSend",
+          "options": [
+            "autoMapInputData",
+            "defineBelow"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "fieldId",
+                  "type": "options"
+                },
+                {
+                  "name": "fieldValue",
+                  "type": "string"
+                }
+              ],
+              "name": "fieldValues",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "fieldsUi",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "filterString",
+          "type": "string"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "value",
+                  "type": "string"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "filterStringParameters",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "filterType",
+          "options": [
+            "manual",
+            "none",
+            "string"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "condition",
+                  "options": [
+                    "eq",
+                    "fullText",
+                    "gt",
+                    "gte",
+                    "ilike",
+                    "is",
+                    "like",
+                    "lt",
+                    "lte",
+                    "neq"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "keyName",
+                  "type": "options"
+                },
+                {
+                  "name": "keyValue",
+                  "type": "string"
+                },
+                {
+                  "name": "searchFunction",
+                  "options": [
+                    "fts",
+                    "phfts",
+                    "plfts",
+                    "wfts"
+                  ],
+                  "type": "options"
+                }
+              ],
+              "name": "conditions",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "filters",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "inputsToIgnore",
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "type": "number"
+        },
+        {
+          "name": "matchType",
+          "options": [
+            "allFilters",
+            "anyFilter"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "operation",
+          "options": [
+            "create",
+            "delete",
+            "get",
+            "getAll",
+            "update"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "orderBy",
+          "type": "string"
+        },
+        {
+          "name": "projectRef",
+          "type": "options"
+        },
+        {
+          "name": "resource",
+          "options": [
+            "row"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "returnAll",
+          "type": "boolean"
+        },
+        {
+          "name": "schema",
+          "type": "string"
+        },
+        {
+          "name": "tableId",
+          "type": "options"
+        },
+        {
+          "name": "useCustomSchema",
+          "type": "boolean"
+        }
+      ],
+      "typeVersion": 1
+    },
+    "n8n-nodes-base.switch": {
+      "credentials": [],
+      "displayName": "Switch",
+      "inputs": 1,
+      "outputs": "dynamic",
+      "properties": [
+        {
+          "name": "looseTypeValidation",
+          "type": "boolean"
+        },
+        {
+          "name": "mode",
+          "options": [
+            "expression",
+            "rules"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "numberOutputs",
+          "type": "number"
+        },
+        {
+          "children": [
+            {
+              "name": "allMatchingOutputs",
+              "type": "boolean"
+            },
+            {
+              "name": "fallbackOutput",
+              "type": "options"
+            },
+            {
+              "name": "ignoreCase",
+              "type": "boolean"
+            },
+            {
+              "name": "looseTypeValidation",
+              "type": "boolean"
+            },
+            {
+              "name": "renameFallbackOutput",
+              "type": "string"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "name": "output",
+          "type": "number"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "conditions",
+                  "type": "filter"
+                },
+                {
+                  "name": "outputKey",
+                  "type": "string"
+                },
+                {
+                  "name": "renameOutput",
+                  "type": "boolean"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "rules",
+          "type": "fixedCollection"
+        }
+      ],
+      "typeVersion": 3.5
+    },
+    "n8n-nodes-base.telegram": {
+      "credentials": [
+        "telegramApi"
+      ],
+      "displayName": "Telegram",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "action",
+          "options": [
+            "find_location",
+            "record_audio",
+            "record_video",
+            "record_video_note",
+            "typing",
+            "upload_audio",
+            "upload_document",
+            "upload_photo",
+            "upload_video",
+            "upload_video_note"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "name": "appendAttribution",
+              "type": "boolean"
+            },
+            {
+              "name": "cache_time",
+              "type": "number"
+            },
+            {
+              "name": "caption",
+              "type": "string"
+            },
+            {
+              "name": "disable_notification",
+              "type": "boolean"
+            },
+            {
+              "name": "disable_web_page_preview",
+              "type": "boolean"
+            },
+            {
+              "name": "duration",
+              "type": "number"
+            },
+            {
+              "name": "fileName",
+              "type": "string"
+            },
+            {
+              "name": "height",
+              "type": "number"
+            },
+            {
+              "name": "is_rtl",
+              "type": "boolean"
+            },
+            {
+              "name": "message_effect_id",
+              "type": "string"
+            },
+            {
+              "name": "message_thread_id",
+              "type": "number"
+            },
+            {
+              "name": "mimeType",
+              "type": "string"
+            },
+            {
+              "name": "parse_mode",
+              "options": [
+                "HTML",
+                "Markdown",
+                "MarkdownV2"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "performer",
+              "type": "string"
+            },
+            {
+              "name": "protect_content",
+              "type": "boolean"
+            },
+            {
+              "name": "reply_to_message_id",
+              "type": "number"
+            },
+            {
+              "name": "show_alert",
+              "type": "boolean"
+            },
+            {
+              "name": "skip_entity_detection",
+              "type": "boolean"
+            },
+            {
+              "name": "text",
+              "type": "string"
+            },
+            {
+              "name": "thumb",
+              "type": "string"
+            },
+            {
+              "name": "title",
+              "type": "string"
+            },
+            {
+              "name": "url",
+              "type": "string"
+            },
+            {
+              "name": "width",
+              "type": "number"
+            }
+          ],
+          "name": "additionalFields",
+          "type": "collection"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "approvalType",
+                  "options": [
+                    "double",
+                    "single"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "approveLabel",
+                  "type": "string"
+                },
+                {
+                  "name": "disapproveLabel",
+                  "type": "string"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "approvalOptions",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "approverIds",
+          "type": "string"
+        },
+        {
+          "name": "binaryData",
+          "type": "boolean"
+        },
+        {
+          "name": "binaryPropertyName",
+          "type": "string"
+        },
+        {
+          "name": "chatApproval",
+          "type": "boolean"
+        },
+        {
+          "name": "chatId",
+          "type": "string"
+        },
+        {
+          "name": "defineForm",
+          "options": [
+            "fields",
+            "json"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "download",
+          "type": "boolean"
+        },
+        {
+          "name": "draftId",
+          "type": "number"
+        },
+        {
+          "name": "file",
+          "type": "string"
+        },
+        {
+          "name": "fileId",
+          "type": "string"
+        },
+        {
+          "children": [
+            {
+              "name": "force_reply",
+              "type": "boolean"
+            },
+            {
+              "name": "selective",
+              "type": "boolean"
+            }
+          ],
+          "name": "forceReply",
+          "type": "collection"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "acceptFileTypes",
+                  "type": "string"
+                },
+                {
+                  "name": "defaultValue",
+                  "type": "dateTime"
+                },
+                {
+                  "name": "defaultValue",
+                  "type": "string"
+                },
+                {
+                  "name": "elementName",
+                  "type": "string"
+                },
+                {
+                  "name": "fieldLabel",
+                  "type": "string"
+                },
+                {
+                  "name": "fieldName",
+                  "type": "string"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "name": "option",
+                          "type": "string"
+                        }
+                      ],
+                      "name": "values",
+                      "type": "fixedCollectionGroup"
+                    }
+                  ],
+                  "name": "fieldOptions",
+                  "type": "fixedCollection"
+                },
+                {
+                  "name": "fieldType",
+                  "options": [
+                    "checkbox",
+                    "date",
+                    "dropdown",
+                    "email",
+                    "file",
+                    "hiddenField",
+                    "html",
+                    "number",
+                    "password",
+                    "radio",
+                    "text",
+                    "textarea"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "fieldValue",
+                  "type": "string"
+                },
+                {
+                  "name": "html",
+                  "type": "string"
+                },
+                {
+                  "name": "limitSelection",
+                  "options": [
+                    "exact",
+                    "range",
+                    "unlimited"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "maxSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "minSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "multipleFiles",
+                  "type": "boolean"
+                },
+                {
+                  "name": "multiselect",
+                  "type": "boolean"
+                },
+                {
+                  "name": "numberOfSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "placeholder",
+                  "type": "string"
+                },
+                {
+                  "name": "requiredField",
+                  "type": "boolean"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "formFields",
+          "type": "fixedCollection"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "children": [
+                            {
+                              "name": "callback_data",
+                              "type": "string"
+                            },
+                            {
+                              "name": "pay",
+                              "type": "boolean"
+                            },
+                            {
+                              "name": "switch_inline_query",
+                              "type": "string"
+                            },
+                            {
+                              "name": "switch_inline_query_current_chat",
+                              "type": "string"
+                            },
+                            {
+                              "name": "url",
+                              "type": "string"
+                            },
+                            {
+                              "children": [
+                                {
+                                  "name": "url",
+                                  "type": "string"
+                                }
+                              ],
+                              "name": "web_app",
+                              "type": "collection"
+                            }
+                          ],
+                          "name": "additionalFields",
+                          "type": "collection"
+                        },
+                        {
+                          "name": "text",
+                          "type": "string"
+                        }
+                      ],
+                      "name": "buttons",
+                      "type": "fixedCollectionGroup"
+                    }
+                  ],
+                  "name": "row",
+                  "type": "fixedCollection"
+                }
+              ],
+              "name": "rows",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "inlineKeyboard",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "inlineMessageId",
+          "type": "string"
+        },
+        {
+          "name": "jsonOutput",
+          "type": "json"
+        },
+        {
+          "name": "latitude",
+          "type": "number"
+        },
+        {
+          "name": "longitude",
+          "type": "number"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "caption",
+                      "type": "string"
+                    },
+                    {
+                      "name": "parse_mode",
+                      "options": [
+                        "HTML",
+                        "Markdown",
+                        "MarkdownV2"
+                      ],
+                      "type": "options"
+                    }
+                  ],
+                  "name": "additionalFields",
+                  "type": "collection"
+                },
+                {
+                  "name": "media",
+                  "type": "string"
+                },
+                {
+                  "name": "type",
+                  "options": [
+                    "photo",
+                    "video"
+                  ],
+                  "type": "options"
+                }
+              ],
+              "name": "media",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "media",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "message",
+          "type": "string"
+        },
+        {
+          "name": "messageId",
+          "type": "string"
+        },
+        {
+          "name": "messageType",
+          "options": [
+            "inlineMessage",
+            "message"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "operation",
+          "options": [
+            "administrators",
+            "answerInlineQuery",
+            "answerQuery",
+            "deleteMessage",
+            "editMessageText",
+            "get",
+            "leave",
+            "member",
+            "pinChatMessage",
+            "sendAndWait",
+            "sendAnimation",
+            "sendAudio",
+            "sendChatAction",
+            "sendDocument",
+            "sendLocation",
+            "sendMediaGroup",
+            "sendMessage",
+            "sendMessageDraft",
+            "sendPhoto",
+            "sendRichMessage",
+            "sendRichMessageDraft",
+            "sendSticker",
+            "sendVideo",
+            "setDescription",
+            "setTitle",
+            "unpinChatMessage"
+          ],
+          "type": "options"
+        },
+        {
+          "children": [
+            {
+              "name": "appendAttribution",
+              "type": "boolean"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "limitType",
+                      "options": [
+                        "afterTimeInterval",
+                        "atSpecifiedTime"
+                      ],
+                      "type": "options"
+                    },
+                    {
+                      "name": "maxDateAndTime",
+                      "type": "dateTime"
+                    },
+                    {
+                      "name": "resumeAmount",
+                      "type": "number"
+                    },
+                    {
+                      "name": "resumeUnit",
+                      "options": [
+                        "days",
+                        "hours",
+                        "minutes"
+                      ],
+                      "type": "options"
+                    }
+                  ],
+                  "name": "values",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "limitWaitTime",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "messageButtonLabel",
+              "type": "string"
+            },
+            {
+              "name": "responseFormButtonLabel",
+              "type": "string"
+            },
+            {
+              "name": "responseFormCustomCss",
+              "type": "string"
+            },
+            {
+              "name": "responseFormDescription",
+              "type": "string"
+            },
+            {
+              "name": "responseFormTitle",
+              "type": "string"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "name": "postDecisionBehavior",
+          "options": [
+            "keepMessage",
+            "removeButtons",
+            "showOutcome"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "queryId",
+          "type": "string"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "children": [
+                            {
+                              "name": "request_contact",
+                              "type": "boolean"
+                            },
+                            {
+                              "name": "request_location",
+                              "type": "boolean"
+                            },
+                            {
+                              "children": [
+                                {
+                                  "name": "url",
+                                  "type": "string"
+                                }
+                              ],
+                              "name": "web_app",
+                              "type": "collection"
+                            }
+                          ],
+                          "name": "additionalFields",
+                          "type": "collection"
+                        },
+                        {
+                          "name": "text",
+                          "type": "string"
+                        }
+                      ],
+                      "name": "buttons",
+                      "type": "fixedCollectionGroup"
+                    }
+                  ],
+                  "name": "row",
+                  "type": "fixedCollection"
+                }
+              ],
+              "name": "rows",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "replyKeyboard",
+          "type": "fixedCollection"
+        },
+        {
+          "children": [
+            {
+              "name": "one_time_keyboard",
+              "type": "boolean"
+            },
+            {
+              "name": "resize_keyboard",
+              "type": "boolean"
+            },
+            {
+              "name": "selective",
+              "type": "boolean"
+            }
+          ],
+          "name": "replyKeyboardOptions",
+          "type": "collection"
+        },
+        {
+          "children": [
+            {
+              "name": "remove_keyboard",
+              "type": "boolean"
+            },
+            {
+              "name": "selective",
+              "type": "boolean"
+            }
+          ],
+          "name": "replyKeyboardRemove",
+          "type": "collection"
+        },
+        {
+          "name": "replyMarkup",
+          "options": [
+            "forceReply",
+            "inlineKeyboard",
+            "none",
+            "replyKeyboard",
+            "replyKeyboardRemove"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "resource",
+          "options": [
+            "callback",
+            "chat",
+            "file",
+            "message"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "responseType",
+          "options": [
+            "approval",
+            "customForm",
+            "freeText"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "results",
+          "type": "string"
+        },
+        {
+          "name": "richFormat",
+          "options": [
+            "html",
+            "markdown"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "richMessageText",
+          "type": "string"
+        },
+        {
+          "name": "text",
+          "type": "string"
+        },
+        {
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "name": "unauthorizedReplyText",
+          "type": "string"
+        },
+        {
+          "name": "userId",
+          "type": "string"
+        }
+      ],
+      "typeVersion": 1.2
+    },
+    "n8n-nodes-base.wait": {
+      "credentials": [
+        "httpBasicAuth",
+        "httpHeaderAuth",
+        "jwtAuth"
+      ],
+      "displayName": "Wait",
+      "inputs": 1,
+      "outputs": 1,
+      "properties": [
+        {
+          "name": "amount",
+          "type": "number"
+        },
+        {
+          "name": "dateTime",
+          "type": "dateTime"
+        },
+        {
+          "name": "formDescription",
+          "type": "string"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "name": "acceptFileTypes",
+                  "type": "string"
+                },
+                {
+                  "name": "defaultValue",
+                  "type": "dateTime"
+                },
+                {
+                  "name": "defaultValue",
+                  "type": "string"
+                },
+                {
+                  "name": "elementName",
+                  "type": "string"
+                },
+                {
+                  "name": "fieldLabel",
+                  "type": "string"
+                },
+                {
+                  "name": "fieldName",
+                  "type": "string"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "name": "option",
+                          "type": "string"
+                        }
+                      ],
+                      "name": "values",
+                      "type": "fixedCollectionGroup"
+                    }
+                  ],
+                  "name": "fieldOptions",
+                  "type": "fixedCollection"
+                },
+                {
+                  "name": "fieldType",
+                  "options": [
+                    "checkbox",
+                    "date",
+                    "dropdown",
+                    "email",
+                    "file",
+                    "hiddenField",
+                    "html",
+                    "number",
+                    "password",
+                    "radio",
+                    "text",
+                    "textarea"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "fieldValue",
+                  "type": "string"
+                },
+                {
+                  "name": "html",
+                  "type": "string"
+                },
+                {
+                  "name": "limitSelection",
+                  "options": [
+                    "exact",
+                    "range",
+                    "unlimited"
+                  ],
+                  "type": "options"
+                },
+                {
+                  "name": "maxSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "minSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "multipleFiles",
+                  "type": "boolean"
+                },
+                {
+                  "name": "multiselect",
+                  "type": "boolean"
+                },
+                {
+                  "name": "numberOfSelections",
+                  "type": "number"
+                },
+                {
+                  "name": "placeholder",
+                  "type": "string"
+                },
+                {
+                  "name": "requiredField",
+                  "type": "boolean"
+                }
+              ],
+              "name": "values",
+              "type": "fixedCollectionGroup"
+            }
+          ],
+          "name": "formFields",
+          "type": "fixedCollection"
+        },
+        {
+          "name": "formTitle",
+          "type": "string"
+        },
+        {
+          "name": "httpMethod",
+          "options": [
+            "DELETE",
+            "GET",
+            "HEAD",
+            "PATCH",
+            "POST",
+            "PUT"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "incomingAuthentication",
+          "options": [
+            "basicAuth",
+            "headerAuth",
+            "jwtAuth",
+            "none"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "limitType",
+          "options": [
+            "afterTimeInterval",
+            "atSpecifiedTime"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "limitWaitTime",
+          "type": "boolean"
+        },
+        {
+          "name": "maxDateAndTime",
+          "type": "dateTime"
+        },
+        {
+          "children": [
+            {
+              "name": "appendAttribution",
+              "type": "boolean"
+            },
+            {
+              "name": "binaryData",
+              "type": "boolean"
+            },
+            {
+              "name": "binaryPropertyName",
+              "type": "string"
+            },
+            {
+              "name": "ignoreBots",
+              "type": "boolean"
+            },
+            {
+              "name": "ipWhitelist",
+              "type": "string"
+            },
+            {
+              "name": "noResponseBody",
+              "type": "boolean"
+            },
+            {
+              "name": "oauthClient",
+              "options": [
+                "auto",
+                "bearer",
+                "browser"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "onlyRunIf",
+              "type": "string"
+            },
+            {
+              "name": "rawBody",
+              "type": "boolean"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "formSubmittedText",
+                      "type": "string"
+                    },
+                    {
+                      "name": "redirectUrl",
+                      "type": "string"
+                    },
+                    {
+                      "name": "respondWith",
+                      "options": [
+                        "redirect",
+                        "text"
+                      ],
+                      "type": "options"
+                    }
+                  ],
+                  "name": "values",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "respondWithOptions",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "responseContentType",
+              "type": "string"
+            },
+            {
+              "name": "responseData",
+              "type": "string"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "value",
+                      "type": "string"
+                    }
+                  ],
+                  "name": "entries",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "responseHeaders",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "responsePropertyName",
+              "type": "string"
+            },
+            {
+              "name": "webhookSuffix",
+              "type": "string"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "name": "responseBinaryPropertyName",
+          "type": "string"
+        },
+        {
+          "name": "responseCode",
+          "type": "number"
+        },
+        {
+          "name": "responseData",
+          "options": [
+            "allEntries",
+            "firstEntryBinary",
+            "firstEntryJson",
+            "noData"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "responseMode",
+          "options": [
+            "lastNode",
+            "onReceived",
+            "responseNode"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "resume",
+          "options": [
+            "form",
+            "specificTime",
+            "timeInterval",
+            "webhook"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "resumeAmount",
+          "type": "number"
+        },
+        {
+          "name": "resumeUnit",
+          "options": [
+            "days",
+            "hours",
+            "minutes",
+            "seconds"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "unit",
+          "options": [
+            "days",
+            "hours",
+            "minutes",
+            "seconds"
+          ],
+          "type": "options"
+        }
+      ],
+      "typeVersion": 1.1
+    },
+    "n8n-nodes-base.webhook": {
+      "credentials": [
+        "httpBasicAuth",
+        "httpHeaderAuth",
+        "jwtAuth"
+      ],
+      "displayName": "Webhook",
+      "inputs": 0,
+      "outputs": "dynamic",
+      "properties": [
+        {
+          "name": "authentication",
+          "options": [
+            "basicAuth",
+            "headerAuth",
+            "jwtAuth",
+            "n8nOAuth2",
+            "none"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "httpMethod",
+          "options": [
+            "DELETE",
+            "GET",
+            "HEAD",
+            "PATCH",
+            "POST",
+            "PUT"
+          ],
+          "type": "multiOptions"
+        },
+        {
+          "name": "httpMethod",
+          "options": [
+            "DELETE",
+            "GET",
+            "HEAD",
+            "PATCH",
+            "POST",
+            "PUT"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "multipleMethods",
+          "type": "boolean"
+        },
+        {
+          "children": [
+            {
+              "name": "allowedOrigins",
+              "type": "string"
+            },
+            {
+              "name": "binaryData",
+              "type": "boolean"
+            },
+            {
+              "name": "binaryPropertyName",
+              "type": "string"
+            },
+            {
+              "name": "ignoreBots",
+              "type": "boolean"
+            },
+            {
+              "name": "ipWhitelist",
+              "type": "string"
+            },
+            {
+              "name": "noResponseBody",
+              "type": "boolean"
+            },
+            {
+              "name": "oauthClient",
+              "options": [
+                "auto",
+                "bearer",
+                "browser"
+              ],
+              "type": "options"
+            },
+            {
+              "name": "onlyRunIf",
+              "type": "string"
+            },
+            {
+              "name": "rawBody",
+              "type": "boolean"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "customCode",
+                      "type": "number"
+                    },
+                    {
+                      "name": "responseCode",
+                      "options": [
+                        200,
+                        201,
+                        204,
+                        301,
+                        302,
+                        304,
+                        400,
+                        401,
+                        403,
+                        404,
+                        "customCode"
+                      ],
+                      "type": "options"
+                    }
+                  ],
+                  "name": "values",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "responseCode",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "responseContentType",
+              "type": "string"
+            },
+            {
+              "name": "responseData",
+              "type": "string"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "value",
+                      "type": "string"
+                    }
+                  ],
+                  "name": "entries",
+                  "type": "fixedCollectionGroup"
+                }
+              ],
+              "name": "responseHeaders",
+              "type": "fixedCollection"
+            },
+            {
+              "name": "responsePropertyName",
+              "type": "string"
+            }
+          ],
+          "name": "options",
+          "type": "collection"
+        },
+        {
+          "name": "path",
+          "type": "string"
+        },
+        {
+          "name": "requireExecuteAccess",
+          "type": "boolean"
+        },
+        {
+          "name": "responseBinaryPropertyName",
+          "type": "string"
+        },
+        {
+          "name": "responseCode",
+          "type": "number"
+        },
+        {
+          "name": "responseData",
+          "options": [
+            "allEntries",
+            "firstEntryBinary",
+            "firstEntryJson",
+            "noData"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "responseMode",
+          "options": [
+            "lastNode",
+            "onReceived",
+            "responseNode",
+            "streaming"
+          ],
+          "type": "options"
+        },
+        {
+          "name": "trustedSource",
+          "type": "options"
+        }
+      ],
+      "typeVersion": 2.2
+    }
+  },
+  "nodesBaseVersion": "2.49.5"
+}

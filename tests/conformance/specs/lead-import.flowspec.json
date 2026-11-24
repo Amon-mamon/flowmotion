@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "name": "Weekly lead import",
+  "description": "Every Monday, reads new leads from a sheet, normalises the signup date, and stores each lead in Postgres and Supabase.",
+  "nodes": [
+    {
+      "key": "weekly",
+      "nodeType": "n8n-nodes-base.scheduleTrigger",
+      "label": "Every Monday",
+      "params": { "cron": "30 6 * * 1" }
+    },
+    {
+      "key": "read_leads",
+      "nodeType": "n8n-nodes-base.googleSheets",
+      "label": "Read Leads",
+      "params": { "operation": "read", "documentId": "YOUR_LEADS_SHEET_ID", "sheetName": "YOUR_LEADS_SHEET_NAME" }
+    },
+    {
+      "key": "iso_date",
+      "nodeType": "n8n-nodes-base.dateTime",
+      "label": "Signup As ISO",
+      "params": { "operation": "format", "value": "{{ $json.signup_date }}", "format": "iso", "as": "signupIso" }
+    },
+    {
+      "key": "day_only",
+      "nodeType": "n8n-nodes-base.dateTime",
+      "label": "Signup Day",
+      "params": { "operation": "format", "value": "{{ $json.signup_date }}", "format": "yyyy-MM-dd", "as": "signupDay" }
+    },
+    {
+      "key": "all_rows",
+      "nodeType": "n8n-nodes-base.removeDuplicates",
+      "label": "Drop Repeats",
+      "params": { "fields": [] }
+    },
+    {
+      "key": "insert_lead",
+      "nodeType": "n8n-nodes-base.postgres",
+      "label": "Insert Lead",
+      "params": {
+        "operation": "insert",
+        "table": "leads",
+        "columns": [
+          { "name": "full_name", "value": "{{ $json.name }}" },
+          { "name": "signup_at", "value": "{{ $json.signupIso }}" },
+          { "name": "active", "value": true },
+          { "name": "score", "value": 0 }
+        ]
+      }
+    },
+    {
+      "key": "mirror_lead",
+      "nodeType": "n8n-nodes-base.supabase",
+      "label": "Mirror Lead",
+      "params": {
+        "operation": "insert",
+        "table": "leads_mirror",
+        "columns": [
+          { "name": "full_name", "value": "{{ $node[\"Drop Repeats\"].json.name }}" },
+          { "name": "signup_day", "value": "{{ $node[\"Drop Repeats\"].json.signupDay }}" },
+          { "name": "imported", "value": true }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    { "from": "weekly", "to": "read_leads" },
+    { "from": "read_leads", "to": "iso_date" },
+    { "from": "iso_date", "to": "day_only" },
+    { "from": "day_only", "to": "all_rows" },
+    { "from": "all_rows", "to": "insert_lead" },
+    { "from": "insert_lead", "to": "mirror_lead" }
+  ],
+  "tests": {
+    "cases": [
+      {
+        "name": "Leads are stored in both databases",
+        "trigger": { "kind": "schedule", "payload": {} },
+        "mocks": {
+          "read_leads": [{ "name": "Ada Example", "signup_date": "2026-01-05" }],
+          "insert_lead": { "id": 1 },
+          "mirror_lead": { "id": 1 }
+        },
+        "expect": {
+          "reachedNodes": ["weekly", "read_leads", "iso_date", "day_only", "all_rows", "insert_lead", "mirror_lead"]
+        }
+      }
+    ]
+  }
+}

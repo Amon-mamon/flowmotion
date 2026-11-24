@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "name": "Support ticket triage",
+  "description": "Routes a new support ticket by priority: urgent ones alert Telegram and open an issue, low ones go to Discord and Notion.",
+  "nodes": [
+    {
+      "key": "ticket_webhook",
+      "nodeType": "n8n-nodes-base.webhook",
+      "label": "Ticket Webhook",
+      "params": { "path": "support-ticket", "method": "POST", "respond": "immediately" }
+    },
+    {
+      "key": "route_priority",
+      "nodeType": "n8n-nodes-base.switch",
+      "label": "Route Priority",
+      "params": { "value": "{{ $json.body.priority }}", "cases": ["high", "low", 3], "fallback": true }
+    },
+    {
+      "key": "alert_telegram",
+      "nodeType": "n8n-nodes-base.telegram",
+      "label": "Alert On Call",
+      "params": { "chatId": "YOUR_TELEGRAM_CHAT_ID", "text": "Urgent ticket: {{ $json.body.subject }}" }
+    },
+    {
+      "key": "open_issue",
+      "nodeType": "n8n-nodes-base.github",
+      "label": "Open Issue",
+      "params": {
+        "owner": "YOUR_GITHUB_OWNER",
+        "repo": "YOUR_GITHUB_REPO",
+        "title": "Urgent: {{ $node[\"Ticket Webhook\"].json.body.subject }}",
+        "body": "Opened from a support ticket."
+      }
+    },
+    {
+      "key": "post_discord",
+      "nodeType": "n8n-nodes-base.discord",
+      "label": "Post To Discord",
+      "params": { "text": "New ticket: {{ $json.body.subject }}" }
+    },
+    {
+      "key": "log_notion",
+      "nodeType": "n8n-nodes-base.notion",
+      "label": "Log In Notion",
+      "params": {
+        "databaseId": "YOUR_NOTION_DATABASE_ID",
+        "title": "{{ $node[\"Ticket Webhook\"].json.body.subject }}"
+      }
+    },
+    {
+      "key": "ignore",
+      "nodeType": "n8n-nodes-base.noOp",
+      "label": "Ignore",
+      "params": {}
+    }
+  ],
+  "edges": [
+    { "from": "ticket_webhook", "to": "route_priority" },
+    { "from": "route_priority", "to": "alert_telegram", "output": 0 },
+    { "from": "alert_telegram", "to": "open_issue" },
+    { "from": "route_priority", "to": "post_discord", "output": 1 },
+    { "from": "route_priority", "to": "post_discord", "output": 2 },
+    { "from": "post_discord", "to": "log_notion" },
+    { "from": "route_priority", "to": "ignore", "output": 3 }
+  ],
+  "tests": {
+    "cases": [
+      {
+        "name": "High priority alerts the on-call chat",
+        "trigger": { "kind": "webhook", "payload": { "body": { "priority": "high", "subject": "Checkout is down" } } },
+        "mocks": { "alert_telegram": { "ok": true }, "open_issue": { "number": 12 } },
+        "expect": {
+          "reachedNodes": ["ticket_webhook", "route_priority", "alert_telegram", "open_issue"],
+          "notReachedNodes": ["post_discord", "ignore"]
+        }
+      },
+      {
+        "name": "Low priority is logged",
+        "trigger": { "kind": "webhook", "payload": { "body": { "priority": "low", "subject": "Typo on pricing page" } } },
+        "mocks": { "post_discord": { "ok": true }, "log_notion": { "id": "page_1" } },
+        "expect": {
+          "reachedNodes": ["ticket_webhook", "route_priority", "post_discord", "log_notion"],
+          "notReachedNodes": ["alert_telegram"]
+        }
+      },
+      {
+        "name": "Unknown priority is ignored",
+        "trigger": { "kind": "webhook", "payload": { "body": { "priority": "other", "subject": "Hello" } } },
+        "mocks": {},
+        "expect": { "reachedNodes": ["ticket_webhook", "route_priority", "ignore"] }
+      }
+    ]
+  }
+}

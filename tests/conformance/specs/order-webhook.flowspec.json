@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "name": "Order webhook alerts",
+  "description": "Receives a new order from the shop, alerts the team in Slack for large orders or by email for the rest, then answers the caller.",
+  "nodes": [
+    {
+      "key": "order_webhook",
+      "nodeType": "n8n-nodes-base.webhook",
+      "label": "Order Webhook",
+      "params": { "path": "new-order", "method": "POST", "respond": "respondNode" },
+      "sourceFiles": ["src/app/api/orders/route.ts"],
+      "notes": "Replaces the order route handler."
+    },
+    {
+      "key": "shape_order",
+      "nodeType": "n8n-nodes-base.set",
+      "label": "Shape Order",
+      "params": {
+        "fields": [
+          { "name": "orderId", "value": "{{ $json.body.id }}" },
+          { "name": "total", "value": "{{ $json.body.total }}" },
+          { "name": "source", "value": "webshop" },
+          { "name": "attempt", "value": 1 },
+          { "name": "reviewed", "value": false }
+        ],
+        "keepOtherFields": false
+      }
+    },
+    {
+      "key": "large_order",
+      "nodeType": "n8n-nodes-base.if",
+      "label": "Large Order",
+      "params": {
+        "conditions": [
+          { "left": "{{ $json.total }}", "op": "gt", "right": 500 },
+          { "left": "{{ $json.source }}", "op": "equals", "right": "webshop" }
+        ],
+        "combine": "and"
+      }
+    },
+    {
+      "key": "notify_slack",
+      "nodeType": "n8n-nodes-base.slack",
+      "label": "Notify Sales",
+      "params": {
+        "channel": "YOUR_SLACK_CHANNEL",
+        "text": "Large order {{ $json.orderId }} worth {{ $json.total }}"
+      }
+    },
+    {
+      "key": "email_team",
+      "nodeType": "n8n-nodes-base.emailSend",
+      "label": "Email Team",
+      "params": {
+        "from": "YOUR_FROM_EMAIL",
+        "to": "YOUR_TEAM_EMAIL",
+        "subject": "New order {{ $json.orderId }}",
+        "text": "A new order arrived.\nTotal: {{ $json.total }}"
+      }
+    },
+    {
+      "key": "join_branches",
+      "nodeType": "n8n-nodes-base.merge",
+      "label": "Join Branches",
+      "params": { "mode": "append" }
+    },
+    {
+      "key": "reply",
+      "nodeType": "n8n-nodes-base.respondToWebhook",
+      "label": "Reply",
+      "params": {
+        "statusCode": 200,
+        "body": [
+          { "name": "received", "value": true },
+          { "name": "orderId", "value": "{{ $node[\"Shape Order\"].json.orderId }}" },
+          { "name": "note", "value": "Thanks, we got \"it\"" }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    { "from": "order_webhook", "to": "shape_order" },
+    { "from": "shape_order", "to": "large_order" },
+    { "from": "large_order", "to": "notify_slack", "output": 0 },
+    { "from": "large_order", "to": "email_team", "output": 1 },
+    { "from": "notify_slack", "to": "join_branches", "input": 0 },
+    { "from": "email_team", "to": "join_branches", "input": 1 },
+    { "from": "join_branches", "to": "reply" }
+  ],
+  "tests": {
+    "cases": [
+      {
+        "name": "Large order goes to Slack",
+        "trigger": { "kind": "webhook", "payload": { "body": { "id": "ord_1001", "total": 900 } } },
+        "mocks": { "notify_slack": { "ok": true } },
+        "expect": {
+          "reachedNodes": ["order_webhook", "shape_order", "large_order", "notify_slack", "join_branches", "reply"],
+          "notReachedNodes": ["email_team"],
+          "outputs": { "shape_order": { "orderId": "ord_1001" } }
+        }
+      },
+      {
+        "name": "Small order goes to email",
+        "trigger": { "kind": "webhook", "payload": { "body": { "id": "ord_1002", "total": 20 } } },
+        "mocks": { "email_team": { "accepted": ["team@example.com"] } },
+        "expect": {
+          "reachedNodes": ["order_webhook", "shape_order", "large_order", "email_team", "join_branches", "reply"],
+          "notReachedNodes": ["notify_slack"]
+        }
+      }
+    ]
+  }
+}

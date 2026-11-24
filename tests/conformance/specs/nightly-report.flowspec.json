@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "name": "Nightly order sync",
+  "description": "Every night, loads paid orders, sends the newest fifty to the CRM in batches, and mails a short report.",
+  "nodes": [
+    {
+      "key": "nightly",
+      "nodeType": "n8n-nodes-base.scheduleTrigger",
+      "label": "Every Night",
+      "params": { "cron": "0 3 * * *" },
+      "sourceFiles": ["vercel.json"]
+    },
+    {
+      "key": "load_orders",
+      "nodeType": "n8n-nodes-base.postgres",
+      "label": "Load Orders",
+      "params": { "operation": "select", "table": "orders", "limit": 100 }
+    },
+    {
+      "key": "only_paid",
+      "nodeType": "n8n-nodes-base.filter",
+      "label": "Only Paid",
+      "params": {
+        "conditions": [
+          { "left": "{{ $json.status }}", "op": "equals", "right": "paid" },
+          { "left": "{{ $json.refunded }}", "op": "isFalse" }
+        ],
+        "combine": "and"
+      }
+    },
+    {
+      "key": "newest_first",
+      "nodeType": "n8n-nodes-base.sort",
+      "label": "Newest First",
+      "params": { "by": [{ "field": "created_at", "order": "desc" }, { "field": "customer.name", "order": "asc" }] }
+    },
+    {
+      "key": "top_fifty",
+      "nodeType": "n8n-nodes-base.limit",
+      "label": "Top Fifty",
+      "params": { "maxItems": 50, "keep": "first" }
+    },
+    {
+      "key": "each_batch",
+      "nodeType": "n8n-nodes-base.splitInBatches",
+      "label": "Each Batch",
+      "params": { "batchSize": 10 }
+    },
+    {
+      "key": "push_to_crm",
+      "nodeType": "n8n-nodes-base.httpRequest",
+      "label": "Push To CRM",
+      "params": {
+        "method": "POST",
+        "baseUrl": "YOUR_CRM_API_URL",
+        "path": "/v1/orders/{{ $json.id }}",
+        "query": [{ "name": "source", "value": "nightly" }],
+        "headers": [{ "name": "Accept", "value": "application/json" }],
+        "jsonBody": [
+          { "name": "total", "value": "{{ $json.total }}" },
+          { "name": "currency", "value": "EUR" }
+        ]
+      }
+    },
+    {
+      "key": "pause",
+      "nodeType": "n8n-nodes-base.wait",
+      "label": "Pause",
+      "params": { "seconds": 2 }
+    },
+    {
+      "key": "collect",
+      "nodeType": "n8n-nodes-base.aggregate",
+      "label": "Collect",
+      "params": { "as": "orders" }
+    },
+    {
+      "key": "mail_report",
+      "nodeType": "n8n-nodes-base.gmail",
+      "label": "Mail Report",
+      "params": {
+        "to": "YOUR_REPORT_EMAIL",
+        "subject": "Nightly order sync",
+        "message": "The nightly order sync finished."
+      }
+    }
+  ],
+  "edges": [
+    { "from": "nightly", "to": "load_orders" },
+    { "from": "load_orders", "to": "only_paid" },
+    { "from": "only_paid", "to": "newest_first" },
+    { "from": "newest_first", "to": "top_fifty" },
+    { "from": "top_fifty", "to": "each_batch" },
+    { "from": "each_batch", "to": "push_to_crm", "output": 1 },
+    { "from": "push_to_crm", "to": "pause" },
+    { "from": "pause", "to": "each_batch" },
+    { "from": "each_batch", "to": "collect", "output": 0 },
+    { "from": "collect", "to": "mail_report" }
+  ],
+  "tests": {
+    "cases": [
+      {
+        "name": "Paid orders are pushed and reported",
+        "trigger": { "kind": "schedule", "payload": {} },
+        "mocks": {
+          "load_orders": [
+            { "id": 1, "status": "paid", "refunded": false, "total": 40, "created_at": "2026-01-02" },
+            { "id": 2, "status": "open", "refunded": false, "total": 15, "created_at": "2026-01-03" }
+          ],
+          "push_to_crm": { "ok": true },
+          "mail_report": { "id": "msg_1" }
+        },
+        "expect": {
+          "reachedNodes": ["nightly", "load_orders", "only_paid", "each_batch", "push_to_crm", "collect", "mail_report"]
+        }
+      }
+    ]
+  }
+}

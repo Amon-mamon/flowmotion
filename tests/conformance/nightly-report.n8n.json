@@ -1,0 +1,361 @@
+{
+  "name": "Nightly order sync",
+  "nodes": [
+    {
+      "id": "6a496928-fd24-4f78-9991-9488caf3c6d8",
+      "name": "Every Night",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 3 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "796027e9-247a-4279-b3d6-2a09d2e53219",
+      "name": "Load Orders",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        470,
+        300
+      ],
+      "parameters": {
+        "operation": "select",
+        "schema": {
+          "__rl": true,
+          "mode": "name",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "name",
+          "value": "orders"
+        },
+        "returnAll": false,
+        "limit": 100,
+        "options": {}
+      }
+    },
+    {
+      "id": "1e0d28a8-e930-4f98-8a28-95481a7cbbb8",
+      "name": "Only Paid",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.4,
+      "position": [
+        690,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "e1c774e2-e405-4f52-aa7b-bcc2c3124a32",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "paid",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "e2c77675-e505-40e5-ab7b-be55c4124bc5",
+              "leftValue": "={{ $json.refunded }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "fa9a5c38-284f-4748-95d2-91d83dd12a68",
+      "name": "Newest First",
+      "type": "n8n-nodes-base.sort",
+      "typeVersion": 1,
+      "position": [
+        910,
+        300
+      ],
+      "parameters": {
+        "type": "simple",
+        "sortFieldsUi": {
+          "sortField": [
+            {
+              "fieldName": "created_at",
+              "order": "descending"
+            },
+            {
+              "fieldName": "customer.name",
+              "order": "ascending"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ef98fe03-7419-42b3-ae13-c323968a44d3",
+      "name": "Top Fifty",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        1130,
+        300
+      ],
+      "parameters": {
+        "maxItems": 50,
+        "keep": "firstItems"
+      }
+    },
+    {
+      "id": "13ae0a4d-5959-483d-8d4c-00edffa1af5d",
+      "name": "Each Batch",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1350,
+        300
+      ],
+      "parameters": {
+        "batchSize": 10,
+        "options": {}
+      }
+    },
+    {
+      "id": "8b0ba4a6-dbc7-4596-bbc4-18864c2f8276",
+      "name": "Push To CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1570,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=YOUR_CRM_API_URL/v1/orders/{{ $json.id }}",
+        "authentication": "none",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "source",
+              "value": "nightly"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "total",
+              "value": "={{ $json.total }}"
+            },
+            {
+              "name": "currency",
+              "value": "EUR"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "686cd62f-98be-409f-85f1-c08f2fcd51ff",
+      "name": "Pause",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1790,
+        300
+      ],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 2,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "6de9c3db-a06a-49cb-9e0c-423bdd7c4c2b",
+      "name": "Collect",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1570,
+        460
+      ],
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "orders",
+        "include": "allFields",
+        "options": {}
+      }
+    },
+    {
+      "id": "cedbd5eb-9b50-4adb-8c85-720b6f2966fb",
+      "name": "Mail Report",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1790,
+        460
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "YOUR_REPORT_EMAIL",
+        "subject": "Nightly order sync",
+        "emailType": "text",
+        "message": "The nightly order sync finished.",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Every Night": {
+      "main": [
+        [
+          {
+            "node": "Load Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Orders": {
+      "main": [
+        [
+          {
+            "node": "Only Paid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Paid": {
+      "main": [
+        [
+          {
+            "node": "Newest First",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Newest First": {
+      "main": [
+        [
+          {
+            "node": "Top Fifty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Top Fifty": {
+      "main": [
+        [
+          {
+            "node": "Each Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Each Batch": {
+      "main": [
+        [
+          {
+            "node": "Collect",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Push To CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Push To CRM": {
+      "main": [
+        [
+          {
+            "node": "Pause",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pause": {
+      "main": [
+        [
+          {
+            "node": "Each Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect": {
+      "main": [
+        [
+          {
+            "node": "Mail Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

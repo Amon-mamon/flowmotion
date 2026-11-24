@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -26,6 +26,7 @@ import {
   zeroCounts,
 } from "@/features/analysis/fixtures";
 import type { Finding } from "@/features/analysis/schemas";
+import { renderWithQuery } from "@/features/test-utils/render";
 
 const reasonRow = (key: string) => document.querySelector(`[data-reason="${key}"]`) as HTMLElement | null;
 
@@ -190,7 +191,7 @@ describe("SignalsList", () => {
 
 describe("RecommendationsList", () => {
   it("shows title, trigger, confidence, credentials, risk, source files, rationale", () => {
-    render(<RecommendationsList recommendations={doneRecommendations} />);
+    renderWithQuery(<RecommendationsList recommendations={doneRecommendations} />);
     const card = document.querySelector(`[data-recommendation="${doneRecommendations[1]!.id}"]`) as HTMLElement;
     const c = within(card);
     expect(c.getByText("Nightly order summary email")).toBeInTheDocument();
@@ -207,43 +208,37 @@ describe("RecommendationsList", () => {
     expect(c.getByText(/A cron entry in vercel.json/)).toBeInTheDocument();
   });
 
-  it("toggles selection; Generate stays disabled with the Phase 3 hint", () => {
-    render(<RecommendationsList recommendations={doneRecommendations} />);
-    const generate = screen.getByRole("button", { name: /Generate/ });
-    expect(generate).toBeDisabled();
-    expect(generate).toHaveAccessibleDescription("Flow generation arrives in the next phase");
-    expect(screen.getByTestId("selected-count")).toHaveTextContent("0 selected");
-
-    const first = screen.getByRole("checkbox", { name: "Notify Slack on new orders" });
-    const second = screen.getByRole("checkbox", { name: "Nightly order summary email" });
-    fireEvent.click(first);
-    fireEvent.click(second);
-    expect(first).toBeChecked();
-    expect(second).toBeChecked();
-    expect(screen.getByTestId("selected-count")).toHaveTextContent("2 selected");
-    fireEvent.click(first);
-    expect(first).not.toBeChecked();
-    expect(screen.getByTestId("selected-count")).toHaveTextContent("1 selected");
-    expect(generate).toBeDisabled();
+  it("has no checkbox or selected bar; each card has its own gated Generate flow button (D-42)", () => {
+    renderWithQuery(<RecommendationsList recommendations={doneRecommendations} />);
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("selected-count")).not.toBeInTheDocument();
+    const buttons = screen.getAllByRole("button", { name: "Generate flow" });
+    expect(buttons).toHaveLength(doneRecommendations.length);
+    for (const button of buttons) {
+      expect(button).toBeDisabled();
+      expect(button).toHaveAccessibleDescription("Flow generation is being set up.");
+    }
   });
 
-  it("selected is disabled with Generating; generated links to the flow", () => {
+  it("selected shows Generating with View progress; generated links to the flow", () => {
     const flowId = "7d1e2f3a-6666-4f6f-8a6f-000000000001";
-    render(
+    renderWithQuery(
       <RecommendationsList
         recommendations={[
-          { ...doneRecommendations[0]!, status: "selected" },
+          { ...doneRecommendations[0]!, status: "selected", flowId },
           { ...doneRecommendations[1]!, status: "generated", flowId },
         ]}
       />,
     );
-    expect(screen.getByRole("checkbox", { name: "Notify Slack on new orders" })).toBeDisabled();
     expect(screen.getByText("Generating")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View progress" })).toHaveAttribute("href", `/flows/${flowId}`);
+    expect(screen.getByText("Flow ready")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open flow" })).toHaveAttribute("href", `/flows/${flowId}`);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("keeps model text literal", () => {
-    render(
+    renderWithQuery(
       <RecommendationsList
         recommendations={[{ ...doneRecommendations[0]!, title: "<h1>Pwn</h1>", rationale: "<em>x</em> because" }]}
       />,
@@ -254,7 +249,7 @@ describe("RecommendationsList", () => {
   });
 
   it("empty state", () => {
-    render(<RecommendationsList recommendations={[]} />);
+    renderWithQuery(<RecommendationsList recommendations={[]} />);
     expect(screen.getByText("No automations found")).toBeInTheDocument();
   });
 });

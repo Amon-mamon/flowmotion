@@ -120,6 +120,42 @@
   --radius-4xl: 2rem;
 }
 
+/*
+ * React Flow canvas (flow page): themed only through these variables, so the
+ * canvas uses the same black, light red, and white tokens as the rest of the app.
+ */
+.react-flow.fm-canvas {
+  --xy-background-color: var(--fm-background);
+  --xy-background-pattern-color: var(--fm-border);
+  --xy-edge-stroke: var(--fm-accent);
+  --xy-edge-stroke-selected: var(--fm-accent-strong);
+  --xy-edge-stroke-width: 1.5;
+  --xy-edge-label-color: var(--fm-foreground);
+  --xy-edge-label-background-color: var(--fm-surface);
+  --xy-handle-background-color: var(--fm-accent);
+  --xy-handle-border-color: var(--fm-background);
+  --xy-controls-button-background-color: var(--fm-surface);
+  --xy-controls-button-background-color-hover: var(--fm-surface-2);
+  --xy-controls-button-color: var(--fm-foreground);
+  --xy-controls-button-color-hover: var(--fm-foreground);
+  --xy-controls-button-border-color: var(--fm-border);
+  --xy-controls-box-shadow: none;
+  --xy-attribution-background-color: var(--fm-background);
+  font-family: inherit;
+}
+.react-flow.fm-canvas .react-flow__controls {
+  border: 1px solid var(--fm-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.react-flow.fm-canvas .react-flow__attribution a {
+  color: var(--fm-muted);
+}
+.react-flow.fm-canvas .react-flow__edge-text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
