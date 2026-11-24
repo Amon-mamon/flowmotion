@@ -1,8 +1,13 @@
 import { audit } from "@/server/audit";
 import { requireSameOrigin, requireUser } from "@/server/auth";
-import { toAnalysisSummaryDto, toProjectDto } from "@/server/db-rows";
+import { analysisHasRecommendationCount, toAnalysisSummaryDto, toProjectDto } from "@/server/db-rows";
 import { ApiError, ok, parseParams, withApi, type RouteContext } from "@/server/http";
-import { deleteProjectForUser, getProjectForUser, listAnalysisSummaries } from "@/server/projects";
+import {
+  countRecommendationsByAnalysis,
+  deleteProjectForUser,
+  getProjectForUser,
+  listAnalysisSummaries,
+} from "@/server/projects";
 import { enforceUserLimit } from "@/server/rate-limit";
 import { idParamSchema } from "@/schemas/project";
 
@@ -16,7 +21,15 @@ export const GET = withApi<{ id: string }>(
     const row = await getProjectForUser(user.id, id);
     if (row === null) throw new ApiError("NOT_FOUND");
     const analyses = await listAnalysisSummaries(user.id, id);
-    return ok({ ...toProjectDto(row), analyses: analyses.map(toAnalysisSummaryDto) });
+    // One query for all listed analyses (D-36 (b)), never one per analysis.
+    const counts = await countRecommendationsByAnalysis(
+      user.id,
+      analyses.filter(analysisHasRecommendationCount).map((analysis) => analysis.id),
+    );
+    return ok({
+      ...toProjectDto(row),
+      analyses: analyses.map((analysis) => toAnalysisSummaryDto(analysis, counts)),
+    });
   },
 );
 

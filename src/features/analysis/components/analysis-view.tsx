@@ -197,7 +197,11 @@ function AnalysisBody({
             <AiDisabledNotice />
           </section>
         ) : (
-          <RecommendationsSection projectId={projectId} analysisId={analysis.id} />
+          <RecommendationsSection
+            projectId={projectId}
+            analysisId={analysis.id}
+            showCount={analysis.errorCode === null}
+          />
         )
       ) : null}
     </>

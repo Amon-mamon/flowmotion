@@ -1,5 +1,5 @@
 import { dedupeSignals, extractSignals } from "@/lib/analysis/extractors";
-import { ModelProviderError, type ModelFailureReason } from "@/lib/analysis/model/types";
+import { ModelProviderError, type AnalysisModel, type ModelFailureReason } from "@/lib/analysis/model/types";
 import {
   ANALYSIS_MAX_OUTPUT_TOKENS,
   FILE_BUDGET_CHARS,
@@ -59,6 +59,13 @@ export interface StepContext {
   state: AnalyzeState;
   attempts: number;
   signal: AbortSignal;
+  /**
+   * Deadline of the model call inside the `ai` step (D-36 (d), R2c-2):
+   * `max(budget - AI_STEP_MARGIN_MS, floor(budget / 2))`, so the adapter
+   * always times out before the step timer. Set for every step; only
+   * `stepAi` reads it.
+   */
+  aiCallTimeoutMs: number;
 }
 
 // --- helpers ------------------------------------------------------------------------
@@ -322,16 +329,37 @@ export type AiFailureReason = ModelFailureReason | "empty_content" | "invalid_ou
 
 /** `ai`: one model call, usage_events row per response, drafts parsed with Zod. */
 export async function stepAi(ctx: StepContext): Promise<StepOutcome> {
-  const { deps, analysis, state } = ctx;
+  const { deps, state } = ctx;
   if (deps.model === null || !state.aiEnabled) {
     return { kind: "next", step: "persist", state: { ...state, snippets: [], aiSkipped: true } };
   }
+  // D-36 (d): the model call has its own deadline from the start of the step,
+  // inside the step budget, so a slow model ends `timeout` / AI_UNAVAILABLE.
+  // A plain setTimeout (not AbortSignal.timeout) so fake timers work.
+  const call = new AbortController();
+  const abortCall = () => call.abort();
+  const deadline = setTimeout(abortCall, ctx.aiCallTimeoutMs);
+  if (ctx.signal.aborted) call.abort();
+  ctx.signal.addEventListener("abort", abortCall, { once: true });
+  try {
+    return await runAiCall(ctx, deps.model, call.signal);
+  } finally {
+    clearTimeout(deadline);
+    ctx.signal.removeEventListener("abort", abortCall);
+  }
+}
+
+async function runAiCall(ctx: StepContext, model: AnalysisModel, callSignal: AbortSignal): Promise<StepOutcome> {
+  const { deps, analysis, state } = ctx;
   await progress(ctx, "analyzing", 75);
   const built = buildAnalysisPrompt(state.signals, state.snippets);
   const startedAt = Date.now();
-  // D-35 (b): exactly one `ai.failed` line per failed `ai` step, with these five
-  // keys only: never the provider, model id, message, bodies, prompt, or key.
-  const fail = (reason: AiFailureReason, status: number | null, error: StepError): StepError => {
+  // D-35 (b): exactly one `ai.failed` line per failed model call or unusable
+  // output, with these five keys only: never the provider, model id, message,
+  // bodies, prompt, or key. D-36 (d): a step-budget abort (ctx.signal) or a
+  // database error is INTERNAL and writes no line.
+  const fail = (reason: AiFailureReason, status: number | null, error: StepError): Error => {
+    if (ctx.signal.aborted) return new StepAbortedError();
     deps.log?.("ai.failed", {
       jobId: ctx.jobId,
       attempt: ctx.attempts,
@@ -343,11 +371,11 @@ export async function stepAi(ctx: StepContext): Promise<StepOutcome> {
   };
   let output;
   try {
-    output = await deps.model.analyze({
+    output = await model.analyze({
       system: built.system,
       prompt: built.prompt,
       maxOutputTokens: ANALYSIS_MAX_OUTPUT_TOKENS,
-      signal: ctx.signal,
+      signal: callSignal,
     });
   } catch (error) {
     // At most 2 tries of `ai` so a flaky provider costs at most 2 billed calls.
@@ -361,7 +389,8 @@ export async function stepAi(ctx: StepContext): Promise<StepOutcome> {
     throw fail("internal", null, new StepError("INTERNAL", ctx.attempts < AI_MAX_ATTEMPTS, "model call failed"));
   }
   const elapsedMs = Date.now() - startedAt;
-  assertActive(ctx);
+  // R2c-5: every billed response is logged, so the usage row comes before the
+  // abort check; assertActive still precedes every analysis or job state write.
   await deps.db.insertUsageEvent({
     userId: analysis.user_id,
     kind: "analysis",
@@ -369,7 +398,9 @@ export async function stepAi(ctx: StepContext): Promise<StepOutcome> {
     tokensOut: output.tokensOut,
     refId: analysis.id,
   });
-  const invalid = (reason: "empty_content" | "invalid_output"): StepError => {
+  assertActive(ctx);
+  const invalid = (reason: "empty_content" | "invalid_output"): Error => {
+    if (ctx.signal.aborted) return new StepAbortedError();
     deps.log?.("ai.failed", { jobId: ctx.jobId, attempt: ctx.attempts, reason, status: null, elapsedMs });
     return new StepError("MODEL_OUTPUT_INVALID", false);
   };
@@ -380,6 +411,7 @@ export async function stepAi(ctx: StepContext): Promise<StepOutcome> {
     drafts = parseDrafts(output.text, built.sentPaths);
   } catch (error) {
     if (error instanceof ModelOutputInvalidError) throw invalid("invalid_output");
+    if (ctx.signal.aborted) throw new StepAbortedError();
     deps.log?.("ai.failed", { jobId: ctx.jobId, attempt: ctx.attempts, reason: "internal", status: null, elapsedMs });
     throw error;
   }
@@ -387,6 +419,7 @@ export async function stepAi(ctx: StepContext): Promise<StepOutcome> {
     analysisId: analysis.id,
     kept: drafts.drafts.length,
     dropped: drafts.dropped,
+    droppedOverCap: drafts.droppedOverCap,
     droppedUnknownNodeTypes: drafts.droppedUnknownNodeTypes,
   });
   return {

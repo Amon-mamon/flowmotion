@@ -38,6 +38,11 @@ export const projectAnalysisSummarySchema = z.object({
   errorCode: jobErrorCodeSchema.nullable(),
   startedAt: isoDateTimeSchema.nullable(),
   finishedAt: isoDateTimeSchema.nullable(),
+  /**
+   * Phase 2d (D-36): number of recommendations when `status = done` and
+   * `errorCode` is null (0 is a real count), otherwise null.
+   */
+  recommendationCount: z.number().int().nonnegative().nullable(),
 });
 export type ProjectAnalysisSummary = z.infer<typeof projectAnalysisSummarySchema>;
 

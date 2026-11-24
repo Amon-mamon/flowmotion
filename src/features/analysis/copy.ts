@@ -74,6 +74,23 @@ export const SEVERITY_LABEL: Readonly<Record<Severity, string>> = {
   low: "Low",
 };
 
+/** exact (design.md, recommendation risk badge, D-36) */
+export const RISK_LABEL: Readonly<Record<Severity, string>> = {
+  high: "High risk",
+  medium: "Medium risk",
+  low: "Low risk",
+};
+
+/**
+ * exact (design.md, Phase 2d count line under "Recommendations"):
+ * "N recommendations found" for N >= 2, "1 recommendation found" for 1,
+ * null (no line) for 0, where the empty state is shown instead.
+ */
+export function recommendationsFoundText(count: number): string | null {
+  if (count <= 0) return null;
+  return count === 1 ? "1 recommendation found" : `${count} recommendations found`;
+}
+
 export const SEVERITY_ORDER: readonly Severity[] = ["high", "medium", "low"];
 
 /** snake_case category turned into words (design.md), acronyms kept upper case. */

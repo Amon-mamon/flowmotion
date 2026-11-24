@@ -98,6 +98,7 @@ const summary = (over: Partial<ProjectAnalysisSummary>): ProjectAnalysisSummary 
   errorCode: null,
   startedAt: "2026-11-12T09:00:00.000Z",
   finishedAt: "2026-11-12T09:02:00.000Z",
+  recommendationCount: 3,
   ...over,
 });
 
@@ -107,6 +108,45 @@ function serveDetail(detail: ProjectDetail, analyze: () => { status?: number; bo
     { method: "POST", match: (u) => u === `/api/projects/${detail.id}/analyze`, respond: analyze },
   ]);
 }
+
+const historyRows = () => {
+  const history = screen.getByRole("heading", { name: "History" }).parentElement!;
+  return [...history.querySelectorAll("li a")] as HTMLElement[];
+};
+
+describe("ProjectView: history recommendation count (Phase 2d, D-36)", () => {
+  it.each([
+    [{ recommendationCount: 8 }, "8 recommendations"],
+    [{ recommendationCount: 2 }, "2 recommendations"],
+    [{ recommendationCount: 1 }, "1 recommendation"],
+    [{ recommendationCount: 0 }, "No recommendations"],
+    [{ recommendationCount: null, errorCode: "AI_DISABLED" }, "AI analysis not enabled"],
+    [
+      { recommendationCount: null, status: "failed", errorCode: "AI_UNAVAILABLE" },
+      "AI service did not respond",
+    ],
+  ] as const)("%o -> %s", async (over, text) => {
+    serveDetail({ ...validProject, analyses: [summary(over)] });
+    renderWithQuery(<ProjectView projectId={validProject.id} />);
+    await screen.findByRole("heading", { name: "History" });
+    const [row] = historyRows();
+    expect(row!.querySelector("[data-testid=history-count]")?.textContent).toBe(`· ${text}`);
+  });
+
+  it.each([
+    [{ status: "scanning", errorCode: null, finishedAt: null }],
+    [{ status: "rejected", errorCode: "PROJECT_INVALID" }],
+    [{ status: "failed", errorCode: "MODEL_OUTPUT_INVALID" }],
+    [{ status: "failed", errorCode: "INTERNAL" }],
+  ] as const)("null count with %o shows no text and no separator", async (over) => {
+    serveDetail({ ...validProject, analyses: [summary({ ...over, recommendationCount: null })] });
+    renderWithQuery(<ProjectView projectId={validProject.id} />);
+    await screen.findByRole("heading", { name: "History" });
+    const [row] = historyRows();
+    expect(row!.querySelector("[data-testid=history-count]")).toBeNull();
+    expect(row!.textContent).not.toMatch(/recommendation|AI analysis not enabled|AI service did not respond/);
+  });
+});
 
 describe("ProjectView: analyze (Phase 2)", () => {
   it("Analyze POSTs and navigates to the analysis page", async () => {
@@ -153,8 +193,14 @@ describe("ProjectView: analyze (Phase 2)", () => {
     serveDetail({
       ...validProject,
       analyses: [
-        summary({ errorCode: "AI_DISABLED" }),
-        summary({ id: older, status: "rejected", errorCode: "PROJECT_INVALID", commitSha: "ffffffffffffffffffff" }),
+        summary({ errorCode: "AI_DISABLED", recommendationCount: null }),
+        summary({
+          id: older,
+          status: "rejected",
+          errorCode: "PROJECT_INVALID",
+          commitSha: "ffffffffffffffffffff",
+          recommendationCount: null,
+        }),
       ],
     });
     renderWithQuery(<ProjectView projectId={validProject.id} />);

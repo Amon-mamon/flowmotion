@@ -38,7 +38,8 @@ const plainText = (min: number, max: number) =>
       message: "Control characters are not allowed",
     });
 
-export const MAX_DRAFTS = 20;
+/** At most 8 recommendations kept per analysis (Phase 2d, D-36 (a); was 20). */
+export const MAX_DRAFTS = 8;
 
 /**
  * RecommendationDraft: one item of the analysis model output (section 7).

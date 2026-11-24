@@ -128,8 +128,14 @@ export function toProjectDto(row: ProjectRow): Project {
   };
 }
 
+/** True when the analysis shows a recommendation count (D-36 (b)). */
+export function analysisHasRecommendationCount(row: z.infer<typeof analysisSummaryRowSchema>): boolean {
+  return row.status === "done" && row.error_code === null;
+}
+
 export function toAnalysisSummaryDto(
   row: z.infer<typeof analysisSummaryRowSchema>,
+  counts: ReadonlyMap<string, number>,
 ): ProjectAnalysisSummary {
   return {
     id: row.id,
@@ -138,6 +144,7 @@ export function toAnalysisSummaryDto(
     errorCode: row.error_code,
     startedAt: row.started_at === null ? null : toIso(row.started_at),
     finishedAt: row.finished_at === null ? null : toIso(row.finished_at),
+    recommendationCount: analysisHasRecommendationCount(row) ? (counts.get(row.id) ?? 0) : null,
   };
 }
 

@@ -22,6 +22,7 @@ import { isActiveStatus } from "@/features/analysis/schemas";
 import { useStartAnalysis } from "@/features/analysis/use-start-analysis";
 import { DeleteProjectDialog } from "@/features/projects/components/delete-project-dialog";
 import { ProjectStatusBadge } from "@/features/projects/components/project-status-badge";
+import { historyCountText } from "@/features/projects/copy";
 import { useProject } from "@/features/projects/queries";
 import type { ProjectDetail } from "@/features/projects/schemas";
 import { formatDate } from "@/hooks/use-format-date";
@@ -143,6 +144,15 @@ function ProjectBody({ project }: { project: ProjectDetail }) {
   );
 }
 
+function HistoryCount({ text }: { text: string | null }) {
+  if (text === null) return null;
+  return (
+    <span className="text-sm text-muted-foreground" data-testid="history-count">
+      · {text}
+    </span>
+  );
+}
+
 function AnalysesHistory({ project }: { project: ProjectDetail }) {
   const [latest] = project.analyses;
   return (
@@ -189,7 +199,10 @@ function AnalysesHistory({ project }: { project: ProjectDetail }) {
                   href={analysisHref(project.id, analysis.id)}
                   className="flex flex-col gap-1 px-4 py-3 hover:bg-secondary sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <AnalysisStatusLabel status={analysis.status} />
+                  <span className="flex flex-wrap items-center gap-x-1.5">
+                    <AnalysisStatusLabel status={analysis.status} />
+                    <HistoryCount text={historyCountText(analysis)} />
+                  </span>
                   <span className="text-sm text-muted-foreground">
                     <span className="font-mono">{shortSha(analysis.commitSha)}</span>
                     {analysis.startedAt ? <> · {formatDate(analysis.startedAt)}</> : null}

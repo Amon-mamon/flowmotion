@@ -53,6 +53,29 @@ export async function listAnalysisSummaries(userId: string, projectId: string) {
   return z.array(analysisSummaryRowSchema).parse(data);
 }
 
+/**
+ * Recommendation counts for several analyses of one user in ONE query
+ * (D-36 (b)). Returns analysis id -> count; ids with no rows are absent.
+ */
+export async function countRecommendationsByAnalysis(
+  userId: string,
+  analysisIds: readonly string[],
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (analysisIds.length === 0) return counts;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("recommendations")
+    .select("analysis_id")
+    .eq("user_id", userId)
+    .in("analysis_id", [...analysisIds]);
+  if (error !== null) throw new Error(`recommendations count failed: ${error.code ?? "unknown"}`);
+  for (const row of z.array(z.object({ analysis_id: z.uuid() })).parse(data)) {
+    counts.set(row.analysis_id, (counts.get(row.analysis_id) ?? 0) + 1);
+  }
+  return counts;
+}
+
 export async function createProject(input: {
   userId: string;
   installationRowId: string;

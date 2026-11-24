@@ -20,6 +20,7 @@ import {
   signalsBlock,
 } from "@/lib/analysis/prompt";
 import type { Signal } from "@/schemas/analysis";
+import { MAX_DRAFTS } from "@/schemas/recommendation";
 
 const draft = (overrides: Record<string, unknown> = {}) => ({
   title: "Alert Slack on orders",
@@ -162,10 +163,54 @@ describe("parseDrafts (model output Zod validation)", () => {
     expect(parsed.drafts[0]?.required_credentials).toEqual(["Slack"]);
   });
 
-  it("keeps at most 20 drafts", () => {
-    const parsed = parseDrafts(JSON.stringify(Array.from({ length: 25 }, () => draft())), sent);
-    expect(parsed.drafts).toHaveLength(20);
-    expect(parsed.dropped).toBe(5);
+  describe("cap at MAX_DRAFTS = 8 (D-36 (a))", () => {
+    const titled = (i: number, confidence: number) => draft({ title: `Recommendation ${i}`, confidence });
+
+    it("19 valid drafts → the 8 highest confidences, droppedOverCap 11 (not in dropped)", () => {
+      expect(MAX_DRAFTS).toBe(8);
+      const items = Array.from({ length: 19 }, (_, i) => titled(i, ((i * 7) % 19) / 20));
+      const parsed = parseDrafts(JSON.stringify(items), sent);
+      expect(parsed.drafts).toHaveLength(8);
+      expect(parsed.droppedOverCap).toBe(11);
+      expect(parsed.dropped).toBe(0);
+      const top = items.map((item) => item.confidence).sort((a, b) => b - a).slice(0, 8);
+      expect(parsed.drafts.map((d) => d.confidence)).toEqual(top);
+    });
+
+    it("no positional cut-off: 3 invalid then 7 valid → 7 kept", () => {
+      const items = [
+        draft({ title: "x" }),
+        draft({ confidence: 2 }),
+        draft({ node_types: ["n8n-nodes-base.code"] }),
+        ...Array.from({ length: 7 }, (_, i) => titled(i, 0.5)),
+      ];
+      const parsed = parseDrafts(JSON.stringify(items), sent);
+      expect(parsed.drafts).toHaveLength(7);
+      expect(parsed.dropped).toBe(3);
+      expect(parsed.droppedOverCap).toBe(0);
+    });
+
+    it("confidence ties keep the model's order", () => {
+      const items = [titled(0, 0.9), ...Array.from({ length: 10 }, (_, i) => titled(i + 1, 0.5))];
+      const parsed = parseDrafts(JSON.stringify(items), sent);
+      expect(parsed.drafts.map((d) => d.title)).toEqual([
+        "Recommendation 0",
+        ...Array.from({ length: 7 }, (_, i) => `Recommendation ${i + 1}`),
+      ]);
+      expect(parsed.droppedOverCap).toBe(3);
+    });
+
+    it("exactly 8 valid → 8 kept, droppedOverCap 0", () => {
+      const parsed = parseDrafts(JSON.stringify(Array.from({ length: 8 }, (_, i) => titled(i, 0.3))), sent);
+      expect(parsed.drafts).toHaveLength(8);
+      expect(parsed.droppedOverCap).toBe(0);
+    });
+
+    it("the prompt asks for at most 8, most valuable first", () => {
+      const built = buildAnalysisPrompt([], [{ path: "a.ts", text: "x" }]);
+      expect(built.prompt).toContain("at most 8");
+      expect(built.prompt).toContain("most valuable first");
+    });
   });
 
   it("tolerates code fences and surrounding prose", () => {
@@ -174,7 +219,7 @@ describe("parseDrafts (model output Zod validation)", () => {
   });
 
   it("zero surviving drafts is not a failure", () => {
-    expect(parseDrafts("[]", sent)).toEqual({ drafts: [], dropped: 0, droppedUnknownNodeTypes: 0 });
+    expect(parseDrafts("[]", sent)).toEqual({ drafts: [], dropped: 0, droppedUnknownNodeTypes: 0, droppedOverCap: 0 });
   });
 
   it("whole-array failure → ModelOutputInvalidError", () => {

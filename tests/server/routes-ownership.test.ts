@@ -67,6 +67,7 @@ vi.mock("@/server/projects", () => ({
   getProjectForUser: m.getProjectForUser,
   listProjectsForUser: m.listProjectsForUser,
   listAnalysisSummaries: m.listAnalysisSummaries,
+  countRecommendationsByAnalysis: vi.fn(async () => new Map()),
 }));
 vi.mock("@/server/profile", () => ({
   getProfile: vi.fn(),

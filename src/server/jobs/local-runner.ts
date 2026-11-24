@@ -44,12 +44,6 @@ function loopState(userId: string): LoopState {
   return state;
 }
 
-function stripNulls(fields: Record<string, string | number | boolean | null>): Record<string, string | number | boolean> {
-  const out: Record<string, string | number | boolean> = {};
-  for (const [key, value] of Object.entries(fields)) if (value !== null) out[key] = value;
-  return out;
-}
-
 /** Worker deps for the local runner; `claimUserId` is always set (D-27). */
 export function localDeps(userId: string): WorkerDeps {
   const env = getServerEnv();
@@ -60,7 +54,8 @@ export function localDeps(userId: string): WorkerDeps {
     now: () => new Date(),
     workerId: `local-${crypto.randomUUID()}`,
     claimUserId: userId,
-    log: (event, fields) => logServerInfo(`worker:${event}`, stripNulls(fields)),
+    // Fields pass unchanged: null values stay (R2c-1, `ai.failed` keeps `status: null`).
+    log: (event, fields) => logServerInfo(`worker:${event}`, fields),
   };
 }
 

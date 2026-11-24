@@ -18,6 +18,6 @@ export function logServerError(scope: string, error: unknown): void {
   console.error(`[${scope}]`, describe(error));
 }
 
-export function logServerInfo(scope: string, fields: Record<string, string | number | boolean>): void {
+export function logServerInfo(scope: string, fields: Record<string, string | number | boolean | null>): void {
   console.info(`[${scope}]`, fields);
 }

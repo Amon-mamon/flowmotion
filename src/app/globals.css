@@ -23,6 +23,11 @@
   --fm-foreground: #ffffff;
   --fm-muted: #a3a3a3;
 
+  /* Recommendation risk tokens (D-36): the only hue exception, risk badge only. */
+  --risk-low: #4ade80;
+  --risk-medium: #fbbf24;
+  --risk-high: #ff6b6b;
+
   /* shadcn variables mapped to the palette */
   --background: var(--fm-background);
   --foreground: var(--fm-foreground);
@@ -65,6 +70,9 @@
 }
 
 @theme inline {
+  --color-risk-low: var(--risk-low);
+  --color-risk-medium: var(--risk-medium);
+  --color-risk-high: var(--risk-high);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);

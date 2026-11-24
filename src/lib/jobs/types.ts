@@ -12,7 +12,7 @@ import {
   type ValidationResult,
 } from "@/schemas/analysis";
 import type { JobErrorCode } from "@/schemas/api";
-import { recommendationDraftSchema } from "@/schemas/recommendation";
+import { MAX_DRAFTS, recommendationDraftSchema } from "@/schemas/recommendation";
 
 /**
  * Worker contracts (contract sections 4 and 5, Phase 2 item 9).
@@ -95,7 +95,7 @@ export const analyzeStateSchema = z.object({
   budgetUsedChars: z.number().int().nonnegative().default(0),
   budgetClosed: z.boolean().default(false),
   aiSkipped: z.boolean().default(false),
-  drafts: z.array(recommendationDraftSchema).optional(),
+  drafts: z.array(recommendationDraftSchema).max(MAX_DRAFTS).optional(),
 });
 export type AnalyzeState = z.infer<typeof analyzeStateSchema>;
 

@@ -185,6 +185,42 @@ describe("AnalysisView: done", () => {
     expect(await screen.findByText(COPY.noRecommendations)).toBeInTheDocument();
   });
 
+  it.each([
+    [8, "8 recommendations found"],
+    [1, "1 recommendation found"],
+  ])("count line: %i recommendations -> %s (Phase 2d)", async (n, text) => {
+    const base = recommendationsFor(doneAnalysis.id);
+    const recommendations = Array.from({ length: n }, (_, i) => ({
+      ...base[i % base.length]!,
+      id: `7d2e9f3a-4444-4d4d-9f4d-${String(i + 1).padStart(12, "0")}`,
+    }));
+    serve(doneAnalysis, { recommendations });
+    view(doneAnalysis);
+    const line = await screen.findByTestId("recommendations-count");
+    expect(line.textContent).toBe(text);
+    expect(document.querySelectorAll("[data-recommendation]")).toHaveLength(n);
+  });
+
+  it("count line: 0 recommendations shows only the empty state", async () => {
+    serve(doneAnalysis, { recommendations: [] });
+    view(doneAnalysis);
+    expect(await screen.findByText("No automations found")).toBeInTheDocument();
+    expect(screen.queryByTestId("recommendations-count")).not.toBeInTheDocument();
+    expect(screen.queryByText(/recommendations? found/)).not.toBeInTheDocument();
+  });
+
+  it("count line: none while the recommendations list is loading", async () => {
+    mockFetch([
+      { match: (u) => u === `/api/analyses/${doneAnalysis.id}`, respond: () => ok(doneAnalysis) },
+      { match: (u) => u === `/api/projects/${fixtureProjectId}`, respond: () => ok(baseProject) },
+      { match: (u) => u.includes("/findings"), respond: () => ok({ analysisId: doneAnalysis.id, findings: [] }) },
+      { match: (u) => u.includes("/recommendations"), respond: () => new Promise<never>(() => {}) },
+    ]);
+    view(doneAnalysis);
+    expect(await screen.findByRole("heading", { name: "Recommendations" })).toBeInTheDocument();
+    expect(screen.queryByTestId("recommendations-count")).not.toBeInTheDocument();
+  });
+
   it("findings error state", async () => {
     mockFetch([
       { match: (u) => u === `/api/analyses/${doneAnalysis.id}`, respond: () => ok(doneAnalysis) },
@@ -210,6 +246,8 @@ describe("AnalysisView: done", () => {
     expect(screen.getByText("nodemailer")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Generate/ })).not.toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([u]) => String(u).includes("/recommendations"))).toBe(false);
+    expect(screen.queryByTestId("recommendations-count")).not.toBeInTheDocument();
+    expect(screen.queryByText(/recommendations? found/)).not.toBeInTheDocument();
   });
 
   it("stale: notice with Re-analyze when the project moved past this commit", async () => {
@@ -265,6 +303,7 @@ describe("AnalysisView: failed", () => {
     expect(screen.getByText("nodemailer")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Recommendations" })).not.toBeInTheDocument();
     expect(screen.queryByText("Something went wrong during analysis. Try again.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/recommendations? found/)).not.toBeInTheDocument();
     expect(container.textContent ?? "").not.toMatch(/openrouter|anthropic|claude|openai|gpt/i);
     fireEvent.click(screen.getByRole("button", { name: "Retry analysis" }));
     await waitFor(() => expect(push).toHaveBeenCalled());

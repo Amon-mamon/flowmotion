@@ -34,7 +34,7 @@ export const SYSTEM_PROMPT = [
 ].join("\n");
 
 const INSTRUCTIONS = [
-  `Return a JSON array of at most ${MAX_DRAFTS} automation recommendations for this repository. Each item has exactly these fields:`,
+  `Return a JSON array of at most ${MAX_DRAFTS} automation recommendations for this repository, most valuable first. Each item has exactly these fields:`,
   '{ "title": string (3..80 chars, plain text), "description": string (10..600 chars, plain text),',
   '  "trigger_kind": "webhook" | "schedule" | "manual", "confidence": number between 0 and 1,',
   '  "source_files": string[] (only paths of repo_file blocks below), "required_credentials": string[],',
@@ -162,6 +162,8 @@ export interface ParsedDrafts {
   dropped: number;
   /** Drafts dropped because a node type is not in the catalog allowlist. */
   droppedUnknownNodeTypes: number;
+  /** Valid drafts dropped because more than MAX_DRAFTS survived (D-36 (a)); not in `dropped`. */
+  droppedOverCap: number;
 }
 
 function extractJson(text: string): unknown {
@@ -201,11 +203,7 @@ export function parseDrafts(text: string, sentPaths: readonly string[]): ParsedD
   let dropped = 0;
   let droppedUnknownNodeTypes = 0;
 
-  for (const [index, item] of items.entries()) {
-    if (index >= MAX_DRAFTS) {
-      dropped += 1;
-      continue;
-    }
+  for (const item of items) {
     if (typeof item !== "object" || item === null || Array.isArray(item)) {
       dropped += 1;
       continue;
@@ -243,7 +241,13 @@ export function parseDrafts(text: string, sentPaths: readonly string[]): ParsedD
     }
     drafts.push(parsed.data);
   }
-  return { drafts, dropped, droppedUnknownNodeTypes };
+  // D-36 (a): keep the MAX_DRAFTS highest-confidence valid drafts. Array sort
+  // is stable, so ties keep the model's order. Over-cap is never a failure.
+  const kept =
+    drafts.length > MAX_DRAFTS
+      ? [...drafts].sort((a, b) => b.confidence - a.confidence).slice(0, MAX_DRAFTS)
+      : drafts;
+  return { drafts: kept, dropped, droppedUnknownNodeTypes, droppedOverCap: drafts.length - kept.length };
 }
 
 /** `estimated_tokens = min(30000, 4000 + ceil(chars of its source files' snippets / 3))`. */

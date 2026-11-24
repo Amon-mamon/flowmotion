@@ -59,6 +59,19 @@ describe("local runner", () => {
     expect(localDeps(USER).claimUserId).toBe(USER);
   });
 
+  it("localDeps log keeps null fields, so ai.failed has all five keys (R2c-1)", () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const log = localDeps(USER).log;
+    expect(log).toBeDefined();
+    log?.("ai.failed", { jobId: "job-1", attempt: 1, reason: "timeout", status: null, elapsedMs: 1234 });
+    expect(info).toHaveBeenCalledTimes(1);
+    const [scope, fields] = info.mock.calls[0] ?? [];
+    expect(scope).toBe("[worker:ai.failed]");
+    expect(Object.keys(fields as object).sort()).toEqual(["attempt", "elapsedMs", "jobId", "reason", "status"]);
+    expect((fields as { status: unknown }).status).toBeNull();
+    info.mockRestore();
+  });
+
   it("a due job of another user is not claimed", async () => {
     const { deps, db } = setup(OTHER_USER);
     expect(await drainLocal(deps)).toBe(0);

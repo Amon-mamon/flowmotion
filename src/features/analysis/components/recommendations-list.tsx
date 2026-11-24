@@ -18,9 +18,9 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { COPY, TRIGGER_LABEL } from "@/features/analysis/copy";
+import { COPY, TRIGGER_LABEL, recommendationsFoundText } from "@/features/analysis/copy";
 import { ListSkeleton } from "@/features/analysis/components/section-states";
-import { SeverityBadge } from "@/features/analysis/components/severity-badge";
+import { RiskBadge } from "@/features/analysis/components/risk-badge";
 import { useRecommendations } from "@/features/analysis/queries";
 import type { Recommendation, TriggerKind } from "@/features/analysis/schemas";
 import { cn } from "@/lib/utils";
@@ -77,7 +77,7 @@ function RecommendationCard({
           {TRIGGER_LABEL[rec.triggerKind]}
         </Badge>
         <Badge variant="outline">{confidence}% confidence</Badge>
-        <SeverityBadge severity={rec.riskLevel} prefix="Risk:" />
+        <RiskBadge risk={rec.riskLevel} />
         {rec.status === "selected" ? (
           <Badge variant="secondary">
             <Loader2Icon aria-hidden="true" className="animate-spin" />
@@ -195,14 +195,34 @@ export function RecommendationsList({ recommendations }: { recommendations: Reco
   );
 }
 
-/** Recommendations section with loading, empty, and error states. */
-export function RecommendationsSection({ projectId, analysisId }: { projectId: string; analysisId: string }) {
+/**
+ * Recommendations section with loading, empty, and error states. `showCount`
+ * enables the count line (design.md, Phase 2d): only for a `done` analysis
+ * with `errorCode` null, and only once the list has loaded.
+ */
+export function RecommendationsSection({
+  projectId,
+  analysisId,
+  showCount = false,
+}: {
+  projectId: string;
+  analysisId: string;
+  showCount?: boolean;
+}) {
   const recs = useRecommendations(projectId, analysisId, true);
+  const countText = showCount && recs.isSuccess ? recommendationsFoundText(recs.data.recommendations.length) : null;
   return (
     <section aria-labelledby="recommendations-heading" className="flex flex-col gap-4">
-      <h2 id="recommendations-heading" className="text-lg font-semibold">
-        Recommendations
-      </h2>
+      <div className="flex flex-col gap-1">
+        <h2 id="recommendations-heading" className="text-lg font-semibold">
+          Recommendations
+        </h2>
+        {countText ? (
+          <p className="text-sm text-muted-foreground" data-testid="recommendations-count">
+            {countText}
+          </p>
+        ) : null}
+      </div>
       {recs.isPending ? (
         <ListSkeleton label="Loading recommendations" />
       ) : recs.isError ? (

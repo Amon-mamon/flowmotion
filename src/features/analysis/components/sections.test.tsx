@@ -14,6 +14,7 @@ import { AnalyzeErrorNotice } from "@/features/analysis/components/analyze-error
 import { FilesSummary, totalSkipped } from "@/features/analysis/components/files-summary";
 import { FindingsList } from "@/features/analysis/components/findings-list";
 import { RecommendationsList } from "@/features/analysis/components/recommendations-list";
+import { RiskBadge } from "@/features/analysis/components/risk-badge";
 import { SeverityBadge } from "@/features/analysis/components/severity-badge";
 import { SignalsList } from "@/features/analysis/components/signals-list";
 import { COPY, SKIPPED_LABEL } from "@/features/analysis/copy";
@@ -122,6 +123,46 @@ describe("SeverityBadge", () => {
   });
 });
 
+describe("SeverityBadge (findings): outlined red, unchanged by D-36", () => {
+  it.each(["high", "medium", "low"] as const)("%s uses the red outline, no risk token", (severity) => {
+    const { container } = render(<SeverityBadge severity={severity} />);
+    const badge = container.querySelector(`[data-severity="${severity}"]`) as HTMLElement;
+    expect(badge.className).toContain("border-primary");
+    expect(badge.className).toContain("text-primary");
+    expect(badge.className).toContain("bg-transparent");
+    expect(badge.className).not.toMatch(/risk-/);
+  });
+});
+
+describe("RiskBadge (D-36)", () => {
+  it.each([
+    ["low", "Low risk", "risk-low"],
+    ["medium", "Medium risk", "risk-medium"],
+    ["high", "High risk", "risk-high"],
+  ] as const)("%s renders an icon, %s, and the %s token outline", (risk, label, token) => {
+    const { container } = render(<RiskBadge risk={risk} />);
+    const badge = container.querySelector(`[data-risk="${risk}"]`) as HTMLElement;
+    expect(badge.textContent).toBe(label);
+    expect(badge.querySelector("svg")).not.toBeNull();
+    expect(badge.className).toContain(`border-${token}`);
+    expect(badge.className).toContain(`text-${token}`);
+    expect(badge.className).toContain("bg-transparent");
+    expect(badge.className).toContain("rounded-lg");
+    // The outline variant's neutral border/text are overridden by the token.
+    expect(badge.className).not.toContain("border-border");
+    expect(badge.className).not.toContain("text-foreground");
+  });
+
+  it("Low risk is not the red token", () => {
+    const { container } = render(<RiskBadge risk="low" />);
+    const badge = container.querySelector("[data-risk=low]") as HTMLElement;
+    const classes = badge.className.split(/\s+/);
+    for (const red of ["border-risk-high", "text-risk-high", "border-primary", "text-primary", "border-destructive", "text-destructive"]) {
+      expect(classes).not.toContain(red);
+    }
+  });
+});
+
 describe("SignalsList", () => {
   it("keeps HTML-looking labels literal", () => {
     render(<SignalsList signals={[{ kind: "route", filePath: "a.ts", line: 1, label: "<i>GET /x</i>" }]} />);
@@ -157,7 +198,11 @@ describe("RecommendationsList", () => {
     expect(c.getByText("74% confidence")).toBeInTheDocument();
     expect(c.getByText("SMTP")).toBeInTheDocument();
     expect(c.getByText("Postgres")).toBeInTheDocument();
-    expect(c.getByText("Risk: Medium")).toBeInTheDocument();
+    expect(c.getByText("Medium risk")).toBeInTheDocument();
+    // Recommendation cards use the RiskBadge, never the finding severity badge (D-36).
+    expect(card.querySelector("[data-risk=medium]")).not.toBeNull();
+    expect(card.querySelector("[data-severity]")).toBeNull();
+    expect(c.queryByText(/Risk:/)).toBeNull();
     expect(c.getByText("src/server/orders.ts")).toBeInTheDocument();
     expect(c.getByText(/A cron entry in vercel.json/)).toBeInTheDocument();
   });

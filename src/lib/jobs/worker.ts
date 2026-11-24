@@ -32,6 +32,14 @@ export function aiStepBudgetMs(deps: Pick<WorkerDeps, "aiStepTimeoutMs" | "model
     Math.min((deps.model?.timeoutMs ?? ANTHROPIC_TIMEOUT_MS) + AI_STEP_MARGIN_MS, AI_STEP_MAX_MS)
   );
 }
+/**
+ * D-36 (d): the model call deadline inside the `ai` step,
+ * `max(budget - AI_STEP_MARGIN_MS, floor(budget / 2))`, so the adapter
+ * always times out before the step timer.
+ */
+export function aiCallTimeoutMs(budgetMs: number): number {
+  return Math.max(budgetMs - AI_STEP_MARGIN_MS, Math.floor(budgetMs / 2));
+}
 export const BACKOFF_BASE_MS = 30_000;
 export const DUE_NOW_SKEW_MS = 5_000;
 
@@ -134,6 +142,7 @@ export async function runOnce(deps: WorkerDeps): Promise<RunResult> {
   if (!parsedState.success) return endJob(deps, job, analysis.id, "failed", "INTERNAL");
 
   const controller = new AbortController();
+  const aiBudget = aiStepBudgetMs(deps);
   const ctx: StepContext = {
     deps,
     jobId: job.id,
@@ -142,11 +151,9 @@ export async function runOnce(deps: WorkerDeps): Promise<RunResult> {
     state: parsedState.data,
     attempts: job.attempts,
     signal: controller.signal,
+    aiCallTimeoutMs: aiCallTimeoutMs(aiBudget),
   };
-  const budget =
-    job.step === "ai"
-      ? aiStepBudgetMs(deps)
-      : (deps.stepTimeoutMs ?? STEP_TIMEOUT_MS);
+  const budget = job.step === "ai" ? aiBudget : (deps.stepTimeoutMs ?? STEP_TIMEOUT_MS);
 
   let outcome: StepOutcome;
   try {
