@@ -46,6 +46,14 @@ Needs one backend addition: an estimated frequency and minutes saved per recomme
 ## Suggested phase order
 Phase 3 flows → Phase 4 simulation → **Phase 6: dashboard + auto re-analysis + notifications + security center** → **Phase 7: flow library + setup checklist + integrations (own AI key) + shareable report** → Phase 5 hardening last (so it covers everything) → launch.
 
+## Recommendation list fixes (from first live test, 2026-11-25)
+First live run on `booklod` (OpenRouter `particle-ai/particle-1`, under $0.01 per analysis) produced specific, security-aware recommendations, but too many at once. Proposed for the dashboard round:
+1. Show the top 3-5 first (ranked by hours saved x confidence), "Show all" for the rest.
+2. Cards unchecked by default, so users pick deliberately.
+3. Risk colours: Low neutral or green, Medium amber, High red (today Low is red too).
+4. Filters or grouping by trigger, risk and credential.
+5. Show confidence as Low / Medium / High words instead of raw percentages (55-58% reads as weak).
+
 ## Owner decisions needed
 1. Which Tier 1 and Tier 2 items are in?
 2. Is an AI-estimated "hours saved" figure acceptable if it is clearly labelled as an estimate?
