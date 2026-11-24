@@ -46,6 +46,9 @@ export function failedMessage(code: JobErrorCode | null, branch?: string): strin
       return "Flow Motion can no longer read this repository. Reconnect GitHub and try again.";
     case "MODEL_OUTPUT_INVALID":
       return "The AI returned an answer we could not use. Your security findings are saved below. Try analyzing again.";
+    case "AI_UNAVAILABLE":
+      // D-35: never names the provider.
+      return "The AI service did not respond. Your security findings and detected signals are saved below. Try again later.";
     default:
       return "Something went wrong during analysis. Try again.";
   }

@@ -1,3 +1,4 @@
+import { ANTHROPIC_TIMEOUT_MS } from "@/lib/analysis/model/anthropic";
 import { estimateTokens } from "@/lib/analysis/prompt";
 import type { AnalysisModel, AnalyzeInput, AnalyzeOutput } from "@/lib/analysis/model/types";
 
@@ -20,6 +21,8 @@ export interface FakeModelOptions {
   script?: (string | Error)[];
   /** Extra raw draft objects appended to the derived drafts (e.g. unknown node types). */
   extraDrafts?: unknown[];
+  /** The fake's own `timeoutMs` (D-35); defaults to the Anthropic adapter's 55 s. */
+  timeoutMs?: number;
 }
 
 export interface FakeModel extends AnalysisModel {
@@ -122,6 +125,7 @@ export function createFakeModel(options: FakeModelOptions = {}): FakeModel {
   const calls: AnalyzeInput[] = [];
   return {
     calls,
+    timeoutMs: options.timeoutMs ?? ANTHROPIC_TIMEOUT_MS,
     async analyze(input: AnalyzeInput): Promise<AnalyzeOutput> {
       calls.push(input);
       const next = script.shift();

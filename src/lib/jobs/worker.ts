@@ -1,3 +1,4 @@
+import { ANTHROPIC_TIMEOUT_MS } from "@/lib/analysis/model/anthropic";
 import { AI_MAX_ATTEMPTS, runAnalyzeStep, type StepContext, type StepOutcome } from "@/lib/jobs/analyze";
 import { StepError } from "@/lib/jobs/errors";
 import { analyzeStateSchema, type JobRow, type WorkerDeps } from "@/lib/jobs/types";
@@ -12,7 +13,25 @@ import type { JobErrorCode } from "@/schemas/api";
  */
 
 export const STEP_TIMEOUT_MS = 20_000;
-export const AI_STEP_TIMEOUT_MS = 60_000;
+/** D-35 (a): the `ai` step budget is the model adapter's timeout plus this margin... */
+export const AI_STEP_MARGIN_MS = 5_000;
+/** ...capped here, at least 10 s inside the stale-lock window, so a running billed call is never re-claimed. */
+export const AI_STEP_MAX_MS = 110_000;
+/**
+ * Mirror of the stale-lock re-claim window in `claim_job()`: SQL
+ * `interval '2 minutes'` in supabase/migrations/20261114000000_phase2_analysis.sql
+ * and 20261114120000_phase2_review_fixes.sql. The SQL does not read this; it
+ * exists so tests pin the budget invariant against it.
+ */
+export const STALE_LOCK_MS = 120_000;
+
+/** The `ai` step budget: `min(model.timeoutMs + 5 s, 110 s)`. Never branches on the provider. */
+export function aiStepBudgetMs(deps: Pick<WorkerDeps, "aiStepTimeoutMs" | "model">): number {
+  return (
+    deps.aiStepTimeoutMs ??
+    Math.min((deps.model?.timeoutMs ?? ANTHROPIC_TIMEOUT_MS) + AI_STEP_MARGIN_MS, AI_STEP_MAX_MS)
+  );
+}
 export const BACKOFF_BASE_MS = 30_000;
 export const DUE_NOW_SKEW_MS = 5_000;
 
@@ -117,6 +136,7 @@ export async function runOnce(deps: WorkerDeps): Promise<RunResult> {
   const controller = new AbortController();
   const ctx: StepContext = {
     deps,
+    jobId: job.id,
     analysis,
     project,
     state: parsedState.data,
@@ -125,7 +145,7 @@ export async function runOnce(deps: WorkerDeps): Promise<RunResult> {
   };
   const budget =
     job.step === "ai"
-      ? (deps.aiStepTimeoutMs ?? AI_STEP_TIMEOUT_MS)
+      ? aiStepBudgetMs(deps)
       : (deps.stepTimeoutMs ?? STEP_TIMEOUT_MS);
 
   let outcome: StepOutcome;

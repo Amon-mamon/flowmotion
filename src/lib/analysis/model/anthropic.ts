@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { combineSignals, isRetryableStatus, type FetchLike } from "@/lib/analysis/model/http";
+import { combineSignals, postModelJson, type FetchLike } from "@/lib/analysis/model/http";
 import {
   ModelProviderError,
   type AnalysisModel,
@@ -10,8 +10,8 @@ import {
 
 /**
  * Anthropic Messages API adapter (plain fetch, no SDK, D-16). The response is
- * validated with Zod. Errors carry the HTTP status only: request and response
- * bodies are never logged or attached.
+ * validated with Zod. Errors carry a fixed reason and the HTTP status only
+ * (D-35): request and response bodies are never logged or attached.
  */
 
 export const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
@@ -40,11 +40,14 @@ export interface AnthropicModelOptions {
 
 export function createAnthropicModel(options: AnthropicModelOptions): AnalysisModel {
   const doFetch = options.fetch ?? fetch;
+  const timeoutMs = options.timeoutMs ?? ANTHROPIC_TIMEOUT_MS;
   return {
+    timeoutMs,
     async analyze(input: AnalyzeInput): Promise<AnalyzeOutput> {
-      let response: Response;
-      try {
-        response = await doFetch(ANTHROPIC_MESSAGES_URL, {
+      const { status, json } = await postModelJson(
+        doFetch,
+        ANTHROPIC_MESSAGES_URL,
+        {
           method: "POST",
           headers: {
             "content-type": "application/json",
@@ -57,27 +60,12 @@ export function createAnthropicModel(options: AnthropicModelOptions): AnalysisMo
             system: input.system,
             messages: [{ role: "user", content: input.prompt }],
           }),
-          signal: combineSignals(options.timeoutMs ?? ANTHROPIC_TIMEOUT_MS, input.signal),
-        });
-      } catch {
-        throw new ModelProviderError("Model request failed (network or timeout)", null, true);
-      }
-      if (!response.ok) {
-        throw new ModelProviderError(
-          `Model request failed with status ${response.status}`,
-          response.status,
-          isRetryableStatus(response.status),
-        );
-      }
-      let json: unknown;
-      try {
-        json = await response.json();
-      } catch {
-        throw new ModelProviderError("Model response was not JSON", response.status, true);
-      }
+        },
+        combineSignals(timeoutMs, input.signal),
+      );
       const parsed = anthropicResponseSchema.safeParse(json);
       if (!parsed.success) {
-        throw new ModelProviderError("Model response had an unexpected shape", response.status, true);
+        throw new ModelProviderError("bad_shape", status, true);
       }
       const text = parsed.data.content
         .filter((block) => block.type === "text" && typeof block.text === "string")

@@ -110,6 +110,7 @@ function AnalysisBody({
     (analysis.status === "failed" &&
       (analysis.progress >= DETECT_PROGRESS ||
         analysis.errorCode === "MODEL_OUTPUT_INVALID" ||
+        analysis.errorCode === "AI_UNAVAILABLE" ||
         analysis.signals.length > 0));
 
   return (

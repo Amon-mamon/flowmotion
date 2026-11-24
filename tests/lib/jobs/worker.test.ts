@@ -183,20 +183,20 @@ describe("worker: happy path with the fake model", () => {
 
   it("the ai step is tried at most 2 times", async () => {
     const model = createFakeModel({
-      script: [new ModelProviderError("x", 529, true), new ModelProviderError("x", 529, true), "[]"],
+      script: [new ModelProviderError("http", 529, true), new ModelProviderError("http", 529, true), "[]"],
     });
     const { db, deps, clock } = setup(WEB_REPO, { model });
     await drain(deps, clock, true);
     expect(model.calls).toHaveLength(2);
     expect(db.analysis.status).toBe("failed");
-    expect(db.analysis.error_code).toBe("INTERNAL");
+    expect(db.analysis.error_code).toBe("AI_UNAVAILABLE");
     expect(db.usage).toHaveLength(0);
     expect(db.findings.length).toBeGreaterThan(0);
     expect(db.job.state).toEqual({});
   });
 
   it("a non-retryable provider error fails at once", async () => {
-    const model = createFakeModel({ script: [new ModelProviderError("x", 401, false)] });
+    const model = createFakeModel({ script: [new ModelProviderError("http", 401, false)] });
     const { db, deps, clock } = setup(WEB_REPO, { model });
     await drain(deps, clock, true);
     expect(model.calls).toHaveLength(1);

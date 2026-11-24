@@ -45,6 +45,8 @@ export const JOB_ERROR_CODES = [
   "GENERATION_EXHAUSTED",
   /** D-29: the job made no progress for 1 hour and was expired. */
   "JOB_EXPIRED",
+  /** D-35: the AI provider did not deliver a usable response. */
+  "AI_UNAVAILABLE",
   "INTERNAL",
 ] as const;
 export const jobErrorCodeSchema = z.enum(JOB_ERROR_CODES);

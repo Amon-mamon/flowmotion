@@ -243,6 +243,10 @@ describe("Notices (exact design.md copy)", () => {
       "MODEL_OUTPUT_INVALID",
       "The AI returned an answer we could not use. Your security findings are saved below. Try analyzing again.",
     ],
+    [
+      "AI_UNAVAILABLE",
+      "The AI service did not respond. Your security findings and detected signals are saved below. Try again later.",
+    ],
     ["INTERNAL", "Something went wrong during analysis. Try again."],
     [null, "Something went wrong during analysis. Try again."],
   ] as const)("failed %s", (code, text) => {

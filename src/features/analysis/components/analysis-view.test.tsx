@@ -14,6 +14,7 @@ import { COPY } from "@/features/analysis/copy";
 import {
   accessLostAnalysis,
   aiDisabledAnalysis,
+  aiUnavailableAnalysis,
   analyzingAnalysis,
   branchNotFoundAnalysis,
   doneAnalysis,
@@ -250,6 +251,23 @@ describe("AnalysisView: failed", () => {
     expect(await screen.findAllByTestId("masked-evidence")).toHaveLength(4);
     expect(screen.getByText("nodemailer")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Recommendations" })).not.toBeInTheDocument();
+  });
+
+  it("AI_UNAVAILABLE (D-35): exact message, Retry, findings and signals still shown, no provider name", async () => {
+    serve(aiUnavailableAnalysis);
+    const { container } = view(aiUnavailableAnalysis);
+    expect(
+      await screen.findByText(
+        "The AI service did not respond. Your security findings and detected signals are saved below. Try again later.",
+      ),
+    ).toBeInTheDocument();
+    expect(await screen.findAllByTestId("masked-evidence")).toHaveLength(4);
+    expect(screen.getByText("nodemailer")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Recommendations" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Something went wrong during analysis. Try again.")).not.toBeInTheDocument();
+    expect(container.textContent ?? "").not.toMatch(/openrouter|anthropic|claude|openai|gpt/i);
+    fireEvent.click(screen.getByRole("button", { name: "Retry analysis" }));
+    await waitFor(() => expect(push).toHaveBeenCalled());
   });
 
   it("GITHUB_ACCESS_LOST: exact message with a reconnect link", async () => {

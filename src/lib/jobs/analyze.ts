@@ -1,5 +1,5 @@
 import { dedupeSignals, extractSignals } from "@/lib/analysis/extractors";
-import { ModelProviderError } from "@/lib/analysis/model/types";
+import { ModelProviderError, type ModelFailureReason } from "@/lib/analysis/model/types";
 import {
   ANALYSIS_MAX_OUTPUT_TOKENS,
   FILE_BUDGET_CHARS,
@@ -52,6 +52,8 @@ export type StepOutcome =
 
 export interface StepContext {
   deps: WorkerDeps;
+  /** The job id, for the `ai.failed` log line (D-35). */
+  jobId: string;
   analysis: AnalysisRef;
   project: ProjectRef;
   state: AnalyzeState;
@@ -315,6 +317,9 @@ export async function stepDetect(ctx: StepContext): Promise<StepOutcome> {
   };
 }
 
+/** `ai.failed` reasons (D-35 (b)): the adapter reasons plus the worker's own. */
+export type AiFailureReason = ModelFailureReason | "empty_content" | "invalid_output" | "internal";
+
 /** `ai`: one model call, usage_events row per response, drafts parsed with Zod. */
 export async function stepAi(ctx: StepContext): Promise<StepOutcome> {
   const { deps, analysis, state } = ctx;
@@ -323,6 +328,19 @@ export async function stepAi(ctx: StepContext): Promise<StepOutcome> {
   }
   await progress(ctx, "analyzing", 75);
   const built = buildAnalysisPrompt(state.signals, state.snippets);
+  const startedAt = Date.now();
+  // D-35 (b): exactly one `ai.failed` line per failed `ai` step, with these five
+  // keys only: never the provider, model id, message, bodies, prompt, or key.
+  const fail = (reason: AiFailureReason, status: number | null, error: StepError): StepError => {
+    deps.log?.("ai.failed", {
+      jobId: ctx.jobId,
+      attempt: ctx.attempts,
+      reason,
+      status,
+      elapsedMs: Date.now() - startedAt,
+    });
+    return error;
+  };
   let output;
   try {
     output = await deps.model.analyze({
@@ -332,10 +350,17 @@ export async function stepAi(ctx: StepContext): Promise<StepOutcome> {
       signal: ctx.signal,
     });
   } catch (error) {
-    const retryable = !(error instanceof ModelProviderError) || error.retryable;
     // At most 2 tries of `ai` so a flaky provider costs at most 2 billed calls.
-    throw new StepError("INTERNAL", retryable && ctx.attempts < AI_MAX_ATTEMPTS, "model call failed");
+    if (error instanceof ModelProviderError) {
+      throw fail(
+        error.reason,
+        error.status,
+        new StepError("AI_UNAVAILABLE", error.retryable && ctx.attempts < AI_MAX_ATTEMPTS, "model call failed"),
+      );
+    }
+    throw fail("internal", null, new StepError("INTERNAL", ctx.attempts < AI_MAX_ATTEMPTS, "model call failed"));
   }
+  const elapsedMs = Date.now() - startedAt;
   assertActive(ctx);
   await deps.db.insertUsageEvent({
     userId: analysis.user_id,
@@ -344,11 +369,18 @@ export async function stepAi(ctx: StepContext): Promise<StepOutcome> {
     tokensOut: output.tokensOut,
     refId: analysis.id,
   });
+  const invalid = (reason: "empty_content" | "invalid_output"): StepError => {
+    deps.log?.("ai.failed", { jobId: ctx.jobId, attempt: ctx.attempts, reason, status: null, elapsedMs });
+    return new StepError("MODEL_OUTPUT_INVALID", false);
+  };
+  // D-35 (c): an empty or null response is not retried (the billed row is already written).
+  if (output.text.trim() === "") throw invalid("empty_content");
   let drafts;
   try {
     drafts = parseDrafts(output.text, built.sentPaths);
   } catch (error) {
-    if (error instanceof ModelOutputInvalidError) throw new StepError("MODEL_OUTPUT_INVALID", false);
+    if (error instanceof ModelOutputInvalidError) throw invalid("invalid_output");
+    deps.log?.("ai.failed", { jobId: ctx.jobId, attempt: ctx.attempts, reason: "internal", status: null, elapsedMs });
     throw error;
   }
   deps.log?.("analysis.drafts", {

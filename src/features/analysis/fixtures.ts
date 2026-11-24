@@ -122,6 +122,18 @@ export const modelInvalidAnalysis = analysis({
   finishedAt: "2026-11-12T09:02:00.000Z",
 });
 
+/** `failed` because the AI service did not respond (D-35); findings and signals exist. */
+export const aiUnavailableAnalysis = analysis({
+  n: 11,
+  status: "failed",
+  progress: 75,
+  validation: { kind: "website", reason: null },
+  counts: fullCounts,
+  signals,
+  errorCode: "AI_UNAVAILABLE",
+  finishedAt: "2026-11-12T09:02:00.000Z",
+});
+
 export const accessLostAnalysis = analysis({
   n: 8,
   status: "failed",
