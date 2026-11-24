@@ -15,6 +15,7 @@
 2. Run n8n locally or in CI (Docker, pinned tag, no network egress needed, no user data). Any dev-only dependency or CI image needs a `docs/requests.md` entry.
 3. Import every file in `tests/conformance/` through n8n's import (CLI or REST on the local instance) and assert: import succeeds, node count and connection count match the export, and no "unknown node" or parameter errors.
 4. When the test passes for the pinned version, the internal "unverified import" flag is cleared (`contract.md` section 8). Any pin bump sets it again until the test is re-run.
+   Phase 3a form (`contract.md` section 11, backend item 8): `scripts/n8n-import-test.mjs`, run by hand with `npm run test:n8n-import`, using the pinned Docker image or `npx n8n@<pin>` in a temporary user folder; nothing is added to `package.json`; it skips cleanly when no runner is available. The repo has no CI yet, so there is no CI job (OQ-25).
 5. Record the verified settings block, `typeVersion` values, and credential placeholder format back into `contract.md` section 8 (resolves OQ-6).
 
 ## Plan for user-facing live testing, when the owner says so

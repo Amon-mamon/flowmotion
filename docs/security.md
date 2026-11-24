@@ -83,6 +83,7 @@ Runs on every file that was fetched. Patterns include: AWS keys, GitHub tokens, 
 - Service role key only in server code. Never in `NEXT_PUBLIC_*`.
 - Zod validation on every API input and on env at startup.
 - Postgres-based rate limits (`rate_limits` table, fixed 1-minute windows, keys `rl:<route>:<user_id|ip>:<window>`), error `RATE_LIMITED` 429. Defaults until Phase 5 tunes them: 120/min per user on all `/api/*`; 10/min per user on analyze, generate, test, export; 20/min per IP on `/api/auth/*`, `/api/github/install`, `/api/github/authorize`, and the installations callback; 60/min per IP on the webhook.
+- Phase 3b limits: `POST /api/recommendations/generate` and `GET /api/flows/:id/export` 10/min per user (routes `generate`, `export`); `GET /api/flows` and `GET /api/flows/:id` use the general 120/min.
 - Per-user daily caps as abuse protection, not billing: 10 analyses and 30 generations per user per UTC day, enforced server-side through the `rate_limits` table before a job is queued, error code `DAILY_CAP_REACHED` (`contract.md` section 6). Not a plan limit; `subscription.md` is NOT READY.
 - Verify the GitHub webhook signature with a constant-time compare.
 - CSRF protection for state-changing routes: `POST`/`PATCH`/`DELETE` handlers reject a request whose `Origin` header is present and is not the `APP_URL` origin (`403 FORBIDDEN`; the signature-verified webhook is exempt); secure, httpOnly, sameSite cookies.
@@ -92,7 +93,7 @@ Runs on every file that was fetched. Patterns include: AWS keys, GitHub tokens, 
 - **Email confirmation (launch requirement, D-21):** before real users, Supabase Auth "Confirm email" is on and custom SMTP is configured (the built-in Supabase mailer is rate-limited and meant for testing). Tracked in the launch checklist in `status.md`. **Accepted until this gate (D-23):** S11-6, while "Confirm email" is off the browser's direct Supabase sign-up response reveals whether an address already has an account. **Accepted residual risk (D-23, R11-5):** Supabase returns `over_email_send_rate_limit` for the per-address resend cooldown too, so signing up again within about 60 s with an address that has a pending unconfirmed signup shows the rate-limit message; this weakly reveals a recent pending signup and the client cannot tell the cases apart.
 - **GitHub App setting (owner):** "Request user authorization (OAuth) during installation" must stay on; the callback needs its `code` for the ownership check and the repo access sync (D-22).
 - Offer MFA. Pin dependencies, run `npm audit` in review, commit the lockfile.
-- Exported flows: no secrets, no credentials ids, no Code or command nodes, preview and warnings before export, destructive operations (delete, overwrite) flagged.
+- Exported flows: no secrets, no credentials ids, no Code or command nodes, preview and warnings before export. v1 profiles offer no delete or overwrite operation; flows that write data or send messages carry a checklist warning. Full rules in section 9.
 
 ## 6. Leaks Flow Motion must detect in the user's repo
 | Category | Examples | Severity |
@@ -114,4 +115,27 @@ Later (not v1): secrets in git history. Each finding has a category, severity, f
 Secrets in generated flows, logs, error messages, analytics, or screenshots · model output exposing repo data across users · one customer seeing another's data (RLS) · leaked GitHub app key or service role key · forged GitHub webhooks · prompt-injected exfiltration · raw findings shown unmasked · source retained in jobs, caches, or backups · AI provider retaining code beyond stated terms · over-broad GitHub permissions.
 
 ## 8. Review gates
-`security-reviewer` runs after phases 2 to 5 and writes `docs/security-review.md`. Release requires no open high or medium items.
+`security-reviewer` runs after phases 2 to 5 (for Phase 3: after 3a and again after 3b) and writes `docs/security-review.md`. Release requires no open high or medium items.
+
+## 9. Generated flows and export (Phase 3, D-39, D-40)
+The model that writes a flow has read untrusted repo text, so its output is treated as hostile until our code has checked it. The model never writes n8n JSON; it writes a `FlowSpecDraft` that must pass strict Zod schemas and rules `F1`..`F12`, the compiler writes the JSON, and the validator checks the JSON again without trusting the compiler (`contract.md` sections 7 and 8, `testing.md`).
+
+**Nothing from the repo or the model can become executable.**
+- Only allowlisted node types (`node-catalog.md`); no Code, command, file, SSH, or sub-workflow nodes exist in the catalog, the profiles, or the compiler.
+- Every node's `params` must match that node's strict profile schema: unknown keys fail, so the model cannot set an n8n parameter Flow Motion did not design for (for example an authentication option, a raw SQL query, or a "send binary" switch).
+- **Expressions:** n8n evaluates any string parameter that starts with `=`. A `Text` value may not start with `=`; only the compiler adds that prefix, and only to text whose every `{{ … }}` parses with the small grammar in `contract.md` section 7 (field reads and one comparison; no calls, no `$env`, `$execution`, `$workflow`, `$vars`, `$secrets`, no arithmetic). The validator re-parses every `=` string in the compiled JSON. Text that fails is rejected, never "cleaned".
+- Postgres and Supabase nodes take a table and column list as identifiers (`^[a-z_][a-z0-9_]{0,62}$`); there is no raw SQL operation.
+
+**No secrets and no credentials in an export.**
+- No node carries a `credentials` key, a credential id, a token, or a password. Credentials are named in the setup checklist and connected by the user inside n8n.
+- HTTP headers named `authorization`, `proxy-authorization`, `cookie`, or `x-api-key` are rejected.
+- The secret scanner runs over the serialized FlowSpec (`F9`), over the compiled JSON (validator rule 7), and once more in `assertExportSafe` on every download (with the no-`credentials` check and the 256 KB size limit); a hit refuses the export with `EXPORT_NOT_VALID` and logs the flow id and rule only.
+- **Destinations are placeholders only.** Email addresses, Slack channels, chat ids, document, base, database, and repository ids, and every HTTP origin are `YOUR_…` tokens; a literal is a schema failure. So a repository cannot steer a generated flow into sending the user's data to an address or host of the repository author's choosing, and no literal host means no SSRF target ships in an export. Every placeholder is listed in the checklist (validator rule 9). No `http://` URL anywhere.
+
+**Generation re-reads repo files (the `context` step).** It reads only the recommendation's own `source_files` (at most 12) at the analyzed commit, after the same per-user repository access check as analyze (`GITHUB_REFRESH_REQUIRED`), the S2-1 repo identity check, and the path policy; each file goes through the secret scanner before anything is written to `jobs.state`; only redacted text is kept, only in `jobs.state`, cleared when the job ends and by the 1-hour TTL (D-29). A denied path is never fetched even if the model listed it. The recommendation's title, description, and rationale are model text derived from repo text and are sent to the generation model inside delimiters as data. Retry feedback contains only rule ids and node keys produced by our code.
+
+**AI provider and cost.** Generation uses the same provider switch as analysis; OpenRouter stays local-runner-only (D-33) and the Edge worker refuses it. At most 3 model calls are started per flow, counted before each call. `ai.failed` lines follow the rule in section 3 (five fixed keys, no prompt, no provider name). `/privacy` already states that redacted snippets go to the AI provider; generation sends nothing of a new kind.
+
+**Serving the export and the canvas.** `GET /api/flows/:id` and `/export` return only the caller's own flow (`NOT_FOUND` otherwise); the export is served as an attachment with `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`; `flow.generate` and `flow.export` are written to the audit log. All flow text (name, labels, params, notes, checklist entries) is rendered as plain text in the canvas, inspector, and checklist. The dev import test runs a pinned n8n with no user data and no credentials and is never deployed (`n8n.md`); `n8n-nodes-base` is fetched to a temporary directory with `--ignore-scripts` and is never a project dependency.
+
+**Required tests:** listed in `contract.md` section 11 (Phase 3a backend item 9 "Validator", "Export safety", "Injection"; Phase 3b backend item 7 `context` cases).

@@ -13,8 +13,9 @@ Everyone appends one line per finished piece of work: `[role] [date] done / next
 | 2 Analysis | done 2026-11-22 (security re-review: all S2-1..S2-7, R2-x verified; migrations 20261114000000 + 20261114120000 applied on hosted Supabase; lows S2R-1, S2R-2 carried to Phase 2b) |
 | 2b OpenRouter dev provider | done 2026-11-22 (D-24, D-33, D-34; local runner only; scanner fixes S2R-1, R2b-1; server env schema out of client bundle S2b-1); code + security re-review 0 open |
 | 2c AI failure handling | done 2026-11-25 (`02b0c81`, D-35); review lows R2c-1..R2c-5 carried to Phase 2d (R2c-4 done in docs) |
-| 2d Phase 2 close-out | scope confirmed 2026-11-25 (D-36; contract section 11 "Phase 2d"); backend + frontend not started |
-| 3 Flows | not started |
+| 2d Phase 2 close-out | done 2026-11-25 (`6834f5f`, D-36) |
+| 3a Flow engine + flow UI on fixtures | scope confirmed 2026-11-25 (D-37..D-42; contract section 11 "Phase 3a"); not started |
+| 3b Generation job, API, wiring | scope written 2026-11-25 (contract section 11 "Phase 3b"); architect reconfirms after 3a; not started |
 | 4 Simulation | not started |
 | 5 Hardening | not started |
 | Subscription | NOT READY |
@@ -30,8 +31,9 @@ Everyone appends one line per finished piece of work: `[role] [date] done / next
 | Repo access (Phase 1.1 security fixes, D-22) | yes once migration 20261113120000_phase1_1_repo_access.sql is applied (Installation.githubUserLogin/reposSyncedAt/needsRefresh; repos list from the access set; GITHUB_REFRESH_REQUIRED 403 on repos/branches/POST projects; callback ?link=github, ?error=github_account, ?error=github_none) |
 | Analyze API | yes once migration `supabase/migrations/20261114000000_phase2_analysis.sql` is applied (POST /api/projects/:id/analyze → 202 { analysisId }; GET /api/analyses/:id with poll kick; GET /api/projects/:id analyses with errorCode; DAILY_CAP_REACHED 429, GITHUB_REFRESH_REQUIRED 403, "An analysis is already running" / "Reconnect GitHub to analyze this project" VALIDATION_ERROR). Under `npm run dev` the worker runs in-process (OQ-21), no Edge Function needed; AI stays off (AI_DISABLED) |
 | Recommendations API | yes once `20261114000000_phase2_analysis.sql` is applied (GET /api/projects/:id/findings and /recommendations, optional ?analysisId=; flowId null until Phase 3) |
-| Generate API | no |
-| Flow and export API | no |
+| Flow schemas (`src/schemas/flow.ts`, Phase 3a backend item 1) | no |
+| Generate API (Phase 3b) | no |
+| Flow and export API (Phase 3b) | no |
 | Test API | no |
 
 Until a piece says yes, the frontend uses mock data that matches `contract.md`.
@@ -90,3 +92,4 @@ Until a piece says yes, the frontend uses mock data that matches `contract.md`.
 [frontend] 2026-11-25 Phase 2d done: analysis page count line ("N recommendations found" / "1 recommendation found", none for 0, loading, AI_DISABLED, failed, rejected, active); project history row count text from `recommendationCount` + errorCode; outlined RiskBadge ("Low/Medium/High risk", --risk-low/--risk-medium/--risk-high in globals.css) replaces SeverityBadge on recommendation cards only; tests with exact strings (187 frontend tests pass, tsc and lint clean) / next: Phase 3 / blockers: none
 [backend] 2026-11-25 Phase 2d done: MAX_DRAFTS 8 with highest-confidence keep (stable, ties keep model order) and droppedOverCap in analysis.drafts log, prompt "most valuable first"; `recommendationCount` on GET /api/projects/:id summaries (one user-scoped recommendations query for all done/no-error analyses, skipped when none) - ready; R2c-1 local log keeps nulls; R2c-2 model call deadline max(budget-5s, floor(budget/2)) via StepContext.aiCallTimeoutMs, step abort / DB error = INTERNAL with no ai.failed; R2c-5 usage row before abort check; R2c-3 prompt marker test; typecheck, lint, 1093 tests, build all pass / next: code-reviewer / blockers: none
 [coordinator] 2026-11-25 done: Phase 2d committed (D-36: recommendations capped at 8 by confidence, recommendationCount on project analyses, count line + history text, RiskBadge colours, R2c-1..R2c-5 fixed); code review 0 high/medium (R2d-1 contract wording fixed by coordinator), security 0 high/medium (S2d-1 drafts .max(MAX_DRAFTS) in job state fixed by coordinator with test; S2d-2 informational, revisit with billing). Phase 2 closed / next: Phase 3 (flows) / blockers: S11-2 (RLS suite unrun), OQ-16 (worker never run under Deno)
+[architect] 2026-11-25 done: Phase 3 scope, split into 3a (flow engine: flow schemas first, n8n pin + catalog generator, 32 node profiles, FlowSpec rules F1..F12, compiler, validator, conformance goldens, dev import test; frontend flow page, inspector, export panel, per-card Generate on fixtures) and 3b (migration 20261126000000_phase3_flows.sql, generation job context → ai → compile → validate → persist with a hard 3-call cap, generate / flows / export routes, derived recommendation status, wiring) in contract sections 2, 4, 5, 6, 7, 8, 10, 11, node-catalog.md (FlowSpec parameters), testing.md, security.md section 9, design.md (card actions, flow page copy), D-37..D-42, OQ-7 resolved, OQ-23..OQ-26 opened with defaults applied / next: backend + frontend Phase 3a in parallel (backend lands src/schemas/flow.ts first), then code + security review, then architect reconfirms 3b / blockers: none for 3a; owner applies the 3b migration later; owner may override OQ-23..OQ-26

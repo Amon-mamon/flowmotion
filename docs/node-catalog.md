@@ -5,13 +5,17 @@
 Flow Motion may only use node types listed here. The catalog exists so exports always match what n8n expects.
 
 ## How the catalog is built
-- `scripts/generate-node-catalog` reads the node definitions from **one pinned n8n version** and writes `src/lib/n8n-catalog/catalog.generated.json` (type, typeVersion, parameters, outputs). **Never hand-edit it.**
-- `src/lib/n8n-catalog/allowlist.ts` holds the allowed type names below. The build fails if an allowed type is missing from the pinned version, or if the catalog and allowlist disagree.
+Three layers, each checked against the others by a test (Phase 3a, D-38; `contract.md` section 11):
+1. **This file** (architect): the two type tables below are the human list of allowed nodes, and "FlowSpec parameters" is the contract for what each node may contain.
+2. **`src/lib/n8n-catalog/allowlist.ts`** (backend, hand-written from the tables): the code allowlist. **No flow, draft, FlowSpec, or export may contain a node type outside it**; this is enforced three times: recommendation drafts (dropped), FlowSpec rule `F2`, validator rule 4.
+3. **`src/lib/n8n-catalog/catalog.generated.json`** (generated, **never hand-edited**): `scripts/generate-node-catalog.mjs` (`npm run catalog:generate`) installs the pinned `n8n-nodes-base` into a temporary directory outside the repo and writes, for every allowlisted type at its default version: `typeVersion`, `displayName`, input and output counts, n8n credential type names, and the parameter definitions (name, type, option values, children). It fails if an allowlisted type is missing from the pinned package. `n8n-nodes-base` is never a dependency in `package.json` and is never imported by the app (OQ-5): the committed JSON is the only artifact used at runtime.
+
+- **Pin:** `src/lib/n8n-catalog/version.ts` holds `N8N_VERSION` (the stable `n8n` release current when Phase 3a starts, OQ-7), `NODES_BASE_VERSION` (the `n8n-nodes-base` version that release depends on), and `CATALOG_VERSION` (`"<N8N_VERSION>+fm<n>"`, `n` bumped on any profile change).
+- **Node profiles** (`src/lib/n8n-catalog/profiles/`, hand-written, one per node): the strict Zod schema for the node's FlowSpec params (table below), the function that turns them into n8n parameters for the pinned `typeVersion`, the credential name, input and output counts, and the short reference text shown to the model. Flow Motion deliberately supports **one small, fixed set of operations per node**, not everything n8n offers; that keeps flows checkable and simulatable.
+- **Consistency test (build gate):** the tables below, the allowlist, the generated catalog keys, and the profile index must list the same types; each profile's `typeVersion` must equal the catalog's; every n8n parameter name a profile emits must exist in the catalog's definitions for that node.
 - Each exported flow records `catalog_version` and `n8n_version`. The UI shows "Compatible with n8n x.y".
-- Upgrading n8n: bump the pin, regenerate, run the compiler/validator/simulator tests, and re-run the dev/CI import test (`n8n.md`, D-9); exports are "unverified import" until it passes for the new pin. Never upgrade silently.
-- Per-node Zod parameter schemas are derived from the generated catalog. FlowSpec params must pass them.
-- The type names below were checked against n8n's core node reference. The generator is the final authority. If a name differs, fix this list.
-- OQ-5 (license) must be settled before depending on n8n packages. Until then, extraction is a dev-time step and the generated JSON is the only artifact the app uses at runtime.
+- Upgrading n8n: bump the pin, regenerate, fix any profile the consistency test flags, run the compiler/validator/simulator tests, and re-run the dev import test (`n8n.md`, D-9); exports are "unverified import" until it passes for the new pin. Never upgrade silently.
+- The type names below were checked against n8n's core node reference. The generator is the final authority. If a name differs, backend reports it in `requests.md` and the architect fixes this list.
 
 ## Tier 1 — core nodes (no credentials, simulated fully)
 | Type (`n8n-nodes-base.`) | Purpose |
@@ -65,5 +69,42 @@ Flow Motion may only use node types listed here. The catalog exists so exports a
 - Release or CI events → `webhook` → `github` or `slack`
 - Calls to the project's own API → `httpRequest` with a `YOUR_APP_URL` placeholder
 
+## FlowSpec parameters (Phase 3a, D-39)
+What the model may put in `params` for each node. Schemas are strict (unknown keys fail). Types `Text`, `Value`, `Placeholder`, `FieldName`, `FieldPath`, `Ident` and the expression subset are defined in `contract.md` section 7. `Condition = { left: Value, op: "equals" | "notEquals" | "contains" | "notContains" | "gt" | "gte" | "lt" | "lte" | "exists" | "notExists" | "isTrue" | "isFalse", right?: Value }` (`right` required except for the last four). `Pair = { name: FieldName, value: Value }`. The n8n-side structure each profile emits is the backend's, checked by the consistency test and the import test.
+
+| Node | `params` |
+|---|---|
+| `manualTrigger`, `noOp` | `{}` |
+| `webhook` | `{ path: ^[a-z0-9][a-z0-9-]{0,63}$, method: "GET" \| "POST" \| "PUT" \| "PATCH" \| "DELETE", respond: "immediately" \| "respondNode" }` |
+| `scheduleTrigger` | `{ cron: string }` (five space-separated fields of `[0-9*/,-]`, at most 60 chars) |
+| `respondToWebhook` | `{ statusCode: integer 200..599, body: Pair[0..20] }` (JSON response) |
+| `if`, `filter` | `{ conditions: Condition[1..5], combine: "and" \| "or" }` (`if` outputs: 0 true, 1 false) |
+| `switch` | `{ value: Value, cases: (string \| number)[1..6] (unique), fallback: boolean }` (output i = case i; fallback = the last output) |
+| `set` | `{ fields: Pair[1..20], keepOtherFields: boolean }` |
+| `merge` | `{ mode: "append" }` |
+| `splitInBatches` | `{ batchSize: integer 1..100 }` (outputs: 0 done, 1 loop) |
+| `splitOut` | `{ field: FieldPath }` |
+| `aggregate` | `{ as: FieldName }` (all items into one list field) |
+| `sort` | `{ by: { field: FieldPath, order: "asc" \| "desc" }[1..3] }` |
+| `limit` | `{ maxItems: integer 1..1000, keep: "first" \| "last" }` |
+| `removeDuplicates` | `{ fields: FieldPath[0..10] }` (empty = compare all fields) |
+| `renameKeys` | `{ keys: { from: FieldPath, to: FieldName }[1..20] }` |
+| `dateTime` | `{ operation: "now", as: FieldName }` or `{ operation: "format", value: Value, format: "yyyy-MM-dd" \| "yyyy-MM-dd HH:mm" \| "iso", as: FieldName }` |
+| `wait` | `{ seconds: integer 1..3600 }` |
+| `stopAndError` | `{ message: Text (1..200 chars) }` |
+| `httpRequest` | `{ method: "GET" \| "POST" \| "PUT" \| "PATCH" \| "DELETE", baseUrl: Placeholder (name ends in `_URL`), path: Text (starts with `/`), query?: Pair[0..10], headers?: Pair[0..10], jsonBody?: Pair[0..20] }`. Header names `authorization`, `proxy-authorization`, `cookie`, `x-api-key` (any case) are rejected: authentication is added in n8n. |
+| `emailSend` | `{ from: Placeholder, to: Placeholder, subject: Text, text: Text }` |
+| `slack` | `{ channel: Placeholder, text: Text }` (post a message) |
+| `discord` | `{ text: Text }` (post through the webhook credential) |
+| `telegram` | `{ chatId: Placeholder, text: Text }` |
+| `gmail` | `{ to: Placeholder, subject: Text, message: Text }` (send) |
+| `googleSheets` | `{ operation: "append", documentId: Placeholder, sheetName: Placeholder, columns: Pair[1..20] }` or `{ operation: "read", documentId: Placeholder, sheetName: Placeholder }` |
+| `notion` | `{ databaseId: Placeholder, title: Text }` (create a database page) |
+| `airtable` | `{ baseId: Placeholder, table: Placeholder, fields: Pair[1..20] }` (create a record) |
+| `github` | `{ owner: Placeholder, repo: Placeholder, title: Text, body: Text }` (create an issue) |
+| `postgres`, `supabase` | `{ operation: "insert", table: Ident, columns: { name: Ident, value: Value }[1..20] }` or `{ operation: "select", table: Ident, limit: integer 1..100 }`. Never raw SQL. |
+
+Not offered in v1 (by design): deleting or overwriting data, raw SQL, file operations, reading mail, literal destinations (every address, channel, id, and host is a `YOUR_…` placeholder the user fills in after import).
+
 ## Per-node simulation support
-Each catalog entry has `simulation: "full" | "stubbed"`, `inputs` (count, 2 for `merge`, else 1, 0 for triggers), `outputs` (count, 2 for `if`, N for `switch`, 2 for `splitInBatches`, else 1), and a default fixture for `stubbed` nodes. Tier 1 is `full`. Tier 2 is `stubbed` (returns mock data, never calls out). Every listed node is simulatable and the validator rejects expressions outside the supported subset, so every Valid flow can run in the simulator (`testing.md`).
+Each node profile has `simulation: "full" | "stubbed"`, `inputs` (count, 2 for `merge`, else 1, 0 for triggers), `outputs` (count, 2 for `if`, N for `switch`, 2 for `splitInBatches`, else 1), and a default fixture for `stubbed` nodes. Tier 1 is `full`. Tier 2 is `stubbed` (returns mock data, never calls out). Every listed node is simulatable and the validator rejects expressions outside the supported subset, so every Valid flow can run in the simulator (`testing.md`).
