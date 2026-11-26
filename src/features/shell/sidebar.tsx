@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutDashboardIcon, SettingsIcon } from "lucide-react";
+import { LayoutDashboardIcon, PlugIcon, SettingsIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboardIcon },
+  { href: "/integrations", label: "Integrations", icon: PlugIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ] as const;
 

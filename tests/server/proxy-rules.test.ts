@@ -24,6 +24,9 @@ describe("proxy rules (contract section 3)", () => {
       "/projects/abc/analysis/def",
       "/flows/xyz",
       "/settings",
+      "/integrations",
+      "/integrations/",
+      "/integrations/x",
     ]) {
       expect(unauth(path)).toEqual({ kind: "redirect", to: "/login" });
       expect(auth(path)).toEqual({ kind: "next" });
@@ -34,6 +37,9 @@ describe("proxy rules (contract section 3)", () => {
     expect(isAppPath("/dashboards")).toBe(false);
     expect(isAppPath("/settingsx")).toBe(false);
     expect(unauth("/projectsfoo")).toEqual({ kind: "next" });
+    expect(isAppPath("/integrationsx")).toBe(false);
+    expect(unauth("/integrationsx")).toEqual({ kind: "next" });
+    expect(unauth("/integrations-public")).toEqual({ kind: "next" });
   });
 
   it("authenticated users visiting /login or /signup go to /dashboard", () => {

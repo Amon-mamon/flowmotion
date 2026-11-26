@@ -37,7 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </SheetTrigger>
             <SheetContent side="left" className="w-72 p-0">
               <SheetTitle className="sr-only">Navigation</SheetTitle>
-              <SheetDescription className="sr-only">Dashboard, settings, and sign out</SheetDescription>
+              <SheetDescription className="sr-only">Dashboard, integrations, settings, and sign out</SheetDescription>
               <SidebarContent onNavigate={() => setOpen(false)} />
             </SheetContent>
           </Sheet>

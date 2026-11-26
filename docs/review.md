@@ -553,3 +553,58 @@ Counts: high 0, medium 0, low 4.
 - **Frontend item 1:** `DropdownMenuLabel` is wrapped in `DropdownMenuGroup`, and this is the only use of `DropdownMenuLabel` in `src`. Base UI's `useMenuGroupRootContext` throws without a group (`node_modules/@base-ui/react/menu/group/MenuGroupContext.mjs`), so `user-menu.test.tsx`, which opens the real menu, would fail without the fix. The test covers the email label, no `console.error`, Settings → `/settings`, and exactly one `POST /api/auth/sign-out`.
 - **Frontend items 2 to 4:** the `github_in_use` copy matches design.md line 42 exactly (plain `role="status"` notice, no link, no other account named). The `github_none` copy matches, and the "Connect GitHub" link is still there. The card line reads "Not connected to GitHub" with `UnplugIcon` in muted text and appears only when `installationId === null`; projects are never hidden. The reconnect notice has the exact D-45 sentence. Tests check the full text with anchored regexes and include negative cases.
 - **No subscription or n8n work, and ownership is respected.** Backend touched only `src/app/api`, `src/server`, `src/schemas`, `supabase`, `tests/server`, `tests/rls` and `docs/status.md` (contract item 7). Frontend touched only `src/features`. No `package.json`, dependency, env-name or route change. No `any` in the diff, and every external input is validated with Zod (GitHub items one by one, RPC result).
+
+## Phase 2e-ui — Integrations preview (code review 2026-11-27)
+
+Scope: working tree against HEAD 3850960 (`git diff HEAD` plus untracked `src/features/integrations/**`, `src/app/(app)/integrations/page.tsx`, `src/features/shell/sidebar.test.tsx`). Commands: `npm run typecheck` clean, `npm run lint` clean, `npx vitest run` 69 files passed / 1 skipped, 1594 passed / 90 skipped. `next build` not run (read-only review).
+
+Verified, no finding:
+- D-54 key safety. The key input (`ai-provider-form.tsx:117-126`) is a plain uncontrolled `type="password"` with `autoComplete="off"`, `spellCheck={false}`, no `name`, no `onChange`, not registered. The only access is `keyInputRef.current.value = ""` (`:73-75`). It is cleared on submit (`:101-105`), on Enter in any input (`:85-90`), on provider switch (`:77-83`), and on Cancel (`:169-172`). Nothing in the feature calls fetch, XHR, beacon, WebSocket, a server action, storage, cookies, the URL, the query cache, zustand, or console. The page is rendered without a QueryClientProvider, so any query hook would throw.
+- Marker test, checked by reasoning: adding `onChange={(e) => console.log(e.target.value)}` would fail it. `fireEvent.change` fires React onChange, the console spies record the marker, and the source test also rejects `onChange` on the key input. Writing the key to `localStorage` would also fail it, through the `setItem` spy, the storage scan, and the source check. Rendering the key (for example `value={...}`) would fail on `innerHTML` and the source regex.
+- Save key and Test connection are disabled, with "Coming soon" linked through `aria-describedby`. The preview notice and the "Preview state" select are inside the card.
+- Every string in `copy.ts` and `fixtures.ts` matches design.md "Integrations page" exactly. Suggested models are `anthropic/claude-haiku-5.5` and `claude-haiku-5-5`. The `:free` check ignores case and covers both the form and the saved state.
+- `types.ts` names and fields match contract section 6. `AiProviderFormValues` is the put body without `apiKey`. The full 2e can swap in imports from `src/schemas/ai-provider.ts` without UI changes.
+- `/integrations` is in `APP_PREFIXES` and matches the exact path or the prefix plus "/". Tests cover `/integrations`, `/integrations/`, `/integrations/x`, and the lookalikes. The sidebar item sits between Dashboard and Settings with `PlugIcon`. The active-state test also covers `/integrationsx`. The mobile sheet reuses `SidebarContent`.
+- Nothing extra was built: no backend AI-provider code, no route handler, no migration, no `src/schemas` file, no new dependency, nothing from subscription.md or n8n.md. File ownership was respected.
+- Accepted deviations:
+  - The source check skips `*.test.*` because the tests must name the APIs they spy on.
+  - The custom radio group is correct: roving tabindex, arrow keys plus Home and End, Space and Enter by click, `role="radiogroup"` labelled "Provider". It matches the segmented look in design.md.
+  - The native `<select>` for the preview-only control is accessible and gets removed in the full 2e.
+  - `useWatch` instead of `watch` is right with React Compiler.
+
+### R2eu-1 — password field can trigger the browser's "save password" prompt when it unmounts with a typed key
+- File: `src/features/integrations/components/ai-provider-form.tsx:117-126` (plus `integrations-view.tsx:77` remount on preview-state change, sidebar client navigation)
+- Severity: low
+- Owner: frontend
+- Problem: the key is cleared on submit, Enter, provider switch, and Cancel. It is not cleared when the form unmounts some other way: by changing "Preview state" (the `key={stateId}` remount) or by clicking a sidebar link (a same-document navigation). Chrome treats a password form that disappears after typing as a possible submission and can offer to save the value in the browser's password manager. The user has to accept the prompt, so this is not an app leak. It still goes against "nothing is stored" in spirit.
+- Fix: add `useLayoutEffect(() => () => { if (ref) ref.value = ""; }, [])` (capture the ref node first) so the value is cleared before React removes the DOM node. Extend test (h): type the marker, change "Preview state", and assert that no detached input kept it, for example by holding the element reference and checking `.value === ""`. Also pass this to security-reviewer.
+
+### R2eu-2 — source check misses some network and server-action spellings
+- File: `src/features/integrations/source.test.ts:14-30`
+- Severity: low
+- Owner: frontend
+- Problem: the forbidden list has `fetch(` but not a bare `fetch` (for example `globalThis.fetch.call(...)` or `const f = fetch`). It also lacks `"use server"` (a server action is a network send), `cookieStore`, and `navigator.` (beacon via `navigator["sendBeacon"]`, clipboard). The runtime marker test covers the paths it exercises, but the source check is the guard for paths the test does not click.
+- Fix: add `"use server"`, `cookieStore`, `navigator.`, and a word-boundary regex `/\bfetch\b/` (the feature has no legitimate use of the word in code; keep comments free of it or match only outside comments).
+
+### R2eu-3 — model validation messages are not in design.md
+- File: `src/features/integrations/types.ts:18-20`
+- Severity: low
+- Owner: architect (copy), frontend (apply)
+- Problem: "Enter a model name.", "Use at most 200 characters.", and "Use letters, numbers, and . _ : / @ - only." show inline under the Model field, but design.md "Integrations page" does not list them. The rule is that all UI copy is fixed in design.md.
+- Fix: the architect adds these three strings to design.md (form, Model field, client validation), or chooses replacements. The frontend then moves them into `copy.ts`.
+
+### R2eu-4 — "Tested <relative date>" drifts because the fixture dates are fixed
+- File: `src/features/integrations/fixtures.ts:21-22`, `components/test-result-line.tsx:23`
+- Severity: low
+- Owner: frontend
+- Problem: `testedAt` is fixed at 2026-11-27T09:05Z, so the owner check will read "Tested 3 days ago", then "Tested 2 months ago", and so on. The tests are not flaky: they only match `/^Tested /`, and `formatRelativeDate` is unit-tested with a fixed `now`. This is acceptable for a preview. It only renders after a client-side state change, so there is no hydration risk.
+- Fix (optional): keep it as is and accept it, or derive the preview `testedAt` as `now - 5 min` when a state is picked in `integrations-view.tsx`. If you do, keep the static fixtures for the schema test.
+
+### R2eu-5 — `keyHint` local schema is stricter than the contract
+- File: `src/features/integrations/types.ts:41`
+- Severity: low
+- Owner: architect (contract), backend (full 2e schema)
+- Problem: the local schema requires `^sk-(or|ant)-…\S{4}$`. Contract section 6 declares `keyHint: string` and describes the format only in a comment. If the full 2e backend schema stays a bare `z.string()`, client and server validate differently. If the backend ever uses three ASCII dots, the client parse would reject it.
+- Fix: in the full 2e scope, state the exact `keyHint` regex (Unicode ellipsis U+2026, last 4 characters) in contract section 6 and use it in `src/schemas/ai-provider.ts`. No change is needed in the preview.
+
+Open: high 0 · medium 0 · low 5 (R2eu-1, -2, -4 frontend; R2eu-3 architect/frontend; R2eu-5 architect/backend). Phase 2e-ui can be committed. R2eu-1 and R2eu-2 are cheap to fix first.

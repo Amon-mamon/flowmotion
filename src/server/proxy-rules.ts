@@ -21,7 +21,7 @@ export const BROWSER_API_PATHS: ReadonlySet<string> = new Set([
   "/api/github/installations/callback",
 ]);
 
-const APP_PREFIXES = ["/dashboard", "/projects", "/flows", "/settings"] as const;
+const APP_PREFIXES = ["/dashboard", "/projects", "/flows", "/settings", "/integrations"] as const;
 const AUTH_PAGES: ReadonlySet<string> = new Set(["/login", "/signup"]);
 
 function normalize(pathname: string): string {
