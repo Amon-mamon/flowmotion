@@ -9,8 +9,10 @@ Open this file first in a new Claude Code session, then paste the prompt at the 
 | 0, 1, 1.1 | done, committed, pushed |
 | 2 Analysis, 2b OpenRouter dev provider, 2c AI failure handling, 2d close-out | done, committed, pushed (`6834f5f`) |
 | 3 scope (split into 3a and 3b, D-37..D-42) | committed `172ac20` |
-| **3a Flow engine and flow UI** | **built and reviewed, saved as a checkpoint commit; review fixes NOT done yet (1 high, 2 medium)** |
-| 3b Generation job, API, wiring | not started |
+| 1.2 GitHub account isolation + account menu fix | done 2026-11-27 (`0c7d0b6`, `5ea5424`); migration applied; owner can analyze again |
+| **3a Flow engine and flow UI** | **built and reviewed (checkpoint `64f5863`); review fixes PLANNED (D-46..D-53), not built** |
+| 3b Generation job, API, wiring | not started; next after the 3a fixes |
+| 2e Own AI key | approved; after 3b (D-46) |
 | 4 Simulation, 5 Hardening | not started |
 | Subscription, user-facing n8n testing | NOT READY, do not build |
 
@@ -36,10 +38,12 @@ The code reviewer accepted every backend deviation listed in `docs/requests.md` 
 
 ## Next steps, in order
 
-**Build order (updated 2026-11-27):** Phase 1.2 GitHub isolation fix (in progress) → Phase 3a review fixes (below) → **Phase 2e own AI key** (approved, see `FEATURE-PROPOSAL.md`) → Phase 3b. Everything deferred or not built is listed in `BACKLOG.md`.
+**Build order (D-46, 2026-11-27):** Phase 3a review fixes → Phase 3b → Phase 2e own AI key. Everything deferred or not built is listed in `BACKLOG.md`.
+
+**Start here next session (stopped 2026-11-27 at owner's request, weekly usage about 37% before planning):** the Phase 3a fix plan is written in `docs/contract.md` section 11 "Phase 3a review fixes" (backend items 1-11, frontend items 1-3; D-46..D-53). Launch backend and frontend in parallel on it, then code-reviewer and security-reviewer, fix until no high or medium, commit `fix(phase-3a): ...`, mark 3a done. Estimated cost: 3a fixes about 10-15% of weekly usage; 3b about 18-25%. Ask the owner for /usage first.
 
 
-1. **Architect (small):** rule on the deviation entries in `docs/requests.md`, R3a-10, S3a-1 (scanner rule wording), S3a-3, and OQ-27..OQ-30. Write a short "Phase 3a review fixes" list in `docs/contract.md` section 11.
+1. ~~Architect rulings~~ done 2026-11-27 (D-46..D-53).
 2. **Backend and frontend in parallel:** frontend fixes R3a-1 and R3a-7; backend fixes R3a-2, S3a-1, S3a-2 and the backend lows.
 3. **Re-review** (code-reviewer and security-reviewer) until no high or medium remain. Then commit `fix(phase-3a): ...` and mark Phase 3a done in `docs/status.md`.
 4. **Phase 3b:** architect reconfirms scope, then backend and frontend in parallel, then both reviewers. The owner applies `20261126000000_phase3_flows.sql` in the Supabase SQL Editor when it exists. Remove the Generate gate (`isGenerateApiReady()`).

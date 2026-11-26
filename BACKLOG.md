@@ -6,9 +6,9 @@ Last updated: 2026-11-27 (after Phase 1.2).
 
 ## Planned and approved (build order)
 1. ~~Phase 1.2: GitHub account isolation~~ done 2026-11-27 (D-43..D-45). Owner and teammate must each click "Refresh repository access" once.
-2. **Phase 3a review fixes:** R3a-1 (canvas clicks), R3a-2 and S3a-1 (scanner gaps), plus lows. See `README-RESUME.md`.
-3. **Phase 2e: own AI key** (Integrations page, OpenRouter + Anthropic, any model, free and paid). Approved 2026-11-27; details in `FEATURE-PROPOSAL.md`.
-4. **Phase 3b: flow generation** (Generate button, generate/flows/export API, migration `20261126000000_phase3_flows.sql`).
+2. **Phase 3a review fixes:** planned 2026-11-27 (D-46..D-53, contract section 11 "Phase 3a review fixes": backend items 1-11, frontend items 1-3). Not built yet. Gate: R3a-1, R3a-2, S3a-1, S3a-2 verified fixed before 3b starts.
+3. **Phase 3b: flow generation** (Generate button, generate/flows/export API, migration `20261126000000_phase3_flows.sql`).
+4. **Phase 2e: own AI key** (Integrations page, OpenRouter + Anthropic, any model, free and paid). Approved 2026-11-27; moved after 3b by D-46 (generation reuses the same provider switch, so per-user keys change one place for both). Details in `FEATURE-PROPOSAL.md`.
 5. **Phase 4: simulation** (mock-data test runs).
 6. **Phase 5: hardening** (full security review, rate limits, audit log, MFA, accessibility).
 
@@ -35,6 +35,8 @@ Last updated: 2026-11-27 (after Phase 1.2).
 - Before real users: no `ANALYSIS_PROVIDER=openrouter` or `OPENROUTER_API_KEY` on Vercel or worker secrets (system key).
 
 ## Small known items
+- Phase 3a carried lows (D-53): R3a-4 catalog generator ignores per-version display rules (documented in node-catalog.md); a test near the R3a-6 size limit; pinned integrity hash for the n8n package and a pinned Docker image for the import test (rest of S3a-9); informational: forbid `toString`/`valueOf` names, cap node input/output counts at 16, every-minute schedules.
+- Owner may override two Phase 3a defaults: D-52 generated flows cannot send computed data back to the webhook caller (literal replies only); D-51 custom HTTP header names cannot contain hyphens (so no `Content-Type`).
 - **Releasing a GitHub account (found in live testing 2026-11-27):** uninstalling the App on GitHub only reaches Flow Motion through a webhook, which never arrives on `localhost`, and Settings "Disconnect" removes one installation at a time. A Flow Motion account that once linked another person's GitHub (two GitHub sessions in one browser) kept holding it, so the real owner got `github_in_use` and the other account got `github_account_mismatch`. Fixed by hand with SQL. Needed: a "Disconnect GitHub completely" action that deletes all of the user's installation rows, and a clearer error that says which action releases the account.
 - Phase 1.2 lows (next backend round): R12-1 / S12-3 run the RLS suite against a real database so the new link-function SQL actually executes, plus a concurrent two-account link test; R12-2 align the test fake with the SQL function; R12-3 / S12-2 the analysis worker does not re-check repo access or account type at run time; S12-1 push events still update projects on not-yet-refreshed old installation rows; R12-4 status.md typo.
 - Next.js warning about `scroll-behavior: smooth` on `<html>` (add `data-scroll-behavior="smooth"`).

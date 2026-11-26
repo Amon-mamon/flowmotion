@@ -15,14 +15,14 @@ Exports are blocked below Valid. Show the Simulated badge only when earned.
 Required UI wording for Simulated: "Simulated with mock data in Flow Motion. Behavior with your real credentials and services may differ." Never use "guaranteed" or "works" without that qualifier.
 
 ## Static validator (produces Valid)
-1. Workflow shape matches the expected n8n structure (Zod schema).
+1. Workflow shape matches the expected n8n structure (Zod schema). No own key `__proto__`, `constructor`, or `prototype` at any depth (D-49).
 2. Node names unique; every connection points to an existing node; output and input indexes are below the catalog's output/input count for that node (IF has 2 outputs, Merge has 2 inputs).
 3. Exactly one trigger; no orphan nodes; no cycles except `splitInBatches` loops.
 4. Every `type` is in the allowlist and `typeVersion` equals the catalog's.
-5. Every node's parameters pass its Zod schema from the catalog.
-6. Expressions only use the supported subset: every string parameter that starts with `=` must be `=` followed by text in which each `{{ … }}` parses with the grammar in `contract.md` section 7; a string containing `{{` without the leading `=`, or a leading `=` with anything outside the grammar, fails.
-7. No secrets: run the secret scanner on the whole output. No node has a `credentials` key.
-8. No excluded nodes. No `http://` anywhere in a parameter string; an `httpRequest` URL must begin with a `YOUR_…_URL` placeholder (never a literal host or an expression); no forbidden auth header names (`node-catalog.md`).
+5. Every node's parameters pass its Zod schema from the catalog, **and** the validator's own parameter table (D-50, `security.md` section 9): only the top-level names, mode values (`resource`, `operation`, …), and `options` keys the profiles emit; no raw SQL, delete, update, proxy, or code parameters.
+6. Expressions only use the supported subset: every string parameter that starts with `=` must be `=` followed by text in which each `{{ … }}` parses with the grammar in `contract.md` section 7 and that holds at least one `{{ … }}`; every `$node["…"]` names an upstream node (D-47); a string containing `{{` without the leading `=`, or a leading `=` with anything outside the grammar, fails. The workflow `name` may not start with `=` or contain `{{` (D-53).
+7. No secrets: run the secret scanner on the shared scan rendering of the whole output (`security.md` section 9, D-49). No node has a `credentials` key.
+8. No excluded nodes. No `://` (any case, so also no `http://`) anywhere in a parameter string (D-51); an `httpRequest` URL must begin with a `YOUR_…_URL` placeholder (never a literal host or an expression); `httpRequest` `authentication` is `none` and it has no `jsonHeaders` or credential-type parameters (D-47); no forbidden header names (`node-catalog.md`, D-51); every destination parameter is exactly one `YOUR_…` token (D-50).
 9. Every `YOUR_...` placeholder is listed in the setup checklist.
 10. Size limit (256 KB of JSON) and node count limit (max 40 nodes).
 The same rules apply to the FlowSpec before compiling (`contract.md` section 7, rules `F1`..`F12`), so the validator is a second, independent check on the compiler output. It reads only the compiled JSON, the checklist, and the generated catalog (`validateWorkflow`, Phase 3a). Rule 5 at this level means: every top-level parameter name exists in the catalog's definitions for that node and version, and option-type parameters hold one of the catalog's option values.

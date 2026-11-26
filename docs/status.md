@@ -15,8 +15,9 @@ Everyone appends one line per finished piece of work: `[role] [date] done / next
 | 2b OpenRouter dev provider | done 2026-11-22 (D-24, D-33, D-34; local runner only; scanner fixes S2R-1, R2b-1; server env schema out of client bundle S2b-1); code + security re-review 0 open |
 | 2c AI failure handling | done 2026-11-25 (`02b0c81`, D-35); review lows R2c-1..R2c-5 carried to Phase 2d (R2c-4 done in docs) |
 | 2d Phase 2 close-out | done 2026-11-25 (`6834f5f`, D-36) |
-| 3a Flow engine + flow UI on fixtures | scope confirmed 2026-11-25 (D-37..D-42; contract section 11 "Phase 3a"); not started |
-| 3b Generation job, API, wiring | scope written 2026-11-25 (contract section 11 "Phase 3b"); architect reconfirms after 3a; not started |
+| 3a Flow engine + flow UI on fixtures | built and reviewed 2026-11-25 (checkpoint `64f5863`); review fixes scope confirmed 2026-11-27 (D-46..D-53; contract section 11 "Phase 3a review fixes"); fixes not started |
+| 3b Generation job, API, wiring | scope written 2026-11-25 (contract section 11 "Phase 3b"); starts after the 3a review fixes; architect reconfirms first; not started |
+| 2e Own AI key (FEATURE-PROPOSAL.md) | approved; moved after 3b (D-46); not started |
 | 4 Simulation | not started |
 | 5 Hardening | not started |
 | Subscription | NOT READY |
@@ -47,6 +48,7 @@ Until a piece says yes, the frontend uses mock data that matches `contract.md`.
 - [ ] Security review has no open high or medium items (`security.md` section 8).
 - [ ] GitHub App "Request user authorization (OAuth) during installation" on and webhook active; every user has run "Refresh repository access" once after the D-22 migration.
 - [ ] Deploy the worker Edge Function once and run one analysis end to end before production (OQ-16 risk: never run under Deno; `src/lib` uses extensionless imports Deno may not resolve; local dev runs in-process, D-26). If the deploy fails on module resolution, report in `requests.md` for an architect decision.
+- [ ] `npm run test:n8n-import` passed once for the pinned n8n (Docker) and `tests/conformance/verified.json` committed; OQ-30 facts recorded in contract section 8 (D-53).
 
 ## Log
 (append below)
@@ -102,3 +104,4 @@ Until a piece says yes, the frontend uses mock data that matches `contract.md`.
 [backend] 2026-11-27 done: Phase 1.2 backend items 1-7 (migration 20261125120000_phase1_2_github_isolation.sql written once and not edited after the owner applied it; isLinkableInstallation filter before any repo listing; per-item installation parsing; GitHubAccountInUseError → ?error=github_in_use; D-45 cleanup; findUserInstallation/verifyInstallationOwnership and unused upsertInstallation removed; tests incl. stubbed-fetch flow and RLS SQL cases i-vii, skipped here without SUPABASE_TEST_*) / next: owner runs Refresh repository access per user; Phase 3a review fixes / blockers: RLS SQL cases not run locally (no Docker)
 [coordinator] 2026-11-27 done: Phase 1.2 committed (D-43 link only own-account or Organization installations, D-44 one GitHub account per Flow Motion account, D-45 cleanup; migration 20261125120000 already applied by the owner; account menu crash fixed); code review 0 high/medium, 4 low (R12-1..4); security review 0 high/medium, 3 low (S12-1..3), incident closed / next: owner and teammate click Refresh repository access and test, then Phase 3a review fixes, Phase 2e own AI key, Phase 3b / blockers: S11-2 RLS suite unrun
 [coordinator] 2026-11-27 fix: 'Reconnect GitHub' links on the project/analysis notices now go to /api/github/authorize (was /api/github/install, which dead-ends on GitHub's settings page when the App is already installed, so the owner could not relink after the Phase 1.2 migration); tests updated
+[architect] 2026-11-27 done: Phase 3a review fixes scope (D-46 build order 3a fixes → 3b → 2e; D-47 backend deviations recorded, requests.md entry closed; D-48 scanner HTTP credential rules for S3a-1; D-49 one shared scan rendering + reserved names; D-50 validator-owned parameter table, destinations, assertExportSafe type rule, validate step and export route run both checks; D-51 no `://`, header deny rule, OQ-28 no hyphens, path-expression warning, catalog 2.49.5+fm2; D-52 OQ-29 literal respondToWebhook bodies; D-53 OQ-27, OQ-30 launch gate, R3a-8, dispositions) in contract sections 4, 6, 7, 8, 11, security.md sections 2 and 9, node-catalog.md, testing.md, design.md / next: backend items 1-11 + frontend items 1-3 in parallel, then code + security re-review; R3a-1, R3a-2, S3a-1, S3a-2 gate 3b / blockers: none; owner may override D-52 and OQ-28
