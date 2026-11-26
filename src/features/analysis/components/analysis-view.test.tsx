@@ -319,7 +319,7 @@ describe("AnalysisView: failed", () => {
     expect(
       await screen.findByText("Flow Motion can no longer read this repository. Reconnect GitHub and try again."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Reconnect GitHub" })).toHaveAttribute("href", "/api/github/install");
+    expect(screen.getByRole("link", { name: "Reconnect GitHub" })).toHaveAttribute("href", "/api/github/authorize");
     expect(screen.queryByText("Security findings")).not.toBeInTheDocument();
   });
 

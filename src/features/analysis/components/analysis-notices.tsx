@@ -30,7 +30,7 @@ export function ReconnectNotice() {
       <AlertDescription>
         <p>
           The GitHub installation for this repository was disconnected. Existing results stay available.{" "}
-          <a href="/api/github/install">Reconnect GitHub</a>
+          <a href="/api/github/authorize">Reconnect GitHub</a>
         </p>
         <p>{COPY.reconnectOtherAccount}</p>
       </AlertDescription>
@@ -80,7 +80,7 @@ export function FailedNotice({
       <AlertDescription>
         <p>{failedMessage(errorCode, branch)}</p>
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          {errorCode === "GITHUB_ACCESS_LOST" ? <a href="/api/github/install">Reconnect GitHub</a> : null}
+          {errorCode === "GITHUB_ACCESS_LOST" ? <a href="/api/github/authorize">Reconnect GitHub</a> : null}
           {errorCode === "BRANCH_NOT_FOUND" ? <Link href="/dashboard">Back to dashboard</Link> : null}
           {onRetry ? (
             <Button type="button" variant="outline" size="sm" onClick={onRetry} disabled={retryDisabled}>

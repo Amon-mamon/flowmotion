@@ -269,7 +269,7 @@ describe("Notices (exact design.md copy)", () => {
   it("reconnect", () => {
     render(<ReconnectNotice />);
     expect(screen.getByText("Reconnect GitHub to analyze")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Reconnect GitHub" })).toHaveAttribute("href", "/api/github/install");
+    expect(screen.getByRole("link", { name: "Reconnect GitHub" })).toHaveAttribute("href", "/api/github/authorize");
     expect(
       screen.getByText(
         "If this repository is on someone else's personal GitHub account, Flow Motion can no longer analyze it. Its past results stay here until you delete the project.",

@@ -61,7 +61,7 @@ describe("ProjectView", () => {
     expect(screen.getByText("<b>docs only</b>")).toBeInTheDocument();
     expect(document.querySelector("b")).toBeNull();
     expect(document.querySelector('[data-notice="reconnect"]')).toHaveTextContent("Reconnect GitHub to analyze");
-    expect(screen.getByRole("link", { name: "Reconnect GitHub" })).toHaveAttribute("href", "/api/github/install");
+    expect(screen.getByRole("link", { name: "Reconnect GitHub" })).toHaveAttribute("href", "/api/github/authorize");
   });
 
   it("installationId null: reconnect notice shows both sentences (Phase 1.2, D-45)", async () => {
