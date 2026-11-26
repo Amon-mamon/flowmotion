@@ -36,6 +36,9 @@ The code reviewer accepted every backend deviation listed in `docs/requests.md` 
 
 ## Next steps, in order
 
+**Build order (updated 2026-11-27):** Phase 1.2 GitHub isolation fix (in progress) → Phase 3a review fixes (below) → **Phase 2e own AI key** (approved, see `FEATURE-PROPOSAL.md`) → Phase 3b. Everything deferred or not built is listed in `BACKLOG.md`.
+
+
 1. **Architect (small):** rule on the deviation entries in `docs/requests.md`, R3a-10, S3a-1 (scanner rule wording), S3a-3, and OQ-27..OQ-30. Write a short "Phase 3a review fixes" list in `docs/contract.md` section 11.
 2. **Backend and frontend in parallel:** frontend fixes R3a-1 and R3a-7; backend fixes R3a-2, S3a-1, S3a-2 and the backend lows.
 3. **Re-review** (code-reviewer and security-reviewer) until no high or medium remain. Then commit `fix(phase-3a): ...` and mark Phase 3a done in `docs/status.md`.

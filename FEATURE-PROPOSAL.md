@@ -2,6 +2,32 @@
 
 Owner draft for decision. Nothing here is in the contract yet. Once the owner picks, the architect turns the picks into phases in `docs/contract.md`. NOT READY items (`docs/subscription.md`, `docs/n8n.md`) stay out.
 
+## APPROVED: Own AI key ("bring your own key"), owner decision 2026-11-27
+
+Build as **Phase 2e**, after the Phase 1.2 security fix and the Phase 3a review fixes, and **before Phase 3b**, so flow generation uses the user's key from day one.
+
+**How it works**
+- Sidebar: a new **Integrations** item, with an **AI provider** section.
+- Provider picker: **OpenRouter** and **Anthropic** at launch. Choosing one shows that provider's fields:
+  - **API key**: shown as dots, never displayed again after saving (only something like `sk-or-…4f2a`).
+  - **Model**: a suggested default per provider, but the user may enter **any model** the provider offers, **free or paid**.
+- **Test connection** button: sends one tiny request, then shows "Working" or a clear reason ("Invalid key", "No credit", "Model not found").
+- **Remove key** at any time.
+- Analyses, and later flow generation, use that user's key only for that user's own repos.
+
+**Owner intent**
+- When a user has a working key, **their chosen provider and model are used instead of the system AI**. This cuts the owner's AI cost, and users who find the built-in model slow or weak can pick their own.
+- If the user's key fails, show the error; **never silently fall back** to the owner's key.
+- Free models are allowed, with a clear warning that free providers may log or train on what they receive.
+
+**Rules the architect must record when the phase starts**
+- Keys stored encrypted in Supabase Vault, never returned to the browser, never logged.
+- No custom server URLs: users pick a provider, they cannot type an endpoint.
+- Amend D-24 / D-33: OpenRouter is development-only for the **system** key; a **user's own** OpenRouter key may be used in production for that user's repos.
+- Errors reuse Phase 2c handling (`AI_UNAVAILABLE`, `ai.failed`), plus invalid-key and no-credit messages.
+
+**Deferred (see BACKLOG.md):** direct OpenAI connector and other providers.
+
 ## The goal behind every pick
 A user pays monthly only if Flow Motion keeps finding value in their repos. So each feature should do at least one of these: **show value fast** (first session), **bring users back** (every push), **cut our AI cost**, or **help agencies sell** (they are the best payers).
 
@@ -28,7 +54,7 @@ Needs one backend addition: an estimated frequency and minutes saved per recomme
 5. **Setup checklist per flow.** Which n8n credentials to create, which env values the flow expects, a link to n8n docs per node. *Cuts "it does not work" support.*
 
 ### Tier 2: before launch if time allows
-6. **Integrations page:**
+6. **Integrations page** (the own-AI-key part is APPROVED above as Phase 2e):
    - **Own AI key (bring your own key):** Anthropic (and possibly OpenAI). Heavy users then cost us no tokens. Stored encrypted in Supabase Vault, shown masked, "Test key" button, deletable. Paid providers only; never free endpoints that log data for real users.
    - **Notifications:** email and a Slack incoming-webhook URL for the digest.
    - **GitHub:** current connection and access status (moved from Settings).
