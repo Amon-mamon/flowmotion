@@ -15,6 +15,11 @@ Modern, bold, calm. **Not glassmorphism:** no backdrop blur, no translucent pane
 | `--accent-strong` | `#FF8A8A` | hover |
 | `--foreground` | `#FFFFFF` | text on dark surfaces |
 | `--muted` | `#A3A3A3` | secondary text |
+| `--fm-grid` | `#161616` | landing page hairline background grid and section dividers (decorative only, never text; D-55) |
+| `--fm-muted-2` | `#7A7A7A` | tertiary labels such as mono step numbers, **only on `--background`** (about 4.6:1; on `--surface` it falls below 4.5:1, so never there; D-55) |
+| `--fm-border-hover` | `#3A3A3A` | card hover border and secondary button border (D-55) |
+
+CSS names: these are the `--fm-*` variables in `src/app/globals.css` (the table's short names map to `--fm-background`, `--fm-surface`, and so on).
 **Recommendation risk tokens (D-36, the only exception to the hue rule; used only by the recommendation risk badge):**
 | Token | Value | Use |
 |---|---|---|
@@ -31,9 +36,87 @@ Only light red, black, and white (plus these neutral greys for depth, and the th
 - Use shadcn/ui components themed through CSS variables. Do not hardcode colors in components.
 
 ## Landing page (`/`)
-Hero (clear promise, one primary button "Get started" → `/signup`) · how it works as a scroll story · feature highlights (repo scan, node flows, simulation, n8n export) · security section · "Plans coming soon" (no prices, no checkout, no button; subscription is NOT READY) · FAQ · footer with links to `/privacy` and `/terms` (plain static pages, same tokens, no animation). Header: wordmark, "Log in" (`/login`), "Sign up" (`/signup`).
-**Exact "Plans coming soon" copy (do not change without the architect):** heading "Plans coming soon"; body "Flow Motion is in early testing. There are no paid plans, prices, or credits yet. Pricing will be announced here before anything changes." Nothing else in that section.
-**Scroll animation:** Motion `useScroll` and `useTransform` with CSS perspective and 3D transforms (tilting, depth, stacking cards). Respect `prefers-reduced-motion` (replace with fades). No Three.js unless the owner asks (OQ-1). Keep it smooth on mobile.
+**Landing redesign (D-55, D-56; merged from `LANDING-DESIGN.md`, owner-approved 2026-11-27; build scope in `contract.md` section 11 "Landing redesign").** Direction: vercel.com's look (minimal, sharp type, generous space, thin grid lines and borders, crisp product previews, restrained precise motion) in Flow Motion's own colours. Same palette as above, no new hues. `/privacy` and `/terms` stay plain static pages (same tokens and header/footer, no animation, no smooth scrolling).
+
+**Honesty rules (every word on the page):** only facts true for the product as built. No customer logos, testimonials, quotes, user or company counts, usage metrics, star ratings, "trusted by", prices, or performance numbers. No simulation anywhere on the page (Phase 4 is not built). Flow generation and export are not available to users until Phase 3b ships, so every place that shows them carries the "Coming soon" tag (below). The words "guaranteed", "100%", "AI-powered magic", and "free" (in a pricing sense) do not appear.
+
+**"Coming soon" tag:** pill tag (Tag component below) with the text "Coming soon". Shown on: how-it-works step 04, the "Readable node graphs" and "n8n JSON export" feature cards, and the fact strip item "Exports n8n-ready JSON". One switch controls all four (`contract.md` section 11, Landing redesign F1); it is removed when Phase 3b is live.
+
+**Typography (Geist and Geist Mono):**
+| Step | Size / line height (desktop → mobile under 768 px) | Weight | Use |
+|---|---|---|---|
+| Display | 72/76 → 44/48 | 600, tracking -0.04em | hero headline only |
+| H2 | 48/52 → 32/36 | 600, tracking -0.03em | section headings |
+| H3 | 24/32 → 20/28 | 600 | step and card titles |
+| Lead | 20/30 → 18/28 | 400 | hero subline, section intros |
+| Body | 16/26 | 400 | paragraphs, max 65 characters per line |
+| Small | 14/20 | 400–500 | captions, footer |
+| Mono label | 12/16 Geist Mono, uppercase by CSS (`text-transform`), tracking 0.08em | 500 | step labels ("01 / Connect"), eyebrows, tags, fact strip |
+
+Copy below is written in the case stored in source; mono labels are uppercased by CSS only, so screen readers and tests see the source text.
+
+**Spacing and layout:** 8 px grid. Section padding 128 px top and bottom on desktop, 80 px under 768 px. Content width 1200 px, reading width 640 px, 16 px side gutter on phones (32 px from 640 px). A faint 1 px background grid in `--fm-grid` (64 px cells) behind the hero and the security section only; hairline `--fm-grid` dividers between sections instead of colour blocks. Hero centred; every other section left-aligned or split (text left, visual right). No row of three identical cards. Every section that is a link target has `scroll-margin-top: 80px` (sticky header height 64 px plus 16 px).
+
+**Shape and depth:** radius 12 px for cards and product frames, 8 px for controls, full pill for tags. No drop shadows. Depth comes from borders, surface steps, and 3D perspective on the product previews. The only glow: one radial gradient of `--accent` at 8% opacity behind the hero product frame. No gradient text, no purple or blue gradients, no glass, no blur.
+
+**Components (landing):**
+- Primary button: accent fill, black text, 8 px radius, height 44 px; hover `--accent-strong`; focus ring 2 px accent with 2 px offset; disabled 40% opacity.
+- Secondary button: transparent, 1 px `--fm-border-hover` border, white text; hover background `--surface-2`.
+- Quiet link: white or muted text with a small Lucide arrow that moves 2 px right on hover (transform only; no movement under reduced motion).
+- Card: `--surface`, 1 px `--border`, 12 px radius; hover border `--fm-border-hover`.
+- Product frame: a card with a 36 px top bar (three neutral 8 px dots in `--border`, then a mono path label in `--muted`), holding a product preview.
+- Tag: pill, 1 px `--border`, mono label text in `--muted`.
+- FAQ accordion: native `<details>`/`<summary>` (as today) in two columns from 1024 px (one column below), each item a row with a hairline divider, Lucide chevron rotating 180° when open.
+
+**Imagery and icons:** product previews are **built from the app's real presentational components with sample data** (risk badge, severity badge, node icon, a node card body, badges), never screenshots, so they stay sharp and match the theme. Sample data uses the repository name `example/storefront` and branch `main`, and nothing that looks like a real company, person, or secret (masked evidence only in the masked form `sk…2a`). Previews are decorative: `aria-hidden="true"`, `inert`, no focusable element, no pointer interaction; the text beside them carries the meaning. Icons: Lucide only, 1.5 px stroke. No stock photos, no illustrations of people, no emoji, no fake logos.
+
+**Page structure and exact copy (top to bottom):**
+1. **Header** (sticky, `--background` solid, hairline bottom border `--border`, height 64 px): wordmark (links to `/`); nav (`aria-label="Main"`, hidden under 768 px) "How it works" (`#how-it-works`), "Security" (`#security`), "FAQ" (`#faq`); then "Log in" (quiet, `/login`) and "Get started" (primary, `/signup`). On `/privacy` and `/terms` the nav links point to `/#how-it-works`, `/#security`, `/#faq`. "Log in" matches the auth pages' wording.
+2. **Hero** (`aria-labelledby="hero-heading"`, centred, background grid): mono tag "Read-only GitHub access"; H1 (Display) "Turn your repository into working n8n automations."; Lead "Flow Motion reads your code safely, finds what to automate, and builds the workflows for you."; buttons "Get started" (primary, `/signup`) and "See how it works" (secondary, `#how-it-works`). Below, the product frame (path label `example/storefront · main`) showing the analysis preview (files summary line, one masked finding row, two recommendation cards with risk badges) on the accent glow.
+3. **Fact strip** (a row of four mono labels separated by hairlines; 2 × 2 under 768 px), exactly: "Reads only safe files" · "Secrets masked before any AI call" · "32 supported n8n nodes" · "Exports n8n-ready JSON" (+ "Coming soon" tag).
+4. **How it works** (`id="how-it-works"`): mono eyebrow "How it works"; H2 "From repository to workflow in four steps"; Lead "Every step shows what was read, what was skipped, and what was produced." Then four steps (mono number label, H3, body), exactly:
+   - "01 / Connect" — "Connect a repository" — "Install the read-only GitHub App and choose a repository and branch. Flow Motion first checks that it is a real website or app. If it is not, it stops and tells you why, before any AI is used."
+   - "02 / Scan" — "Scan safely" — "Secret files such as env files and private keys are never opened. Every file that is read is checked for secrets, and anything found is masked before an AI sees the code."
+   - "03 / Recommend" — "Pick what to automate" — "Flow Motion lists the automations it finds, such as webhooks, scheduled jobs, and notifications, each with its source files, the credentials it needs, and a risk level."
+   - "04 / Generate" (+ "Coming soon" tag) — "Generate and export" — "Each pick becomes a workflow built only from 32 allowed n8n nodes. Inspect every node on a visual graph, then download n8n JSON with a checklist of what to fill in."
+   Visual per step: (01) a repository file tree with the branch name; (02) the same tree with files marked "Read" or "Blocked for safety" and one masked finding; (03) two or three recommendation cards with risk badges; (04) a small node graph (trigger plus two or three nodes) with accent edges drawing in.
+5. **Features** (`id="features"`): eyebrow "What you get"; H2 "Built to show its work"; Lead "Every result comes with the files and reasons behind it, so you decide what to import." Uneven bento grid (one large card spanning two rows on desktop, three smaller cards), exactly:
+   - Large: "Readable node graphs" (+ "Coming soon" tag) — "Every flow is a graph you can inspect node by node: its type, parameters, the credential it needs, and the source files it came from." Visual: node graph preview.
+   - "Security findings, masked" — "Committed env files, hardcoded keys, and leaked tokens are reported with the file and line. The secret itself is never shown." Visual: one finding row with the severity badge and masked evidence.
+   - "Recommendations with reasons" — "Each automation comes with a confidence score, a risk level, and the files that led to it." Visual: one recommendation card.
+   - "n8n JSON export" (+ "Coming soon" tag) — "Download a file n8n can import, plus a checklist of the credentials and values to fill in. No secrets are ever written into it." Visual: a short mono JSON snippet with `"name"`, `"nodes"`, `"connections"` and a `YOUR_SLACK_CHANNEL` placeholder.
+6. **Security** (`id="security"`, split, background grid): eyebrow "Security"; H2 "Careful with your code by design"; Lead "These rules are enforced in code, not left to the AI." Left, five guarantees (Lucide check icon, H3-weight title, one sentence), exactly:
+   - "Read-only GitHub access" — "The GitHub App asks only to read contents and metadata. It cannot push code, open pull requests, or change settings."
+   - "Secret files are never opened" — "A deny list runs before any file is fetched, so env files, private keys, and credential files are skipped."
+   - "Your code is never run" — "Flow Motion reads files as text. It never installs, builds, or executes anything from your repository."
+   - "Secrets are masked before any AI call" — "Every file that is read is scanned. Secrets are masked in findings and removed before anything is sent to the AI provider. No source code is stored."
+   - "Delete means delete" — "Deleting a project removes its analyses, findings, recommendations, and flows."
+   Under the list the quiet link "Read the privacy page" (`/privacy`). Right: a product frame (path label `Security findings`) with one finding row from sample data: tag "Example", severity "High", category "Hardcoded secret", `src/lib/payments.ts:14`, masked evidence `sk…2a`, remediation "Move this value to an environment variable and rotate the key."
+7. **Plans coming soon** (`id="plans"`): **exact copy, do not change without the architect:** heading "Plans coming soon"; body "Flow Motion is in early testing. There are no paid plans, prices, or credits yet. Pricing will be announced here before anything changes." Nothing else in that section (no button, no link, no tag); subscription is NOT READY. It may take the new type scale and spacing.
+8. **FAQ** (`id="faq"`): eyebrow "FAQ"; H2 "Questions people ask first"; eight items, exactly (question — answer):
+   - "Does Flow Motion run my workflows?" — "No. Flow Motion generates workflows and exports them as n8n JSON. You import and run them in your own n8n."
+   - "Does Flow Motion get write access to my GitHub?" — "No. The GitHub App asks only to read contents and metadata, and only for the repositories you choose when you install it."
+   - "Which files are read?" — "Source files, manifests, framework configs, route handlers, CI workflows, schema files, and README files, within size and count limits. Env files, keys, credentials, lockfiles, and build output are never opened."
+   - "Is my source code stored?" — "No. Files are read during an analysis and discarded when it ends. Only derived results are kept: masked findings, recommendations, and generated flows."
+   - "Is anything sent to an AI provider?" — "Yes. Redacted snippets of the files that were read, with secrets replaced by a placeholder, are sent to the AI provider to produce recommendations and flows."
+   - "What if my repository is not a website or app?" — "The validity check stops the analysis and tells you why. Nothing is sent to the AI provider in that case."
+   - "Which n8n nodes can a flow use?" — "Only the 32 nodes on Flow Motion's allowed list, such as Webhook, Schedule Trigger, HTTP Request, Slack, Gmail, and Postgres. Code nodes are never used, so every flow can be checked before you export it."
+   - "Can I edit a flow before exporting it?" — "Not in Flow Motion yet. You can inspect every node, then change anything you like in n8n after you import the file."
+9. **Final call to action** (`id="get-started"`, a bordered band on `--surface`, left-aligned): H2 "See what your repository can automate."; body "Connect a repository and get a list of automations you can build, with the files behind each one."; buttons "Get started" (primary, `/signup`) and quiet link "Log in" (`/login`).
+10. **Footer** (hairline top border): wordmark; the line "Generates and exports n8n flows. Does not run them for you."; links "Privacy" (`/privacy`) and "Terms" (`/terms`); small muted line "Flow Motion is not affiliated with n8n."
+
+**Motion (Motion library, `motion/react`; never the `framer-motion` package; D-55):**
+- Easing `cubic-bezier(0.16, 1, 0.3, 1)`; durations 200–600 ms; **transform and opacity only** (no animated width, height, top, margin, box-shadow, filter, or blur; no layout animation).
+- Scroll-linked values come only from Motion `useScroll` / `useTransform`, which read the native window scroll position (Lenis moves that same position, D-56). Never read Lenis's own scroll value for animation.
+- **Hero frame:** under `perspective: 1200px` the frame starts at `rotateX(14deg)` and `scale(0.94)` and reaches `rotateX(0)` and `scale(1)` over the first 60% of the hero's scroll range.
+- **How it works (desktop, 768 px and up):** a two-column story. The left column holds the four text steps in normal document flow (each about 70vh tall); the right column holds one visual in `position: sticky` (top 96 px). Pinning is **CSS sticky only**: no element is fixed by script, and the page's total scroll height is exactly its content height. The active step is the one whose text crosses the middle of the viewport; the visual crossfades between the four states (opacity plus a 12 px rise and a small `rotateX` settle), the active step's text is full white and the others `--muted`. Step 04's edges draw in with SVG `pathLength` (a transform-free property Motion animates on SVG only, allowed as the one exception).
+- **How it works (under 768 px):** no sticky; each step is its own panel (text, then its visual) with a short fade and 16 px rise when it enters.
+- **Features:** cards rise 24 px and lose a 6° `rotateX` tilt as they enter (once).
+- **Reduced motion** (`prefers-reduced-motion: reduce`): no Lenis, no scroll-linked transforms, no tilt, no rise; the story becomes four stacked static panels (text plus visual, all visible); at most a 200 ms opacity fade on enter.
+- **Before hydration** (server render): every section, step, and card is fully visible with no transform; animation starts only on the client (the current `data-story-card="static"` rule stays).
+- No Three.js (OQ-1); CSS 3D covers this direction.
+- **Smooth scrolling:** Lenis on the landing page only, with the rules of D-56 (`contract.md` section 11, "Landing redesign", F11).
+- **Performance budget:** smooth 60 fps on a mid-range phone; `will-change: transform` only on the hero frame and the sticky visual; no layout reads in scroll handlers; the landing route imports no `@xyflow/react`, no TanStack Query hook, no Supabase client; Lenis is the only new script.
 
 ## App
 - Shell: left sidebar with wordmark, "Dashboard" (`/dashboard`), "Integrations" (`/integrations`, plug icon; Phase 2e-ui, D-54), "Settings" (`/settings`), and at the bottom the user's display name or email with "Sign out"; collapses to a sheet on small screens.

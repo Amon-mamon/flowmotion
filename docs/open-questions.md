@@ -4,7 +4,7 @@
 
 Each has a recommended default so work can continue. The architect resolves them with the owner and records answers in `decisions.md`.
 
-- **OQ-1** "Motion" 3D scrolling: use Motion scroll with CSS 3D transforms, or Three.js? Default: Motion plus CSS 3D, no Three.js.
+- **OQ-1** "Motion" 3D scrolling: use Motion scroll with CSS 3D transforms, or Three.js? Default: Motion plus CSS 3D, no Three.js. 2026-11-27: kept for the landing redesign (D-55); Lenis smooth scrolling was added at the owner's request (D-56), Three.js still not asked for.
 - **OQ-2** Text on light-red buttons: black (readable) or white (as requested)? Default: black on red, white everywhere else.
 - **OQ-3** AI provider and model for analysis and generation. Default: Anthropic API, model name in `ANALYSIS_MODEL`. 2026-11-12: kept as the default; AI is off by the kill switch until OQ-19 is answered (D-16).
 - **OQ-4** ~~Background jobs: Supabase Edge Function worker with a DB queue, or another Supabase-only approach?~~ **Resolved 2026-11-10 → D-10** (chunked `jobs` state machine, `contract.md` sections 4 and 5).

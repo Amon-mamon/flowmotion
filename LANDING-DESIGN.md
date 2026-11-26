@@ -1,3 +1,5 @@
+> **MERGED 2026-11-27 (architect, D-55, D-56):** approved and merged into `docs/design.md` "Landing page" and `docs/contract.md` section 11 "Landing redesign". Those docs are the source of truth; this file is kept for history only.
+
 # LANDING-DESIGN — landing page direction (proposal for owner approval, 2026-11-27)
 
 **Status: proposal. Nothing is built from this until the owner approves.** After approval the architect merges the tokens into `docs/design.md` and the frontend builds the page.
