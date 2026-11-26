@@ -40,6 +40,25 @@ The code reviewer accepted every backend deviation listed in `docs/requests.md` 
 
 **Build order (D-46, 2026-11-27):** Phase 3a review fixes → Phase 3b → Phase 2e own AI key. Everything deferred or not built is listed in `BACKLOG.md`.
 
+## Brand identity and landing interactivity (owner, 2026-11-27) — START HERE TOMORROW
+
+**What the owner wants:** visitors must *feel* the brand name **Flow Motion** — motion and flow — while scrolling. The first landing build (vercel.com look, Flow Motion colours, Lenis smooth scrolling, Motion scroll animations) was judged "just scroll to the bottom, not that interactive". The owner approved this concept:
+
+- **The page itself is a flow:** one continuous coral flow line, like an n8n connection, starts at the hero and **draws itself as you scroll**, connecting every section the way edges connect nodes. Scrolling drives the flow.
+- **Each section is a node:** when the line reaches a section, a small node connects with a pulse and the content settles into place. The page reads as a workflow running top to bottom.
+- **Data moves along the edges:** small dots travel along the line like data passing through a workflow — the "motion" half of the brand, subtle and always alive.
+- **Hero:** scattered nodes **assemble into a connected flow** as scrolling starts, with gentle mouse parallax and depth.
+- **Wordmark:** "Flow" and "Motion" joined by a line that draws on load.
+- **How it works:** repo files flow into the scanner, become recommendation cards, and the cards become a node graph, all tied to scroll position and fully reversible when scrolling up.
+- **Headlines** reveal word by word; the **main call to action** has a subtle magnetic pull toward the cursor.
+- Stays within the Vercel discipline: precise, fast, coral on black, no flashy effects. Phones get a lighter version; "reduce motion" users get calm fades. No Three.js, no new dependency (Motion and Lenis are already installed).
+
+**State when we stopped (2026-11-27 night):**
+1. Landing redesign v1 is **built but not committed**; its code review was running (`docs/review.md` section "Landing redesign (code review 2026-11-27)"). If the review shows no high or medium, commit it as `feat(landing): ...`; otherwise send findings to frontend first.
+2. The **motion identity spec** was being written by the architect (new subsections "Landing motion identity" in `docs/design.md` and `docs/contract.md` section 11, items M1..Mn, plus a new D-number). Check it exists and is complete.
+3. **Next:** frontend builds M1..Mn on top of v1 → code review → commit `feat(landing): motion identity ...` → the owner scrolls through it with `npm run dev` (not `npm run start`, which needs deployment settings). Estimated 6-10% of weekly usage.
+4. After the landing: the owner decides between the Phase 3a review fixes → 3b generation, or the working own-AI-key backend (only on the owner's word).
+
 **Progress 2026-11-27 night:** Integrations UI preview DONE (`89fe97c`). Landing redesign IN PROGRESS: direction approved (LANDING-DESIGN.md) plus Lenis smooth scrolling and Motion (renamed Framer Motion, already installed) scroll animations; architect writing the scope, then backend installs the pinned `lenis`, frontend builds, code review, commit `feat(landing): ...`.
 
 **Owner's plan for 2026-11-27 night (supersedes the order below for now):** (1) finish the Integrations page **UI preview** (Phase 2e-ui, D-54; frontend build running, then a quick code review, commit `feat(phase-2e): integrations page UI preview`), then (2) **landing page redesign**: Vercel look with Flow Motion colours (BACKLOG.md); first write the design direction and show the owner before building. (3) The **working** own-AI-key backend (full Phase 2e) is built **only when the owner says so**. Phase 3a fixes and 3b stay queued after that.
