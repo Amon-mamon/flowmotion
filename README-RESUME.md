@@ -40,6 +40,8 @@ The code reviewer accepted every backend deviation listed in `docs/requests.md` 
 
 **Build order (D-46, 2026-11-27):** Phase 3a review fixes → Phase 3b → Phase 2e own AI key. Everything deferred or not built is listed in `BACKLOG.md`.
 
+**Progress 2026-11-27 night:** Integrations UI preview DONE (`89fe97c`). Landing redesign IN PROGRESS: direction approved (LANDING-DESIGN.md) plus Lenis smooth scrolling and Motion (renamed Framer Motion, already installed) scroll animations; architect writing the scope, then backend installs the pinned `lenis`, frontend builds, code review, commit `feat(landing): ...`.
+
 **Owner's plan for 2026-11-27 night (supersedes the order below for now):** (1) finish the Integrations page **UI preview** (Phase 2e-ui, D-54; frontend build running, then a quick code review, commit `feat(phase-2e): integrations page UI preview`), then (2) **landing page redesign**: Vercel look with Flow Motion colours (BACKLOG.md); first write the design direction and show the owner before building. (3) The **working** own-AI-key backend (full Phase 2e) is built **only when the owner says so**. Phase 3a fixes and 3b stay queued after that.
 
 **Start here next session (stopped 2026-11-27 at owner's request, weekly usage about 37% before planning):** the Phase 3a fix plan is written in `docs/contract.md` section 11 "Phase 3a review fixes" (backend items 1-11, frontend items 1-3; D-46..D-53). Launch backend and frontend in parallel on it, then code-reviewer and security-reviewer, fix until no high or medium, commit `fix(phase-3a): ...`, mark 3a done. Estimated cost: 3a fixes about 10-15% of weekly usage; 3b about 18-25%. Ask the owner for /usage first.
