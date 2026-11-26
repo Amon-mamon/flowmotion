@@ -21,6 +21,11 @@ export const COPY = {
   rateLimited: "Too many requests, try again in a minute",
   /** exact (design.md, project installation_id = null) */
   reconnect: "Reconnect GitHub to analyze",
+  /** exact (design.md, Phase 1.2 D-45, sentence after the reconnect notice) */
+  reconnectOtherAccount:
+    "If this repository is on someone else's personal GitHub account, Flow Motion can no longer analyze it. Its past results stay here until you delete the project.",
+  /** exact (design.md, Phase 1.2, dashboard project card with installation_id = null) */
+  notConnected: "Not connected to GitHub",
   /** exact (design.md, project stale = true) */
   stale: "New commits since the last analysis",
   /** exact (design.md, files summary explanation) */

@@ -16,9 +16,11 @@ const h = vi.hoisted(() => ({
   db: null as null | import("./helpers/fake-supabase").FakeDb,
   createProject: vi.fn(),
   audit: vi.fn(async () => undefined),
+  sessionUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
 }));
 
 const USER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const USER_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
 vi.mock("@/lib/env.server", () => ({
   getServerEnv: () => ({
@@ -29,7 +31,7 @@ vi.mock("@/lib/env.server", () => ({
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
-    auth: { getUser: async () => ({ data: { user: { id: USER, email: "a@example.com" } }, error: null }) },
+    auth: { getUser: async () => ({ data: { user: { id: h.sessionUserId, email: "a@example.com" } }, error: null }) },
     from: (table: string) => fake.fakeFrom(h.db as import("./helpers/fake-supabase").FakeDb)(table),
   }),
 }));
@@ -71,6 +73,8 @@ const noParams = { params: Promise.resolve({}) };
 
 interface GitHubWorld {
   userId: number;
+  /** GET /user/installations items (raw, as GitHub sends them). */
+  installations: unknown[];
   accessible: { id: number; full_name: string; private: boolean; default_branch: string }[];
 }
 let world: GitHubWorld;
@@ -91,7 +95,7 @@ function githubFetch(input: string | URL | Request, init?: RequestInit): Promise
   if (url.pathname.startsWith("/user")) expect(auth).toBe(`Bearer ${USER_TOKEN}`);
   if (url.pathname === "/user") return Promise.resolve(json({ id: world.userId, login: "octocat" }));
   if (url.pathname === "/user/installations") {
-    return Promise.resolve(json({ total_count: 1, installations: [{ id: 77, account: { login: "octo-org" } }] }));
+    return Promise.resolve(json({ total_count: world.installations.length, installations: world.installations }));
   }
   if (url.pathname === "/user/installations/77/repositories") {
     return Promise.resolve(json({ total_count: world.accessible.length, repositories: world.accessible }));
@@ -112,6 +116,7 @@ function githubFetch(input: string | URL | Request, init?: RequestInit): Promise
   throw new Error(`unexpected GitHub call ${url.pathname}`);
 }
 
+const ORG_77 = { id: 77, account: { id: 7700, login: "octo-org", type: "Organization" } };
 const repo = (id: number, name: string) => ({ id, full_name: `octo-org/${name}`, private: true, default_branch: "main" });
 
 async function linkThroughAuthorize(): Promise<Response> {
@@ -137,7 +142,8 @@ beforeEach(() => {
   calls.length = 0;
   vi.clearAllMocks();
   vi.stubGlobal("fetch", vi.fn(githubFetch));
-  world = { userId: 9001, accessible: [repo(201, "a")] };
+  h.sessionUserId = USER;
+  world = { userId: 9001, installations: [ORG_77], accessible: [repo(201, "a")] };
   h.createProject.mockImplementation(async (input: Record<string, unknown>) => ({
     id: "33333333-3333-4333-8333-333333333333",
     user_id: USER,
@@ -267,5 +273,132 @@ describe("repo access flow (D-22)", () => {
     expect(h.db?.repos).toEqual([]);
     const repos = await listRepos(new Request(`https://app.example.com/api/github/installations/${id}/repos`), ctx(id));
     expect(repos.status).toBe(403);
+  });
+});
+
+describe("GitHub account isolation (Phase 1.2: D-43, D-44, D-45)", () => {
+  /** Another person's personal installation (type User, account id 2). */
+  const OTHER_PERSONAL = { id: 66, account: { id: 2, login: "octocat", type: "User" } };
+  const OWN_PERSONAL = { id: 55, account: { id: 9001, login: "octocat", type: "User" } };
+
+  function stubPersonalRepos() {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+        const match = /^\/user\/installations\/(55|66)\/repositories$/.exec(url.pathname);
+        if (match !== null) {
+          calls.push(`GET ${url.pathname}`);
+          const owner = match[1] === "55" ? "octocat" : "owner-person";
+          return Promise.resolve(json({ total_count: 1, repositories: [{ id: Number(match[1]) * 10, full_name: `${owner}/p`, private: true, default_branch: "main" }] }));
+        }
+        return githubFetch(input, init);
+      }),
+    );
+  }
+
+  it("links own personal + org; another person's personal installation, an enterprise and a malformed item are skipped and their repos never requested", async () => {
+    stubPersonalRepos();
+    world.installations = [
+      OWN_PERSONAL,
+      OTHER_PERSONAL,
+      ORG_77,
+      { id: 88, account: { id: 600, slug: "ent", type: "Enterprise" } },
+      { id: "bad" },
+    ];
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const response = await linkThroughAuthorize();
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?connected=1");
+    expect(calls).not.toContain("GET /user/installations/66/repositories");
+    expect(calls).not.toContain("GET /user/installations/88/repositories");
+    expect(h.db?.installations.map((row) => [row.installation_id, row.account_type, row.account_id]).sort()).toEqual([
+      [55, "User", 9001],
+      [77, "Organization", 7700],
+    ]);
+    expect(h.db?.repos.some((item) => item.repo_full_name.startsWith("owner-person/"))).toBe(false);
+    const logged = JSON.stringify(info.mock.calls);
+    expect(logged).toContain('"skipped":3');
+    expect(logged).not.toContain("octo-org");
+    expect(logged).not.toContain(USER_TOKEN);
+  });
+
+  it("only another person's personal installation → link with [] and ?error=github_none", async () => {
+    stubPersonalRepos();
+    world.installations = [OTHER_PERSONAL];
+    const response = await linkThroughAuthorize();
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github_none");
+    expect(h.db?.installations).toEqual([]);
+    expect(calls).not.toContain("GET /user/installations/66/repositories");
+  });
+
+  it("installation_id of another person's personal installation → ?error=github, nothing written", async () => {
+    stubPersonalRepos();
+    world.installations = [OTHER_PERSONAL, ORG_77];
+    const start = await authorize(new Request("https://app.example.com/api/github/authorize"), noParams);
+    const state = new URL(start.headers.get("location") ?? "").searchParams.get("state") ?? "";
+    const cookie = (start.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
+    const response = await callback(
+      new Request(`https://app.example.com/api/github/installations/callback?installation_id=66&setup_action=install&code=abc&state=${state}`, {
+        headers: { cookie },
+      }),
+      noParams,
+    );
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
+    expect(h.db?.installations).toEqual([]);
+    expect(h.audit).not.toHaveBeenCalled();
+  });
+
+  it("a second Flow Motion account linking a held GitHub account binds nothing → ?error=github_in_use; released after the holder disconnects", async () => {
+    await linkThroughAuthorize();
+    const before = JSON.stringify(h.db);
+    h.sessionUserId = USER_B;
+    h.audit.mockClear();
+    const inUse = await linkThroughAuthorize();
+    expect(inUse.headers.get("location")).toBe("https://app.example.com/dashboard?error=github_in_use");
+    expect(JSON.stringify(h.db)).toBe(before);
+    expect(h.audit).not.toHaveBeenCalled();
+    expect(inUse.headers.get("set-cookie") ?? "").toMatch(/fm_gh_state=;.*Max-Age=0/i);
+
+    // The holder (USER) disconnects every installation.
+    fake.deleteInstallationRows(h.db as import("./helpers/fake-supabase").FakeDb, (row) => row.user_id === USER);
+    const linked = await linkThroughAuthorize();
+    expect(linked.headers.get("location")).toBe("https://app.example.com/dashboard?connected=1");
+    expect(h.db?.installations.map((row) => row.user_id)).toEqual([USER_B]);
+
+    // Now USER cannot take it back while USER_B holds it.
+    h.sessionUserId = USER;
+    const back = await linkThroughAuthorize();
+    expect(back.headers.get("location")).toBe("https://app.example.com/dashboard?error=github_in_use");
+  });
+
+  it("cleanup: a row linked before Phase 1.2 that is no longer linkable is deleted on refresh and its project detached; classified rows are kept", async () => {
+    const db = h.db as import("./helpers/fake-supabase").FakeDb;
+    stubPersonalRepos();
+    // Pre-Phase-1.2 row for another person's personal installation (unclassified, cleared by the migration).
+    db.installations.push({
+      id: "99999999-9999-4999-8999-999999999999",
+      user_id: USER,
+      installation_id: 66,
+      account_login: "owner-person",
+      created_at: "2026-11-10T00:00:00Z",
+      github_user_id: 9001,
+      github_user_login: "octocat",
+      repos_synced_at: null,
+      account_type: null,
+      account_id: null,
+    });
+    db.projects.push({ id: "p-1", user_id: USER, installation_id: "99999999-9999-4999-8999-999999999999" });
+    world.installations = [OTHER_PERSONAL, ORG_77];
+    const response = await linkThroughAuthorize();
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?connected=1");
+    expect(db.installations.map((row) => row.installation_id)).toEqual([77]);
+    expect(db.projects[0]?.installation_id).toBeNull();
+
+    // The org is temporarily not listed: kept, cleared, needs a refresh.
+    world.installations = [];
+    const none = await linkThroughAuthorize();
+    expect(none.headers.get("location")).toBe("https://app.example.com/dashboard?error=github_none");
+    expect(db.installations.map((row) => [row.installation_id, row.repos_synced_at])).toEqual([[77, null]]);
+    expect(db.repos).toEqual([]);
   });
 });

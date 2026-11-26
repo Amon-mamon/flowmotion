@@ -3,8 +3,10 @@
  * touches (D-22): `github_installations` and `github_installation_repos`
  * reads through a tiny PostgREST-like builder, and an `rpc` that mirrors
  * `link_github_installations()` from
- * supabase/migrations/20261113120000_phase1_1_repo_access.sql (lock, account
- * mismatch → nothing written, upsert, replace each set, clear the others).
+ * supabase/migrations/20261125120000_phase1_2_github_isolation.sql (account
+ * mismatch, github_in_use, installation_not_allowed → nothing written;
+ * upsert with account type/id, replace each set; unlisted rows: unclassified
+ * ones deleted with projects detached, classified ones cleared).
  * Tests only; the SQL itself is exercised by the RLS suite on a real stack.
  */
 
@@ -17,6 +19,14 @@ export interface InstallationRecord {
   github_user_id: number | null;
   github_user_login: string | null;
   repos_synced_at: string | null;
+  account_type: "User" | "Organization" | null;
+  account_id: number | null;
+}
+
+export interface ProjectRecord {
+  id: string;
+  user_id: string;
+  installation_id: string | null;
 }
 
 export interface RepoRecord {
@@ -31,6 +41,7 @@ export interface RepoRecord {
 export interface FakeDb {
   installations: InstallationRecord[];
   repos: RepoRecord[];
+  projects: ProjectRecord[];
   now: () => Date;
   nextId: () => string;
 }
@@ -40,6 +51,7 @@ export function createFakeDb(now: () => Date = () => new Date()): FakeDb {
   return {
     installations: [],
     repos: [],
+    projects: [],
     now,
     nextId: () => {
       counter += 1;
@@ -117,8 +129,20 @@ interface LinkArgs {
   p_installations: {
     installationId: number;
     accountLogin: string;
+    accountType: string;
+    accountId: number;
     repos: { id: number; fullName: string; private: boolean; defaultBranch: string }[];
   }[];
+}
+
+/** Deletes rows like the FKs do: repo sets cascade, projects detach. */
+export function deleteInstallationRows(db: FakeDb, predicate: (row: InstallationRecord) => boolean): void {
+  const gone = new Set(db.installations.filter(predicate).map((row) => row.id));
+  db.installations = db.installations.filter((row) => !gone.has(row.id));
+  db.repos = db.repos.filter((repo) => !gone.has(repo.installation_id));
+  for (const project of db.projects) {
+    if (project.installation_id !== null && gone.has(project.installation_id)) project.installation_id = null;
+  }
 }
 
 /** Mirrors link_github_installations() (contract section 5). */
@@ -126,6 +150,14 @@ export function fakeLink(db: FakeDb, args: LinkArgs) {
   const mine = db.installations.filter((row) => row.user_id === args.p_user_id);
   if (mine.some((row) => row.github_user_id !== null && row.github_user_id !== args.p_github_user_id)) {
     return { data: null, error: { code: "P0001", message: "github_account_mismatch" } };
+  }
+  if (db.installations.some((row) => row.user_id !== args.p_user_id && row.github_user_id === args.p_github_user_id)) {
+    return { data: null, error: { code: "P0001", message: "github_in_use" } };
+  }
+  const linkable = (item: LinkArgs["p_installations"][number]) =>
+    item.accountType === "Organization" || (item.accountType === "User" && item.accountId === args.p_github_user_id);
+  if (!args.p_installations.every(linkable)) {
+    return { data: null, error: { code: "P0001", message: "installation_not_allowed" } };
   }
   const nowIso = db.now().toISOString();
   const result: { installation_id: number; inserted: boolean }[] = [];
@@ -143,6 +175,8 @@ export function fakeLink(db: FakeDb, args: LinkArgs) {
         github_user_id: null,
         github_user_login: null,
         repos_synced_at: null,
+        account_type: null,
+        account_id: null,
       };
       db.installations.push(row);
     }
@@ -150,6 +184,8 @@ export function fakeLink(db: FakeDb, args: LinkArgs) {
     row.github_user_id = args.p_github_user_id;
     row.github_user_login = args.p_github_user_login;
     row.repos_synced_at = nowIso;
+    row.account_type = item.accountType === "Organization" ? "Organization" : "User";
+    row.account_id = item.accountId;
     const rowId = row.id;
     db.repos = db.repos.filter((repo) => repo.installation_id !== rowId);
     for (const repo of item.repos) {
@@ -166,6 +202,10 @@ export function fakeLink(db: FakeDb, args: LinkArgs) {
     listed.push(item.installationId);
     result.push({ installation_id: item.installationId, inserted });
   }
+  deleteInstallationRows(
+    db,
+    (row) => row.user_id === args.p_user_id && row.account_type === null && !listed.includes(row.installation_id),
+  );
   for (const row of db.installations) {
     if (row.user_id !== args.p_user_id || listed.includes(row.installation_id)) continue;
     db.repos = db.repos.filter((repo) => repo.installation_id !== row.id);

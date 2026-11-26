@@ -10,7 +10,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-const item = (id: number) => ({ id, account: { login: `acct-${id}` } });
+const item = (id: number, type = "Organization") => ({ id, account: { id: id + 100000, login: `acct-${id}`, type } });
 
 describe("listUserInstallations", () => {
   it("collects every page until total_count is reached", async () => {
@@ -20,8 +20,14 @@ describe("listUserInstallations", () => {
       return jsonResponse({ total_count: 101, installations: items });
     });
     const list = await listUserInstallations({ userToken: "ghu", fetch: fetchMock });
-    expect(list).toHaveLength(101);
-    expect(list[100]).toEqual({ installationId: 101, accountLogin: "acct-101" });
+    expect(list.installations).toHaveLength(101);
+    expect(list.installations[100]).toEqual({
+      installationId: 101,
+      accountLogin: "acct-101",
+      accountType: "Organization",
+      accountId: 100101,
+    });
+    expect(list.skipped).toBe(0);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
     expect(headers.authorization).toBe("Bearer ghu");
@@ -41,7 +47,29 @@ describe("listUserInstallations", () => {
 
   it("empty list → []", async () => {
     const fetchMock: FetchLike = async () => jsonResponse({ total_count: 0, installations: [] });
-    expect(await listUserInstallations({ userToken: "ghu", fetch: fetchMock })).toEqual([]);
+    expect(await listUserInstallations({ userToken: "ghu", fetch: fetchMock })).toEqual({ installations: [], skipped: 0 });
+  });
+
+  it("parses each item on its own: malformed, null-account and enterprise-without-login items are skipped and counted (Phase 1.2)", async () => {
+    const fetchMock: FetchLike = async () =>
+      jsonResponse({
+        total_count: 6,
+        installations: [
+          item(1, "User"),
+          { id: 2, account: null },
+          { id: 3, account: { id: 9, slug: "ent", type: "Enterprise" } },
+          { id: "x", account: { id: 1, login: "a", type: "User" } },
+          "garbage",
+          item(6, "Bot"),
+        ],
+      });
+    const list = await listUserInstallations({ userToken: "ghu", fetch: fetchMock });
+    // Listing does not filter by linkability; Bot is returned with its type.
+    expect(list.installations.map((entry) => [entry.installationId, entry.accountType])).toEqual([
+      [1, "User"],
+      [6, "Bot"],
+    ]);
+    expect(list.skipped).toBe(4);
   });
 
   it("rejects HTTP errors and malformed payloads", async () => {

@@ -28,8 +28,11 @@ export function ReconnectNotice() {
       <PlugIcon aria-hidden="true" />
       <AlertTitle>{COPY.reconnect}</AlertTitle>
       <AlertDescription>
-        The GitHub installation for this repository was disconnected. Existing results stay available.{" "}
-        <a href="/api/github/install">Reconnect GitHub</a>
+        <p>
+          The GitHub installation for this repository was disconnected. Existing results stay available.{" "}
+          <a href="/api/github/install">Reconnect GitHub</a>
+        </p>
+        <p>{COPY.reconnectOtherAccount}</p>
       </AlertDescription>
     </Alert>
   );

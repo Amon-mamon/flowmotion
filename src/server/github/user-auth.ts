@@ -7,16 +7,17 @@ import {
   ghOAuthTokenResponseSchema,
   ghUserInstallationRepoSchema,
   ghUserInstallationReposSchema,
+  ghUserInstallationSchema,
   ghUserInstallationsSchema,
   isValidRepoFullName,
   type GhAuthenticatedUser,
 } from "@/schemas/github";
 
 /**
- * One-time installation ownership check (docs/security.md section 3):
- * exchange the GitHub `code` for a short-lived user token, confirm the
- * installation id appears in `GET /user/installations`, take the account
- * login, and discard the token. Nothing here is stored.
+ * One-time GitHub user check (docs/security.md section 3): exchange the
+ * GitHub `code` for a short-lived user token, read the user, the linkable
+ * installations (D-43) and their accessible repos, and discard the token.
+ * Nothing here is stored.
  */
 
 export interface ExchangeCodeInput {
@@ -45,62 +46,19 @@ export async function exchangeCodeForUserToken(input: ExchangeCodeInput): Promis
   return parsed.data.access_token;
 }
 
-export interface FindUserInstallationInput {
-  /** Short-lived user token. Discarded by the caller right after. */
-  userToken: string;
-  installationId: number;
-  fetch?: FetchLike;
-  maxPages?: number;
-}
-
-/**
- * Returns the account login when `installationId` is among the user's
- * installations, otherwise null.
- */
-export async function findUserInstallation(
-  input: FindUserInstallationInput,
-): Promise<{ accountLogin: string } | null> {
-  const doFetch = input.fetch ?? fetch;
-  const operation = "user installations";
-  const maxPages = input.maxPages ?? 10;
-  for (let page = 1; page <= maxPages; page += 1) {
-    const response = await doFetch(`${GITHUB_API_URL}/user/installations?per_page=100&page=${page}`, {
-      method: "GET",
-      headers: { ...GITHUB_HEADERS, authorization: `Bearer ${input.userToken}` },
-    });
-    if (!response.ok) throw new GitHubApiError(operation, response.status);
-    const parsed = ghUserInstallationsSchema.safeParse(await response.json());
-    if (!parsed.success) throw new GitHubResponseError(operation);
-    const match = parsed.data.installations.find((item) => item.id === input.installationId);
-    if (match !== undefined) return { accountLogin: match.account.login };
-    if (page * 100 >= parsed.data.total_count || parsed.data.installations.length === 0) break;
-  }
-  return null;
-}
-
-export interface VerifyOwnershipInput {
-  clientId: string;
-  clientSecret: string;
-  code: string;
-  installationId: number;
-  fetch?: FetchLike;
-}
-
-/** Full check; the user token never leaves this function. */
-export async function verifyInstallationOwnership(
-  input: VerifyOwnershipInput,
-): Promise<{ accountLogin: string } | null> {
-  const userToken = await exchangeCodeForUserToken(input);
-  return findUserInstallation({
-    userToken,
-    installationId: input.installationId,
-    ...(input.fetch !== undefined ? { fetch: input.fetch } : {}),
-  });
-}
-
 export interface UserInstallation {
   installationId: number;
   accountLogin: string;
+  /** GitHub account type as listed (`User`, `Organization`, `Enterprise`, ...). */
+  accountType: string;
+  /** GitHub id of the account the installation is on. */
+  accountId: number;
+}
+
+export interface UserInstallationList {
+  installations: UserInstallation[];
+  /** Items that failed to parse or had a null account (count only). */
+  skipped: number;
 }
 
 export interface ListUserInstallationsInput {
@@ -111,16 +69,20 @@ export interface ListUserInstallationsInput {
 }
 
 /**
- * Every installation of this App the user can access
+ * Every installation of this App GitHub lists for the user
  * (`GET /user/installations?per_page=100&page=N`, at most 10 pages, D-20).
+ * Each item is parsed on its own (Phase 1.2): a malformed item or one with a
+ * null account is skipped and counted. Not filtered: callers must apply
+ * isLinkableInstallation before using any item (D-43).
  */
 export async function listUserInstallations(
   input: ListUserInstallationsInput,
-): Promise<UserInstallation[]> {
+): Promise<UserInstallationList> {
   const doFetch = input.fetch ?? fetch;
   const operation = "user installations";
   const maxPages = input.maxPages ?? 10;
   const out = new Map<number, UserInstallation>();
+  let skipped = 0;
   for (let page = 1; page <= maxPages; page += 1) {
     const response = await doFetch(`${GITHUB_API_URL}/user/installations?per_page=100&page=${page}`, {
       method: "GET",
@@ -129,12 +91,37 @@ export async function listUserInstallations(
     if (!response.ok) throw new GitHubApiError(operation, response.status);
     const parsed = ghUserInstallationsSchema.safeParse(await response.json());
     if (!parsed.success) throw new GitHubResponseError(operation);
-    for (const item of parsed.data.installations) {
-      out.set(item.id, { installationId: item.id, accountLogin: item.account.login });
+    for (const raw of parsed.data.installations) {
+      const item = ghUserInstallationSchema.safeParse(raw);
+      if (!item.success || item.data.account === null) {
+        skipped += 1;
+        continue;
+      }
+      out.set(item.data.id, {
+        installationId: item.data.id,
+        accountLogin: item.data.account.login,
+        accountType: item.data.account.type,
+        accountId: item.data.account.id,
+      });
     }
     if (page * 100 >= parsed.data.total_count || parsed.data.installations.length === 0) break;
   }
-  return [...out.values()];
+  return { installations: [...out.values()], skipped };
+}
+
+/**
+ * Linking rule (D-43, contract section 6): an installation may be linked only
+ * when it is on the authorizing GitHub user's own account (`User` with the
+ * same id as `GET /user`) or on an `Organization`. Ids only; logins can be
+ * renamed and are never compared. Any other type is not linkable.
+ */
+export function isLinkableInstallation(
+  account: { id: number; type: string } | null,
+  githubUserId: number,
+): boolean {
+  if (account === null) return false;
+  if (account.type === "Organization") return true;
+  return account.type === "User" && account.id === githubUserId;
 }
 
 const MAX_PAGES = 10;
@@ -218,15 +205,23 @@ export async function listUserInstallationRepos(
   return { repos: [...repos.values()], dropped, truncated: Math.max(0, total - seen) };
 }
 
-export interface InstallationAccess extends UserInstallation {
+export interface InstallationAccess {
+  installationId: number;
+  accountLogin: string;
+  accountType: LinkableAccountType;
+  accountId: number;
   repos: AccessibleRepo[];
 }
+
+export type LinkableAccountType = "User" | "Organization";
 
 export interface UserAccessSync {
   user: GhAuthenticatedUser;
   installations: InstallationAccess[];
   droppedRepos: number;
   truncatedRepos: number;
+  /** Installations not linked: unparseable, null account, or not linkable (count only). */
+  skippedInstallations: number;
 }
 
 export interface ResolveUserAccessInput {
@@ -237,24 +232,45 @@ export interface ResolveUserAccessInput {
 }
 
 /**
- * Callback sync (D-20, D-22): exchange `code` for a one-time user token,
- * read the GitHub user, every installation of this App the user can access,
- * and each installation's repos accessible to that user. The token never
- * leaves this function: it is not returned, stored, or logged.
+ * Callback sync (D-20, D-22, D-43): exchange `code` for a one-time user
+ * token, read the GitHub user, every installation of this App GitHub lists
+ * for the user, keep only the linkable ones (own personal account or an
+ * organization), and read each linkable installation's repos accessible to
+ * that user. No repository listing is requested for a skipped installation.
+ * The token never leaves this function: it is not returned, stored, or logged.
  */
 export async function resolveUserAccess(input: ResolveUserAccessInput): Promise<UserAccessSync> {
   const doFetch = input.fetch ?? fetch;
   const userToken = await exchangeCodeForUserToken(input);
   const user = await getAuthenticatedUser(userToken, doFetch);
-  const installations = await listUserInstallations({ userToken, fetch: doFetch });
+  const listed = await listUserInstallations({ userToken, fetch: doFetch });
+  let skippedInstallations = listed.skipped;
+  const linkable: (UserInstallation & { accountType: LinkableAccountType })[] = [];
+  for (const installation of listed.installations) {
+    const account = { id: installation.accountId, type: installation.accountType };
+    if (!isLinkableInstallation(account, user.id)) {
+      skippedInstallations += 1;
+      continue;
+    }
+    linkable.push({
+      ...installation,
+      accountType: installation.accountType === "Organization" ? "Organization" : "User",
+    });
+  }
   const out: InstallationAccess[] = [];
   let droppedRepos = 0;
   let truncatedRepos = 0;
-  for (const installation of installations) {
+  for (const installation of linkable) {
     const list = await listUserInstallationRepos(userToken, installation.installationId, doFetch);
     droppedRepos += list.dropped;
     truncatedRepos += list.truncated;
-    out.push({ ...installation, repos: list.repos });
+    out.push({
+      installationId: installation.installationId,
+      accountLogin: installation.accountLogin,
+      accountType: installation.accountType,
+      accountId: installation.accountId,
+      repos: list.repos,
+    });
   }
-  return { user, installations: out, droppedRepos, truncatedRepos };
+  return { user, installations: out, droppedRepos, truncatedRepos, skippedInstallations };
 }

@@ -5,8 +5,8 @@ import { GitHubApiError, GitHubResponseError } from "@/lib/github/errors";
 import type { FetchLike } from "@/lib/github/http";
 import {
   exchangeCodeForUserToken,
-  findUserInstallation,
-  verifyInstallationOwnership,
+  isLinkableInstallation,
+  resolveUserAccess,
 } from "@/server/github/user-auth";
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -51,73 +51,124 @@ describe("exchangeCodeForUserToken", () => {
   });
 });
 
-describe("findUserInstallation", () => {
-  const installations = (ids: number[]) =>
-    ids.map((id) => ({ id, account: { login: `acct-${id}`, type: "Organization" }, app_id: 1 }));
-
-  it("returns the account login when the installation is listed", async () => {
-    const fetchMock = vi.fn<FetchLike>(async () =>
-      jsonResponse({ total_count: 2, installations: installations([5, 77]) }),
-    );
-    expect(await findUserInstallation({ userToken: "ghu", installationId: 77, fetch: fetchMock })).toEqual({
-      accountLogin: "acct-77",
-    });
-    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
-    expect(headers.authorization).toBe("Bearer ghu");
+describe("isLinkableInstallation (D-43)", () => {
+  const ME = 1;
+  it("own personal account (type User, same id) is linkable", () => {
+    expect(isLinkableInstallation({ id: ME, type: "User" }, ME)).toBe(true);
   });
-
-  it("returns null when the installation belongs to someone else", async () => {
-    const fetchMock: FetchLike = async () =>
-      jsonResponse({ total_count: 1, installations: installations([5]) });
-    expect(await findUserInstallation({ userToken: "ghu", installationId: 77, fetch: fetchMock })).toBeNull();
+  it("another person's personal account is not linkable", () => {
+    expect(isLinkableInstallation({ id: 2, type: "User" }, ME)).toBe(false);
   });
-
-  it("pages through results and stops at total_count", async () => {
-    const fetchMock = vi.fn<FetchLike>(async (url) => {
-      const page = Number(new URL(url).searchParams.get("page"));
-      const ids = page === 1 ? Array.from({ length: 100 }, (_, i) => i + 1) : [500];
-      return jsonResponse({ total_count: 101, installations: installations(ids) });
-    });
-    expect(await findUserInstallation({ userToken: "ghu", installationId: 500, fetch: fetchMock })).toEqual({
-      accountLogin: "acct-500",
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(await findUserInstallation({ userToken: "ghu", installationId: 999, fetch: fetchMock })).toBeNull();
+  it("a User whose login equals mine but whose id differs is not linkable (ids only)", () => {
+    const account = { id: 3, type: "User", login: "octocat" };
+    expect(isLinkableInstallation(account, ME)).toBe(false);
   });
-
-  it("rejects an unexpected payload", async () => {
-    const fetchMock: FetchLike = async () => jsonResponse({ installations: "nope" });
-    await expect(
-      findUserInstallation({ userToken: "ghu", installationId: 1, fetch: fetchMock }),
-    ).rejects.toBeInstanceOf(GitHubResponseError);
+  it("an Organization is linkable", () => {
+    expect(isLinkableInstallation({ id: 500, type: "Organization" }, ME)).toBe(true);
+  });
+  it("Enterprise, Bot, empty, unknown types and a null account are not linkable", () => {
+    for (const type of ["Enterprise", "Bot", "", "organization", "user", "Team"]) {
+      expect(isLinkableInstallation({ id: ME, type }, ME)).toBe(false);
+    }
+    expect(isLinkableInstallation(null, ME)).toBe(false);
   });
 });
 
-describe("verifyInstallationOwnership", () => {
-  it("chains the exchange and the installations check", async () => {
-    const fetchMock = vi.fn<FetchLike>(async (url) => {
-      if (url.startsWith("https://github.com/login/oauth/access_token")) {
-        return jsonResponse({ access_token: "ghu_x", token_type: "bearer" });
+describe("resolveUserAccess (D-43 filter before any repo listing)", () => {
+  const USER_TOKEN = "ghu_one_time_token";
+  const OWN = 11;
+  const OTHER = 22;
+  const ORG = 33;
+  const ENTERPRISE = 44;
+
+  function world() {
+    const urls: string[] = [];
+    const fetchMock = vi.fn<FetchLike>(async (input) => {
+      const url = new URL(String(input));
+      urls.push(url.pathname);
+      if (url.pathname === "/login/oauth/access_token") {
+        return jsonResponse({ access_token: USER_TOKEN, token_type: "bearer" });
       }
-      return jsonResponse({ total_count: 1, installations: [{ id: 42, account: { login: "octo" } }] });
+      if (url.pathname === "/user") return jsonResponse({ id: 1, login: "me" });
+      if (url.pathname === "/user/installations") {
+        return jsonResponse({
+          total_count: 5,
+          installations: [
+            { id: OWN, account: { id: 1, login: "me", type: "User" }, app_id: 9 },
+            { id: OTHER, account: { id: 2, login: "owner-person", type: "User" }, app_id: 9 },
+            { id: ORG, account: { id: 500, login: "acme", type: "Organization" }, app_id: 9 },
+            { id: ENTERPRISE, account: { id: 600, slug: "big-ent", type: "Enterprise" } },
+            { id: "not-a-number", account: "nope" },
+          ],
+        });
+      }
+      const match = /^\/user\/installations\/(\d+)\/repositories$/.exec(url.pathname);
+      if (match !== null) {
+        const id = Number(match[1]);
+        return jsonResponse({
+          total_count: 1,
+          repositories: [{ id: id * 10, full_name: `acct-${id}/repo`, private: true, default_branch: "main" }],
+        });
+      }
+      throw new Error(`unexpected call ${url.pathname}`);
     });
-    expect(
-      await verifyInstallationOwnership({
-        clientId: "a",
-        clientSecret: "b",
-        code: "c",
-        installationId: 42,
-        fetch: fetchMock,
-      }),
-    ).toEqual({ accountLogin: "octo" });
-    expect(
-      await verifyInstallationOwnership({
-        clientId: "a",
-        clientSecret: "b",
-        code: "c",
-        installationId: 43,
-        fetch: fetchMock,
-      }),
-    ).toBeNull();
+    return { fetchMock, urls };
+  }
+
+  it("keeps own + org, skips another person's personal, enterprise and malformed items, never lists their repos", async () => {
+    const { fetchMock, urls } = world();
+    const result = await resolveUserAccess({ clientId: "a", clientSecret: "b", code: "c", fetch: fetchMock });
+    expect(result.user).toEqual({ id: 1, login: "me" });
+    expect(result.installations).toEqual([
+      {
+        installationId: OWN,
+        accountLogin: "me",
+        accountType: "User",
+        accountId: 1,
+        repos: [{ id: OWN * 10, fullName: `acct-${OWN}/repo`, private: true, defaultBranch: "main" }],
+      },
+      {
+        installationId: ORG,
+        accountLogin: "acme",
+        accountType: "Organization",
+        accountId: 500,
+        repos: [{ id: ORG * 10, fullName: `acct-${ORG}/repo`, private: true, defaultBranch: "main" }],
+      },
+    ]);
+    expect(result.skippedInstallations).toBe(3);
+    expect(urls).toEqual([
+      "/login/oauth/access_token",
+      "/user",
+      "/user/installations",
+      `/user/installations/${OWN}/repositories`,
+      `/user/installations/${ORG}/repositories`,
+    ]);
+    expect(urls).not.toContain(`/user/installations/${OTHER}/repositories`);
+    expect(urls).not.toContain(`/user/installations/${ENTERPRISE}/repositories`);
+    // The one-time token is never part of the result.
+    expect(JSON.stringify(result)).not.toContain(USER_TOKEN);
+  });
+
+  it("a list holding only another person's personal installation yields nothing and no repo call", async () => {
+    const urls: string[] = [];
+    const fetchMock = vi.fn<FetchLike>(async (input) => {
+      const url = new URL(String(input));
+      urls.push(url.pathname);
+      if (url.pathname === "/login/oauth/access_token") {
+        return jsonResponse({ access_token: USER_TOKEN, token_type: "bearer" });
+      }
+      if (url.pathname === "/user") return jsonResponse({ id: 1, login: "me" });
+      if (url.pathname === "/user/installations") {
+        return jsonResponse({
+          total_count: 1,
+          installations: [{ id: OTHER, account: { id: 2, login: "me", type: "User" } }],
+        });
+      }
+      throw new Error(`unexpected call ${url.pathname}`);
+    });
+    const result = await resolveUserAccess({ clientId: "a", clientSecret: "b", code: "c", fetch: fetchMock });
+    expect(result.installations).toEqual([]);
+    expect(result.skippedInstallations).toBe(1);
+    expect(urls.some((path) => path.endsWith("/repositories"))).toBe(false);
   });
 });

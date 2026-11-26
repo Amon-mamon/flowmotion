@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const push = vi.fn();
@@ -62,6 +62,29 @@ describe("ProjectView", () => {
     expect(document.querySelector("b")).toBeNull();
     expect(document.querySelector('[data-notice="reconnect"]')).toHaveTextContent("Reconnect GitHub to analyze");
     expect(screen.getByRole("link", { name: "Reconnect GitHub" })).toHaveAttribute("href", "/api/github/install");
+  });
+
+  it("installationId null: reconnect notice shows both sentences (Phase 1.2, D-45)", async () => {
+    serve(invalidProject);
+    renderWithQuery(<ProjectView projectId={invalidProject.id} />);
+    const notice = await waitFor(() => {
+      const el = document.querySelector('[data-notice="reconnect"]') as HTMLElement | null;
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(within(notice).getByText("Reconnect GitHub to analyze")).toBeInTheDocument();
+    expect(
+      within(notice).getByText(
+        "If this repository is on someone else's personal GitHub account, Flow Motion can no longer analyze it. Its past results stay here until you delete the project.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("with an installation: no reconnect notice and no Phase 1.2 sentence", async () => {
+    serve(pendingProject);
+    renderWithQuery(<ProjectView projectId={pendingProject.id} />);
+    expect(await screen.findByRole("heading", { level: 1, name: "acme/storefront" })).toBeInTheDocument();
+    expect(screen.queryByText(/someone else's personal GitHub account/)).not.toBeInTheDocument();
   });
 
   it("not found state", async () => {

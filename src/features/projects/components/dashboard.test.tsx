@@ -154,10 +154,16 @@ describe("Phase 1.1 dashboard", () => {
     mockParams = new URLSearchParams("error=github_none");
     mockFetch([{ match: isProjects, respond: () => ok({ projects }) }]);
     renderWithQuery(<DashboardView />);
-    expect(
-      await screen.findByText(/Flow Motion is not installed on any GitHub account you can access\. Install it first\./),
-    ).toBeInTheDocument();
-    const notice = document.querySelector('[data-notice="github-none"]') as HTMLElement;
+    const notice = await waitFor(() => {
+      const el = document.querySelector('[data-notice="github-none"]') as HTMLElement | null;
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    // Exact Phase 1.2 copy (design.md) followed by the link.
+    expect(notice).toHaveTextContent(
+      /^Flow Motion is not installed on your GitHub account or on an organization you belong to\. Install it first\. Connect GitHub$/,
+    );
+    expect(screen.queryByText(/any GitHub account you can access/)).not.toBeInTheDocument();
     expect(within(notice).getByRole("link", { name: "Connect GitHub" })).toHaveAttribute("href", "/api/github/install");
   });
 });
@@ -231,5 +237,35 @@ describe("Dashboard GitHub notices (D-22, D-23)", () => {
       "You are signed in to GitHub with a different account than the one linked to Flow Motion. Switch accounts on GitHub, or disconnect the linked installations in Settings first.",
     );
     expect(within(notice).getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+  });
+});
+
+describe("Phase 1.2 GitHub account isolation (D-43, D-44, D-45)", () => {
+  it("error=github_in_use: plain notice with the exact copy, no link", async () => {
+    mockParams = new URLSearchParams("error=github_in_use");
+    mockFetch([{ match: isProjects, respond: () => ok({ projects }) }]);
+    renderWithQuery(<DashboardView />);
+    const notice = await waitFor(() => {
+      const el = document.querySelector('[data-notice="github-in-use"]') as HTMLElement | null;
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(notice).toHaveTextContent(
+      /^This GitHub account is already linked to another Flow Motion account\. Sign in to Flow Motion with that account, or disconnect GitHub in its Settings first\. To use a different GitHub account, switch accounts on GitHub and try again\.$/,
+    );
+    expect(within(notice).queryByRole("link")).not.toBeInTheDocument();
+    expect(notice).not.toHaveAttribute("role", "alert");
+    expect(screen.queryByText("Could not connect GitHub. Try again.")).not.toBeInTheDocument();
+  });
+
+  it("a card with installationId null shows Not connected to GitHub; one with an installation does not", async () => {
+    mockFetch([{ match: isProjects, respond: () => ok({ projects }) }]);
+    renderWithQuery(<DashboardView />);
+    const cards = await screen.findAllByTestId("project-card");
+    expect(cards).toHaveLength(3);
+    // projects = [pending (installed), valid (installed), invalid (installationId null)]; never hidden.
+    expect(within(cards[2]!).getByText("Not connected to GitHub")).toBeInTheDocument();
+    expect(within(cards[0]!).queryByText("Not connected to GitHub")).not.toBeInTheDocument();
+    expect(within(cards[1]!).queryByText("Not connected to GitHub")).not.toBeInTheDocument();
   });
 });

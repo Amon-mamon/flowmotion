@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircleIcon, CheckCircle2Icon, LinkIcon } from "lucide-react";
+import { AlertCircleIcon, CheckCircle2Icon, InfoIcon, LinkIcon } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
@@ -42,6 +42,19 @@ export function DashboardNotices() {
       </Alert>
     );
   }
+  if (params.get("error") === "github_in_use") {
+    // Plain notice (design.md, D-44): no link, never names the other account.
+    return (
+      <Alert role="status" data-notice="github-in-use">
+        <InfoIcon aria-hidden="true" />
+        <AlertDescription>
+          This GitHub account is already linked to another Flow Motion account. Sign in to Flow Motion with that
+          account, or disconnect GitHub in its Settings first. To use a different GitHub account, switch accounts on
+          GitHub and try again.
+        </AlertDescription>
+      </Alert>
+    );
+  }
   if (params.get("error") === "github") {
     return (
       <Alert variant="destructive">
@@ -55,7 +68,8 @@ export function DashboardNotices() {
       <Alert variant="destructive" data-notice="github-none">
         <AlertCircleIcon aria-hidden="true" />
         <AlertDescription>
-          Flow Motion is not installed on any GitHub account you can access. Install it first.{" "}
+          Flow Motion is not installed on your GitHub account or on an organization you belong to. Install it
+          first.{" "}
           {/* Plain anchor: this route redirects to GitHub and must not be prefetched. */}
           <a href="/api/github/install">Connect GitHub</a>
         </AlertDescription>

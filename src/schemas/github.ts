@@ -193,14 +193,27 @@ export const ghOAuthTokenResponseSchema = z.object({
   token_type: z.string(),
 });
 
-/** GET /user/installations */
+/**
+ * GET /user/installations item (Phase 1.2, D-43). Parsed one by one by the
+ * caller: an item that fails, or has a null account, is skipped and counted,
+ * never a whole-page failure. `account.type` is any non-empty string here;
+ * only `User` (own id) and `Organization` are linkable.
+ */
 export const ghUserInstallationSchema = z.object({
   id: z.number().int().positive(),
-  account: z.object({ login: z.string().min(1) }),
+  account: z
+    .object({
+      id: z.number().int().positive(),
+      login: z.string().min(1),
+      type: z.string().min(1),
+    })
+    .nullable(),
 });
+export type GhUserInstallation = z.infer<typeof ghUserInstallationSchema>;
+/** Page structure is strict; each item is validated by the caller. */
 export const ghUserInstallationsSchema = z.object({
   total_count: z.number().int().nonnegative(),
-  installations: z.array(ghUserInstallationSchema),
+  installations: z.array(z.unknown()),
 });
 
 /** GET /user (D-22): the GitHub account behind the one-time user token. */

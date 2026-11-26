@@ -1,6 +1,6 @@
 "use client";
 
-import { GitBranchIcon, MoreHorizontalIcon, Trash2Icon } from "lucide-react";
+import { GitBranchIcon, MoreHorizontalIcon, Trash2Icon, UnplugIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -12,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { COPY } from "@/features/analysis/copy";
 import { DeleteProjectDialog } from "@/features/projects/components/delete-project-dialog";
 import { ProjectStatusBadge } from "@/features/projects/components/project-status-badge";
 import type { Project } from "@/features/projects/schemas";
@@ -63,6 +64,12 @@ export function ProjectCard({ project }: { project: Project }) {
             {project.branch}
           </span>
         </p>
+        {project.installationId === null ? (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="project-not-connected">
+            <UnplugIcon aria-hidden="true" className="size-4 shrink-0" />
+            <span>{COPY.notConnected}</span>
+          </p>
+        ) : null}
       </CardContent>
       <CardFooter className="justify-between text-xs text-muted-foreground">
         <span>Added {formatDate(project.createdAt)}</span>

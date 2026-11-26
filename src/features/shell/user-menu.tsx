@@ -8,6 +8,7 @@ import { describeError } from "@/features/api/client";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -58,7 +59,10 @@ export function UserMenu({ onNavigate }: { onNavigate?: () => void }) {
         <ChevronsUpDownIcon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" className="w-56">
-        <DropdownMenuLabel className="truncate">{profile.data?.email ?? "Signed in"}</DropdownMenuLabel>
+        {/* Base UI requires Menu.GroupLabel to sit inside a Menu.Group. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="truncate">{profile.data?.email ?? "Signed in"}</DropdownMenuLabel>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           render={<Link href="/settings" onClick={onNavigate} />}

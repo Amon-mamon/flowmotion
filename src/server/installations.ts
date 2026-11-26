@@ -43,29 +43,6 @@ export async function getInstallationForUser(
   return installationRowSchema.parse(data);
 }
 
-/** Upsert on (user_id, installation_id); returns the row. */
-export async function upsertInstallation(input: {
-  userId: string;
-  installationId: number;
-  accountLogin: string;
-}): Promise<InstallationRow> {
-  const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("github_installations")
-    .upsert(
-      {
-        user_id: input.userId,
-        installation_id: input.installationId,
-        account_login: input.accountLogin,
-      },
-      { onConflict: "user_id,installation_id" },
-    )
-    .select(INSTALLATION_COLUMNS)
-    .single();
-  if (error !== null) throw new Error(`installation upsert failed: ${error.code ?? "unknown"}`);
-  return installationRowSchema.parse(data);
-}
-
 /** Deletes the user's row; projects get installation_id = null via FK. */
 export async function deleteInstallationForUser(userId: string, id: string): Promise<void> {
   const supabase = createAdminClient();
@@ -100,9 +77,23 @@ export class GitHubAccountMismatchError extends Error {
   }
 }
 
+/**
+ * The callback's GitHub account is already held by another Flow Motion
+ * account (D-44). Nothing was written.
+ */
+export class GitHubAccountInUseError extends Error {
+  constructor() {
+    super("github_in_use");
+    this.name = "GitHubAccountInUseError";
+  }
+}
+
 export interface LinkInstallationInput {
   installationId: number;
   accountLogin: string;
+  /** Account the installation is on (D-43); only linkable types. */
+  accountType: "User" | "Organization";
+  accountId: number;
   repos: readonly { id: number; fullName: string; private: boolean; defaultBranch: string }[];
 }
 
@@ -112,9 +103,11 @@ const linkResultSchema = z.array(
 
 /**
  * Calls the service-role-only `link_github_installations()` (contract
- * section 5): one transaction that upserts the listed installations,
- * replaces each repo set, clears the sets of the user's other rows, and
- * writes nothing on a GitHub account mismatch. Returns the GitHub ids of
+ * section 5, Phase 1.2): one transaction that upserts the listed
+ * installations, replaces each repo set, deletes the user's unlisted rows
+ * linked before Phase 1.2 and clears the other unlisted rows, and writes
+ * nothing on a GitHub account mismatch (D-22), a GitHub account held by
+ * another Flow Motion user (D-44), or a non-linkable item (D-43). Returns the GitHub ids of
  * rows that were newly inserted.
  */
 export async function linkGithubInstallations(input: {
@@ -131,6 +124,8 @@ export async function linkGithubInstallations(input: {
     p_installations: input.installations.map((item) => ({
       installationId: item.installationId,
       accountLogin: item.accountLogin,
+      accountType: item.accountType,
+      accountId: item.accountId,
       repos: item.repos.map((repo) => ({
         id: repo.id,
         fullName: repo.fullName,
@@ -140,8 +135,13 @@ export async function linkGithubInstallations(input: {
     })),
   });
   if (error !== null) {
-    if (typeof error.message === "string" && error.message.includes("github_account_mismatch")) {
-      throw new GitHubAccountMismatchError();
+    const message = typeof error.message === "string" ? error.message : "";
+    if (message.includes("github_account_mismatch")) throw new GitHubAccountMismatchError();
+    if (message.includes("github_in_use")) throw new GitHubAccountInUseError();
+    // Fail-closed backstop of the linking rule (D-43): a plain failure,
+    // logged by code only.
+    if (message.includes("installation_not_allowed")) {
+      throw new Error("link_github_installations failed: installation_not_allowed");
     }
     throw new Error(`link_github_installations failed: ${error.code ?? "unknown"}`);
   }

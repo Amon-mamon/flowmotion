@@ -18,6 +18,8 @@ vi.mock("@/lib/env.server", () => ({ getServerEnv: () => env }));
 type InstallationAccess = {
   installationId: number;
   accountLogin: string;
+  accountType: "User" | "Organization";
+  accountId: number;
   repos: { id: number; fullName: string; private: boolean; defaultBranch: string }[];
 };
 type AccessSync = {
@@ -25,6 +27,7 @@ type AccessSync = {
   installations: InstallationAccess[];
   droppedRepos: number;
   truncatedRepos: number;
+  skippedInstallations: number;
 };
 const {
   deleteByGitHubId,
@@ -55,6 +58,8 @@ const {
 vi.mock("@/server/installations", async (importOriginal) => ({
   GitHubAccountMismatchError: (await importOriginal<typeof import("@/server/installations")>())
     .GitHubAccountMismatchError,
+  GitHubAccountInUseError: (await importOriginal<typeof import("@/server/installations")>())
+    .GitHubAccountInUseError,
   deleteInstallationsByGitHubId: deleteByGitHubId,
   revokeInstallationRepos: revokeRepos,
   linkGithubInstallations: linkInstallations,
@@ -84,7 +89,7 @@ import { GET as callback } from "@/app/api/github/installations/callback/route";
 import { GET as authorize } from "@/app/api/github/authorize/route";
 import { GET as install } from "@/app/api/github/install/route";
 import { POST as webhook } from "@/app/api/github/webhook/route";
-import { GitHubAccountMismatchError } from "@/server/installations";
+import { GitHubAccountInUseError, GitHubAccountMismatchError } from "@/server/installations";
 import { ApiError } from "@/server/http";
 
 const ctx = { params: Promise.resolve({}) };
@@ -335,6 +340,14 @@ describe("GET /api/github/installations/callback", () => {
     installations,
     droppedRepos: 0,
     truncatedRepos: 0,
+    skippedInstallations: 0,
+  });
+  const org = (installationId: number, accountLogin: string, repos: InstallationAccess["repos"] = []): InstallationAccess => ({
+    installationId,
+    accountLogin,
+    accountType: "Organization",
+    accountId: installationId + 1000,
+    repos,
   });
 
   beforeEach(() => {
@@ -379,7 +392,7 @@ describe("GET /api/github/installations/callback", () => {
   });
 
   it("installation_id not in the user's installations → error redirect, nothing stored", async () => {
-    resolveAccess.mockResolvedValue(sync([{ installationId: 5, accountLogin: "someone", repos: [] }]));
+    resolveAccess.mockResolvedValue(sync([org(5, "someone")]));
     const response = await callback(callbackRequest(goodQuery, COOKIE), ctx);
     expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
     expect(linkInstallations).not.toHaveBeenCalled();
@@ -403,8 +416,8 @@ describe("GET /api/github/installations/callback", () => {
 
   it("valid state → links every installation with its repo set and the GitHub user, audits, connected=1", async () => {
     const installations = [
-      { installationId: 77, accountLogin: "octo", repos: [repo(1, "octo/a")] },
-      { installationId: 88, accountLogin: "octo-org", repos: [repo(2, "octo-org/b"), repo(3, "octo-org/c")] },
+      org(77, "octo", [repo(1, "octo/a")]),
+      org(88, "octo-org", [repo(2, "octo-org/b"), repo(3, "octo-org/c")]),
     ];
     resolveAccess.mockResolvedValue(sync(installations));
     linkInstallations.mockResolvedValueOnce([88]);
@@ -424,7 +437,7 @@ describe("GET /api/github/installations/callback", () => {
   });
 
   it("valid state without installation_id (authorize / refresh) → links all listed", async () => {
-    const installations = [{ installationId: 77, accountLogin: "octo", repos: [repo(1, "octo/a")] }];
+    const installations = [org(77, "octo", [repo(1, "octo/a")])];
     resolveAccess.mockResolvedValue(sync(installations));
     const response = await callback(callbackRequest(`state=${STATE}&code=abc`, COOKIE), ctx);
     expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?connected=1");
@@ -440,7 +453,7 @@ describe("GET /api/github/installations/callback", () => {
   });
 
   it("different GitHub account than the one linked → ?error=github_account, nothing audited", async () => {
-    resolveAccess.mockResolvedValue(sync([{ installationId: 77, accountLogin: "octo", repos: [] }]));
+    resolveAccess.mockResolvedValue(sync([org(77, "octo")]));
     linkInstallations.mockRejectedValueOnce(new GitHubAccountMismatchError());
     const response = await callback(callbackRequest(goodQuery, COOKIE), ctx);
     expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github_account");
@@ -450,7 +463,7 @@ describe("GET /api/github/installations/callback", () => {
 
   it("never logs anything token-like or repo names", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
-    resolveAccess.mockResolvedValue(sync([{ installationId: 77, accountLogin: "octo", repos: [repo(1, "octo/secret-repo")] }]));
+    resolveAccess.mockResolvedValue(sync([org(77, "octo", [repo(1, "octo/secret-repo")])]));
     await callback(callbackRequest(goodQuery, COOKIE), ctx);
     const logged = JSON.stringify(info.mock.calls);
     expect(logged).not.toContain("secret-repo");
@@ -476,7 +489,7 @@ describe("GET /api/github/installations/callback", () => {
   });
 
   it("database failure while linking → error redirect with cookie cleared", async () => {
-    resolveAccess.mockResolvedValue(sync([{ installationId: 77, accountLogin: "octo", repos: [] }]));
+    resolveAccess.mockResolvedValue(sync([org(77, "octo")]));
     linkInstallations.mockRejectedValueOnce(new Error("db"));
     const response = await callback(callbackRequest(goodQuery, COOKIE), ctx);
     expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
@@ -488,6 +501,44 @@ describe("GET /api/github/installations/callback", () => {
     const response = await callback(callbackRequest(goodQuery, COOKIE), ctx);
     expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
     cleared(response);
+  });
+
+  it("GitHub account held by another Flow Motion account → ?error=github_in_use, no audit, cookie cleared (D-44)", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    resolveAccess.mockResolvedValue(sync([org(77, "octo")]));
+    linkInstallations.mockRejectedValueOnce(new GitHubAccountInUseError());
+    const response = await callback(callbackRequest(goodQuery, COOKIE), ctx);
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github_in_use");
+    expect(audit).not.toHaveBeenCalled();
+    cleared(response);
+    expect(JSON.stringify(info.mock.calls)).toContain("github_in_use");
+  });
+
+  it("installation_not_allowed from the function (fail-closed backstop) → ?error=github, no audit", async () => {
+    resolveAccess.mockResolvedValue(sync([org(77, "octo")]));
+    linkInstallations.mockRejectedValueOnce(new Error("link_github_installations failed: installation_not_allowed"));
+    const response = await callback(callbackRequest(goodQuery, COOKIE), ctx);
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
+    expect(audit).not.toHaveBeenCalled();
+    cleared(response);
+  });
+
+  it("installation_id of a skipped (not linkable) installation → ?error=github, link never called", async () => {
+    // resolveUserAccess returns only linkable installations; 77 was skipped.
+    resolveAccess.mockResolvedValue({ ...sync([org(88, "acme")]), skippedInstallations: 1 });
+    const response = await callback(callbackRequest(goodQuery, COOKIE), ctx);
+    expect(response.headers.get("location")).toBe("https://app.example.com/dashboard?error=github");
+    expect(linkInstallations).not.toHaveBeenCalled();
+  });
+
+  it("logs the skipped count, never an account login", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    resolveAccess.mockResolvedValue({ ...sync([org(77, "login-never-logged")]), skippedInstallations: 2 });
+    await callback(callbackRequest(goodQuery, COOKIE), ctx);
+    const logged = JSON.stringify(info.mock.calls);
+    expect(logged).toContain('"skipped":2');
+    expect(logged).not.toContain("login-never-logged");
+    expect(logged).not.toContain("octocat");
   });
 
   it("signed out → /login and the state cookie is cleared (R11-7)", async () => {

@@ -11,7 +11,11 @@ import {
 } from "@/server/github/state";
 import { resolveUserAccess, type UserAccessSync } from "@/server/github/user-auth";
 import { withApi } from "@/server/http";
-import { GitHubAccountMismatchError, linkGithubInstallations } from "@/server/installations";
+import {
+  GitHubAccountInUseError,
+  GitHubAccountMismatchError,
+  linkGithubInstallations,
+} from "@/server/installations";
 import { logServerError, logServerInfo } from "@/server/log";
 import { RATE_LIMITS, enforceIpLimit } from "@/server/rate-limit";
 import { installationCallbackQuerySchema } from "@/schemas/github";
@@ -23,11 +27,14 @@ import { installationCallbackQuerySchema } from "@/schemas/github";
  *     installation" (S11-3).
  *  2. `state` present: verify it against the fm_gh_state cookie (user and
  *     state, constant time); with the one-time user token read the GitHub
- *     user, every installation of this App the user can access, and each
- *     installation's repos accessible to that user; a given
- *     `installation_id` must be in the list; then one atomic
- *     `link_github_installations()` call replaces the access sets. A
- *     different GitHub account than the one already linked binds nothing.
+ *     user, the linkable installations of this App (own personal account
+ *     or an organization, D-43), and each linkable installation's repos
+ *     accessible to that user; a given `installation_id` must be in the
+ *     linkable list; then one atomic `link_github_installations()` call
+ *     replaces the access sets. A different GitHub account than the one
+ *     already linked binds nothing (?error=github_account); a GitHub account
+ *     held by another Flow Motion account binds nothing (?error=github_in_use,
+ *     D-44).
  *  3. Any other failure → /dashboard?error=github, never JSON.
  * The state cookie is cleared on every outcome, including signed out (R11-7).
  * The user token never leaves resolveUserAccess and is never logged.
@@ -79,6 +86,7 @@ export const GET = withApi("github.installations.callback", async (request) => {
       return failure("ownership_check_failed");
     }
 
+    // `sync.installations` holds only linkable installations (D-43).
     const requested = query.data.installation_id;
     if (requested !== undefined && !sync.installations.some((item) => item.installationId === requested)) {
       return failure("not_owner");
@@ -98,6 +106,10 @@ export const GET = withApi("github.installations.callback", async (request) => {
         logServerInfo("github.installations.callback", { userId: user.id, result: "github_account_mismatch" });
         return finish(NextResponse.redirect(new URL("/dashboard?error=github_account", env.APP_URL)));
       }
+      if (error instanceof GitHubAccountInUseError) {
+        logServerInfo("github.installations.callback", { userId: user.id, result: "github_in_use" });
+        return finish(NextResponse.redirect(new URL("/dashboard?error=github_in_use", env.APP_URL)));
+      }
       throw error;
     }
 
@@ -113,6 +125,7 @@ export const GET = withApi("github.installations.callback", async (request) => {
       repos: sync.installations.reduce((sum, item) => sum + item.repos.length, 0),
       droppedRepos: sync.droppedRepos,
       truncatedRepos: sync.truncatedRepos,
+      skipped: sync.skippedInstallations,
     });
 
     if (sync.installations.length === 0) {

@@ -2,10 +2,10 @@
 
 Single list for "what is still not built?". Update it whenever something is deferred or finished. Phase plans live in `docs/contract.md` section 11; progress in `docs/status.md`; open owner questions in `docs/open-questions.md`.
 
-Last updated: 2026-11-27.
+Last updated: 2026-11-27 (after Phase 1.2).
 
 ## Planned and approved (build order)
-1. **Phase 1.2: GitHub account isolation** (security fix, in progress). D-43..D-45.
+1. ~~Phase 1.2: GitHub account isolation~~ done 2026-11-27 (D-43..D-45). Owner and teammate must each click "Refresh repository access" once.
 2. **Phase 3a review fixes:** R3a-1 (canvas clicks), R3a-2 and S3a-1 (scanner gaps), plus lows. See `README-RESUME.md`.
 3. **Phase 2e: own AI key** (Integrations page, OpenRouter + Anthropic, any model, free and paid). Approved 2026-11-27; details in `FEATURE-PROPOSAL.md`.
 4. **Phase 3b: flow generation** (Generate button, generate/flows/export API, migration `20261126000000_phase3_flows.sql`).
@@ -35,6 +35,7 @@ Last updated: 2026-11-27.
 - Before real users: no `ANALYSIS_PROVIDER=openrouter` or `OPENROUTER_API_KEY` on Vercel or worker secrets (system key).
 
 ## Small known items
+- Phase 1.2 lows (next backend round): R12-1 / S12-3 run the RLS suite against a real database so the new link-function SQL actually executes, plus a concurrent two-account link test; R12-2 align the test fake with the SQL function; R12-3 / S12-2 the analysis worker does not re-check repo access or account type at run time; S12-1 push events still update projects on not-yet-refreshed old installation rows; R12-4 status.md typo.
 - Next.js warning about `scroll-behavior: smooth` on `<html>` (add `data-scroll-behavior="smooth"`).
 - Billed model calls cut off mid-generation may skip a `usage_events` row (S2d-2); revisit with billing.
 - The `.env.local.bak-2026-11-22` backup can be deleted.

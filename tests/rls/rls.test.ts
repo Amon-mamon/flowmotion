@@ -135,6 +135,11 @@ interface Seeded {
 
 const noSession = { auth: { persistSession: false, autoRefreshToken: false } };
 
+/** A GitHub user id no other test (or earlier run) holds (D-44). */
+function randomGithubId(): number {
+  return Math.floor(Math.random() * 1e12) + 1_000_000;
+}
+
 describe.skipIf(!configured)("RLS (skipped: no local Supabase)", () => {
   let admin: SupabaseClient;
   let anon: SupabaseClient;
@@ -322,13 +327,14 @@ describe.skipIf(!configured)("RLS (skipped: no local Supabase)", () => {
     const e = await seedUser("e");
     try {
       await admin.from("github_installations").delete().eq("user_id", e.userId);
+      const gid = randomGithubId();
       const link = (installationId: number) =>
         admin.rpc("link_github_installations", {
           p_user_id: e.userId,
-          p_github_user_id: 99,
+          p_github_user_id: gid,
           p_github_user_login: "octocat",
           p_installations: [
-            { installationId, accountLogin: "org", repos: [{ id: installationId, fullName: "org/r", private: false, defaultBranch: "main" }] },
+            { installationId, accountLogin: "org", accountType: "Organization", accountId: 515000, repos: [{ id: installationId, fullName: "org/r", private: false, defaultBranch: "main" }] },
           ],
         });
       const results = await Promise.all([link(515151), link(515151)]);
@@ -511,8 +517,9 @@ describe.skipIf(!configured)("RLS (skipped: no local Supabase)", () => {
       expect(result.error).not.toBeNull();
     });
 
-    it("link_github_installations replaces the set, clears unlisted rows, and refuses another GitHub account", async () => {
+    it("link_github_installations replaces the set, deletes the unlisted pre-Phase-1.2 row, and refuses another GitHub account", async () => {
       const d = await seedUser("d");
+      const gid = randomGithubId();
       try {
         const link = (githubUserId: number, repos: { id: number; fullName: string }[]) =>
           admin.rpc("link_github_installations", {
@@ -523,23 +530,26 @@ describe.skipIf(!configured)("RLS (skipped: no local Supabase)", () => {
               {
                 installationId: 424242,
                 accountLogin: "octo-org",
+                accountType: "Organization",
+                accountId: 424200,
                 repos: repos.map((repo) => ({ ...repo, private: true, defaultBranch: "main" })),
               },
             ],
           });
-        const first = await must(link(77, [{ id: 1, fullName: "octo-org/a" }, { id: 2, fullName: "octo-org/b" }]));
+        const first = await must(link(gid, [{ id: 1, fullName: "octo-org/a" }, { id: 2, fullName: "octo-org/b" }]));
         expect(first).toEqual([{ installation_id: 424242, inserted: true }]);
-        await must(link(77, [{ id: 3, fullName: "octo-org/c" }]));
+        await must(link(gid, [{ id: 3, fullName: "octo-org/c" }]));
         const rows = (await must(
           admin.from("github_installation_repos").select("repo_full_name").eq("user_id", d.userId),
         )) as { repo_full_name: string }[];
         expect(rows.map((row) => row.repo_full_name).sort()).toEqual(["octo-org/c"]);
-        // The seeded row (installation not listed) was cleared and needs a refresh.
-        const seeded = (await must(
-          admin.from("github_installations").select("repos_synced_at").eq("id", d.ids.github_installations).single(),
-        )) as { repos_synced_at: string | null };
-        expect(seeded.repos_synced_at).toBeNull();
-        const mismatch = await link(78, [{ id: 9, fullName: "octo-org/z" }]);
+        // The seeded row (unclassified, not listed) was deleted (D-45); its project is detached.
+        expect(await countRows("github_installations", "id", d.ids.github_installations)).toBe(0);
+        const project = (await must(
+          admin.from("projects").select("installation_id").eq("id", d.ids.projects).single(),
+        )) as { installation_id: string | null };
+        expect(project.installation_id).toBeNull();
+        const mismatch = await link(gid + 1, [{ id: 9, fullName: "octo-org/z" }]);
         expect(mismatch.error?.message ?? "").toContain("github_account_mismatch");
         const after = (await must(
           admin.from("github_installation_repos").select("repo_full_name").eq("user_id", d.userId),
@@ -548,6 +558,175 @@ describe.skipIf(!configured)("RLS (skipped: no local Supabase)", () => {
       } finally {
         await admin.auth.admin.deleteUser(d.userId);
       }
+    });
+  });
+
+  describe("Phase 1.2 GitHub account isolation (D-43, D-44, D-45)", () => {
+    type Item = { installationId: number; accountType: string; accountId: number; repoIds?: number[] };
+    const link = (userId: string, githubUserId: number, items: Item[]) =>
+      admin.rpc("link_github_installations", {
+        p_user_id: userId,
+        p_github_user_id: githubUserId,
+        p_github_user_login: "octocat",
+        p_installations: items.map((item) => ({
+          installationId: item.installationId,
+          accountLogin: `acct-${item.installationId}`,
+          accountType: item.accountType,
+          accountId: item.accountId,
+          repos: (item.repoIds ?? []).map((id) => ({ id, fullName: `acct/r${id}`, private: true, defaultBranch: "main" })),
+        })),
+      });
+    const instId = () => Math.floor(Math.random() * 1e9) + 1;
+    const rowsOf = async (userId: string) =>
+      (await must(
+        admin
+          .from("github_installations")
+          .select("id, installation_id, account_type, account_id, github_user_id, repos_synced_at")
+          .eq("user_id", userId)
+          .order("installation_id"),
+      )) as { id: string; installation_id: number; account_type: string | null; account_id: number | null; github_user_id: number | null; repos_synced_at: string | null }[];
+    const repoCount = (installationRowId: string) => countRows("github_installation_repos", "installation_id", installationRowId);
+
+    async function withUsers(tags: string[], run: (users: Seeded[]) => Promise<void>) {
+      const users: Seeded[] = [];
+      try {
+        for (const tag of tags) {
+          const user = await seedUser(tag);
+          // Start without the seeded (unclassified) installation row.
+          await must(admin.from("github_installations").delete().eq("user_id", user.userId).select("id"));
+          users.push(user);
+        }
+        await run(users);
+      } finally {
+        for (const user of users) await admin.auth.admin.deleteUser(user.userId);
+      }
+    }
+
+    it("(i) a second user linking a held GitHub account → github_in_use, nothing written, holder unchanged", async () => {
+      await withUsers(["p12a", "p12b"], async ([ua, ub]) => {
+        const g = randomGithubId();
+        const org = instId();
+        await must(link(ua!.userId, g, [{ installationId: org, accountType: "Organization", accountId: 5, repoIds: [1] }]));
+        const before = await rowsOf(ua!.userId);
+        const result = await link(ub!.userId, g, [{ installationId: org, accountType: "Organization", accountId: 5, repoIds: [1] }]);
+        expect(result.error?.message ?? "").toContain("github_in_use");
+        expect(await rowsOf(ub!.userId)).toEqual([]);
+        expect(await rowsOf(ua!.userId)).toEqual(before);
+        // Checked even with no installations listed.
+        const empty = await link(ub!.userId, g, []);
+        expect(empty.error?.message ?? "").toContain("github_in_use");
+      });
+    });
+
+    it("(ii) after the holder deletes all its rows, another user links the GitHub account; the first then gets github_in_use", async () => {
+      await withUsers(["p12c", "p12d"], async ([ua, ub]) => {
+        const g = randomGithubId();
+        const own = instId();
+        await must(link(ua!.userId, g, [{ installationId: own, accountType: "User", accountId: g }]));
+        await must(admin.from("github_installations").delete().eq("user_id", ua!.userId).select("id"));
+        await must(link(ub!.userId, g, [{ installationId: own, accountType: "User", accountId: g }]));
+        expect((await rowsOf(ub!.userId)).map((row) => row.github_user_id)).toEqual([g]);
+        const back = await link(ua!.userId, g, [{ installationId: own, accountType: "User", accountId: g }]);
+        expect(back.error?.message ?? "").toContain("github_in_use");
+        expect(await rowsOf(ua!.userId)).toEqual([]);
+      });
+    });
+
+    it("(iii) another person's personal installation → installation_not_allowed, nothing written", async () => {
+      await withUsers(["p12e"], async ([ua]) => {
+        const g = randomGithubId();
+        const ok = { installationId: instId(), accountType: "Organization", accountId: 5 };
+        const result = await link(ua!.userId, g, [ok, { installationId: instId(), accountType: "User", accountId: g + 1 }]);
+        expect(result.error?.message ?? "").toContain("installation_not_allowed");
+        for (const accountType of ["Enterprise", "Bot"]) {
+          const other = await link(ua!.userId, g, [{ installationId: instId(), accountType, accountId: 5 }]);
+          expect(other.error?.message ?? "").toContain("installation_not_allowed");
+        }
+        const missing = await admin.rpc("link_github_installations", {
+          p_user_id: ua!.userId,
+          p_github_user_id: g,
+          p_github_user_login: "octocat",
+          p_installations: [{ installationId: instId(), accountLogin: "x", repos: [] }],
+        });
+        expect(missing.error?.message ?? "").toContain("invalid_arguments");
+        expect(await rowsOf(ua!.userId)).toEqual([]);
+      });
+    });
+
+    it("(iv) a User row whose account_id differs from github_user_id violates github_installations_linkable_account", async () => {
+      await withUsers(["p12f"], async ([ua]) => {
+        const g = randomGithubId();
+        const base = { user_id: ua!.userId, installation_id: instId(), account_login: "x", github_user_id: g, github_user_login: "octocat" };
+        const bad = await admin.from("github_installations").insert({ ...base, account_type: "User", account_id: g + 1 });
+        expect(bad.error?.code).toBe("23514");
+        const enterprise = await admin.from("github_installations").insert({ ...base, account_type: "Enterprise", account_id: 5 });
+        expect(enterprise.error?.code).toBe("23514");
+        const syncedUnclassified = await admin
+          .from("github_installations")
+          .insert({ ...base, repos_synced_at: new Date().toISOString() });
+        expect(syncedUnclassified.error?.code).toBe("23514");
+        expect(await rowsOf(ua!.userId)).toEqual([]);
+      });
+    });
+
+    it("(v) cleanup: an unlisted pre-Phase-1.2 row is deleted with its project detached; a classified org row is kept, then only cleared", async () => {
+      await withUsers(["p12g"], async ([ua]) => {
+        const g = randomGithubId();
+        const x = instId();
+        const y = instId();
+        const legacy = (await must(
+          admin
+            .from("github_installations")
+            .insert({ user_id: ua!.userId, installation_id: x, account_login: "owner-person", github_user_id: g, github_user_login: "octocat" })
+            .select("id")
+            .single(),
+        )) as { id: string };
+        await must(
+          admin.from("github_installation_repos").insert({
+            user_id: ua!.userId, installation_id: legacy.id, repo_id: 77, repo_full_name: "owner-person/p", private: true, default_branch: "main",
+          }).select("repo_id"),
+        );
+        const project = (await must(
+          admin
+            .from("projects")
+            .insert({ user_id: ua!.userId, installation_id: legacy.id, repo_full_name: `owner-person/p-${crypto.randomUUID().slice(0, 8)}`, default_branch: "main", branch: "main" })
+            .select("id")
+            .single(),
+        )) as { id: string };
+        await must(link(ua!.userId, g, [{ installationId: y, accountType: "Organization", accountId: 5, repoIds: [1, 2] }]));
+        expect(await countRows("github_installations", "id", legacy.id)).toBe(0);
+        expect(await repoCount(legacy.id)).toBe(0);
+        const detached = (await must(admin.from("projects").select("installation_id").eq("id", project.id).single())) as { installation_id: string | null };
+        expect(detached.installation_id).toBeNull();
+        const kept = await rowsOf(ua!.userId);
+        expect(kept.map((row) => [row.installation_id, row.account_type, row.account_id])).toEqual([[y, "Organization", 5]]);
+        expect(await repoCount(kept[0]!.id)).toBe(2);
+
+        await must(link(ua!.userId, g, []));
+        const cleared = await rowsOf(ua!.userId);
+        expect(cleared.map((row) => [row.installation_id, row.repos_synced_at])).toEqual([[y, null]]);
+        expect(await repoCount(cleared[0]!.id)).toBe(0);
+      });
+    });
+
+    it("(vi) one org installation listed for two users with different GitHub ids is linked for both", async () => {
+      await withUsers(["p12h", "p12i"], async ([ua, ub]) => {
+        const org = instId();
+        await must(link(ua!.userId, randomGithubId(), [{ installationId: org, accountType: "Organization", accountId: 5, repoIds: [1] }]));
+        await must(link(ub!.userId, randomGithubId(), [{ installationId: org, accountType: "Organization", accountId: 5, repoIds: [2] }]));
+        expect((await rowsOf(ua!.userId)).map((row) => row.installation_id)).toEqual([org]);
+        expect((await rowsOf(ub!.userId)).map((row) => row.installation_id)).toEqual([org]);
+      });
+    });
+
+    it("(vii) A cannot read B's account_type / account_id", async () => {
+      const { data } = await a.client
+        .from("github_installations")
+        .select("id, account_type, account_id")
+        .eq("id", b.ids.github_installations);
+      expect(data ?? []).toEqual([]);
+      const own = await a.client.from("github_installations").select("account_type, account_id").eq("id", a.ids.github_installations);
+      expect(own.error).toBeNull();
     });
   });
 

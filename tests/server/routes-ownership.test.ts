@@ -114,7 +114,7 @@ const REPO_IDS: Record<string, number> = {
 
 function seedAccessSet(names: string[] = Object.keys(REPO_IDS), syncedAt: string | null = new Date().toISOString()) {
   const current = fake.createFakeDb();
-  current.installations.push({ ...installationRow, repos_synced_at: syncedAt });
+  current.installations.push({ ...installationRow, repos_synced_at: syncedAt, account_type: "Organization", account_id: 4242 });
   for (const name of names) {
     current.repos.push({
       user_id: USER_A,
