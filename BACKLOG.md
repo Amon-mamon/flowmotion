@@ -35,6 +35,7 @@ Last updated: 2026-11-27 (after Phase 1.2).
 - Before real users: no `ANALYSIS_PROVIDER=openrouter` or `OPENROUTER_API_KEY` on Vercel or worker secrets (system key).
 
 ## Small known items
+- **Releasing a GitHub account (found in live testing 2026-11-27):** uninstalling the App on GitHub only reaches Flow Motion through a webhook, which never arrives on `localhost`, and Settings "Disconnect" removes one installation at a time. A Flow Motion account that once linked another person's GitHub (two GitHub sessions in one browser) kept holding it, so the real owner got `github_in_use` and the other account got `github_account_mismatch`. Fixed by hand with SQL. Needed: a "Disconnect GitHub completely" action that deletes all of the user's installation rows, and a clearer error that says which action releases the account.
 - Phase 1.2 lows (next backend round): R12-1 / S12-3 run the RLS suite against a real database so the new link-function SQL actually executes, plus a concurrent two-account link test; R12-2 align the test fake with the SQL function; R12-3 / S12-2 the analysis worker does not re-check repo access or account type at run time; S12-1 push events still update projects on not-yet-refreshed old installation rows; R12-4 status.md typo.
 - Next.js warning about `scroll-behavior: smooth` on `<html>` (add `data-scroll-behavior="smooth"`).
 - Billed model calls cut off mid-generation may skip a `usage_events` row (S2d-2); revisit with billing.
