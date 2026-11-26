@@ -1,16 +1,12 @@
 "use client";
 
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { KeyRoundIcon } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { NodeIcon } from "@/features/flows/components/node-icon";
-import { FLOW_COPY } from "@/features/flows/copy";
+import { FlowNodeCardBody, FlowNodeTriggerTag } from "@/features/flows/components/flow-node-card-body";
 import {
   NODE_HEIGHT,
   NODE_WIDTH,
   handleOffset,
-  shortNodeType,
   sourceHandleId,
   targetHandleId,
   type FlowCanvasNode,
@@ -58,26 +54,9 @@ export function FlowNodeCard({ data }: NodeProps<FlowCanvasNode>) {
           selected ? "border-primary" : "border-border",
         )}
       >
-        <NodeIcon nodeType={node.nodeType} className="size-5 shrink-0 text-primary" />
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-sm font-medium">{node.label}</span>
-          <span className="truncate font-mono text-xs text-muted-foreground">{shortNodeType(node.nodeType)}</span>
-        </span>
-        {node.credential !== null ? (
-          <span className="shrink-0 text-muted-foreground" data-needs-credential="true">
-            <KeyRoundIcon aria-hidden="true" className="size-4" />
-            <span className="sr-only">Needs a credential</span>
-          </span>
-        ) : null}
+        <FlowNodeCardBody label={node.label} nodeType={node.nodeType} needsCredential={node.credential !== null} />
       </button>
-      {node.isTrigger ? (
-        <Badge
-          variant="outline"
-          className="pointer-events-none absolute -top-2.5 left-3 rounded-lg border-primary bg-background text-primary"
-        >
-          {FLOW_COPY.triggerTag}
-        </Badge>
-      ) : null}
+      {node.isTrigger ? <FlowNodeTriggerTag /> : null}
       {Array.from({ length: node.outputs }, (_, i) => (
         <Handle
           key={sourceHandleId(i)}

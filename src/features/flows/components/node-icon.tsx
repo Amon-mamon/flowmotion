@@ -30,7 +30,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { shortNodeType } from "@/features/flows/graph";
+import { shortNodeType } from "@/features/flows/node-type";
 
 /** Icon per allowed node type (docs/node-catalog.md); anything else gets the generic icon. */
 const NODE_ICON: Readonly<Record<string, LucideIcon>> = {

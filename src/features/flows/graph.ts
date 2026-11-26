@@ -9,11 +9,7 @@ export const NODE_HEIGHT = 72;
 export type FlowCanvasNode = Node<{ node: FlowNodeView }, "flowNode">;
 export type FlowCanvasEdge = Edge;
 
-/** "n8n-nodes-base.slack" → "slack" (the part after the last dot). */
-export function shortNodeType(nodeType: string): string {
-  const index = nodeType.lastIndexOf(".");
-  return index === -1 ? nodeType : nodeType.slice(index + 1);
-}
+export { shortNodeType } from "@/features/flows/node-type";
 
 export const sourceHandleId = (output: number) => `out-${output}`;
 export const targetHandleId = (input: number) => `in-${input}`;

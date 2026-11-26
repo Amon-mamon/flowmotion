@@ -118,6 +118,85 @@ Copy below is written in the case stored in source; mono labels are uppercased b
 - **Smooth scrolling:** Lenis on the landing page only, with the rules of D-56 (`contract.md` section 11, "Landing redesign", F11).
 - **Performance budget:** smooth 60 fps on a mid-range phone; `will-change: transform` only on the hero frame and the sticky visual; no layout reads in scroll handlers; the landing route imports no `@xyflow/react`, no TanStack Query hook, no Supabase client; Lenis is the only new script.
 
+### Landing motion identity (D-57; build scope `contract.md` section 11 "Landing motion identity")
+Added on top of the redesign above; copy, tokens, type, layout, section list, and the Lenis rules above are unchanged. Idea: **the page is a workflow.** One coral line runs down the page like an n8n edge, each section is a node it connects to, and small dots move along it like data. Everything stays precise and quiet: coral on black, thin strokes, no glow beyond the existing hero glow, no blur, no colour beyond the palette. Easing is always `cubic-bezier(0.16, 1, 0.3, 1)` (`EASE_OUT`); durations 200–600 ms unless stated.
+
+**Motion gates (one place, used by every item below):**
+| Gate | Rule |
+|---|---|
+| `mounted` | false on the server and during hydration (`useMounted`). Nothing below runs, renders a decorative layer, or hides content before it is true. |
+| `motion` | `mounted` and `prefers-reduced-motion: reduce` does not match (`useMotionAllowed`). Turning reduced motion on while the page is open switches every item to its reduced form at once. |
+| `finePointer` | `(hover: hover) and (pointer: fine)` matches (same query as Lenis, D-56). Required for mouse parallax and the magnetic button. |
+| `desktop` | `(min-width: 768px)`. Below it: the phone version. |
+| `wide` | `(min-width: 1280px)`. Required for the hero node chips (they need the side space beside the headline). |
+
+**Tip line.** One horizontal reference line at **60% of the viewport height** from the top. The flow line's drawn end follows it, a section node lights when the tip line reaches it, and that section's intro settles in at the same moment, so line and content always agree.
+
+**1. Flow line (page edge).**
+- One decorative SVG layer for the whole landing page, rendered by the landing page in a wrapper around the sections (Hero to Final CTA; not the header or footer), `position: absolute`, full width and height of that wrapper, `pointer-events: none`, painted behind all section content and above the page background.
+- **Route (desktop and phone, one rule):** starts at an **output handle** on the bottom edge of the hero product frame, horizontally centred (8 px circle, fill `--background`, 1.5 px `--accent` stroke). From there a vertical S-curve (cubic Bézier, like an n8n edge turned on its side: `M cx,y0 C cx,ym rail,ym rail,y1`) runs through the hero's bottom padding to the **rail**, then a straight vertical line down the rail to the Final CTA node, where it ends. The rail is the **middle of the left gutter of the 1200 px content container** (8 px from the container's outer left edge on phones, 16 px from 640 px), so the line never passes behind text, cards, or frames outside the hero curve. Nothing is drawn in the header, footer, or the right side.
+- **Look:** a **track** (the full path, 1 px `--border`) is always visible once the layer shows; the **drawn line** on top is `--accent`, 1.5 px on desktop and 1 px on phones, round caps.
+- **Drawing (motion on):** scroll-linked and reversible. The drawn length is the path length at the tip line's page position (`scrollY + 0.6 × viewport height`), clamped to 0..total. It is set through Motion `pathLength` from `useScroll` (native scroll, so Lenis smoothing carries over). Scrolling up undraws it.
+- **Reduced motion:** the drawn line is shown complete and static, every node is lit, no pulse, no dots. The layer appears with one 200 ms opacity fade after mount.
+
+**2. Section nodes.**
+- One node on the rail per section that follows the hero: How it works, Features, Security, Plans coming soon, FAQ, Final CTA. Its vertical position is the centre of the first line of the section's eyebrow (or of the H2 when the section has no eyebrow: Plans, Final CTA). Nodes live in the flow layer, never inside a section's DOM (so `#plans` stays exactly as specified).
+- **Look:** a rounded square, 10 px (8 px on phones), 3 px radius. Unlit: fill `--background`, 1 px `--border` stroke. Lit: fill and stroke `--accent`.
+- **Connect:** a node lights when the drawn line reaches it and unlights when the line retreats above it (scrolling up). When it lights, one **pulse** plays: a ring of the same shape, 1 px `--accent` stroke, no fill, `scale` 1 → 2.6 and `opacity` 0.6 → 0 over 600 ms `EASE_OUT`, centred on the node. If two or more nodes light in the same frame (anchor jump, loading `/#faq`, Home/End), they light without a pulse.
+
+**3. Data dots.**
+- Small dots travel along the **visible drawn part** of the line, from the top of the viewport (or the line's start, if lower) down to the drawn end, then restart at the top. They are always moving while the page is visible, also when the user is not scrolling.
+- Desktop: **4 dots**, 4 px diameter (`r` 2), 160 px/s. Phones: **2 dots**, 3 px diameter, 120 px/s. Dots are evenly spaced in time. Fill `--accent`; each fades in over its first 24 px and out over its last 24 px before the drawn end. When the visible drawn part is shorter than 120 px, no dots show.
+- Positions come from a lookup table of points along the path built when the path is measured; each frame only sets each dot's `transform` (and its opacity near the ends).
+- None under reduced motion. Paused while the tab is hidden.
+
+**4. Section intro settle and headline word reveal.**
+- When a section's node lights for the first time, its intro settles in, **once**: the H2 reveals **word by word** (each word `opacity` 0 → 1 and `y` 12 px → 0, 500 ms `EASE_OUT`, 40 ms between words, words after the eighth share the eighth word's delay); the eyebrow fades in with the first word; the lead follows (`opacity` 0 → 1, `y` 12 px → 0, 500 ms, starting 120 ms after the first word).
+- Applies to the intros of How it works, Features, Security, FAQ, and the Final CTA heading. **Not** to the hero H1 (it is the first thing on screen and the main paint), **not** to Plans coming soon (kept exactly static as specified), and not to step lists, cards, or FAQ items (they keep the motion above).
+- Any intro that is already above the tip line when motion starts (page loaded mid-way, anchor jump, back navigation) shows in its final state with no animation.
+- **Accessible name and text stay identical:** words are plain inline-block `<span>`s with ordinary space characters between them, inside the same heading element. No `aria-label` on the heading, no duplicated screen-reader text, no `aria-hidden` on the words. The heading's accessible name and `textContent` equal the copy exactly. Before mount and under reduced motion the heading is plain text with no word spans.
+
+**5. Hero assembly (wide screens, 1280 px and up).**
+- Four **node chips** (decorative, in the hero, behind the hero text): 40 px squares, 8 px radius, fill `--surface`, 1 px `--border`, each showing the existing `NodeIcon` (18 px, `--muted`) for `webhook`, `scheduleTrigger`, `httpRequest`, `slack`.
+- **Scattered state** (scroll at the top): chip centres at these fractions of the hero's text area (from the hero top to the product frame's top): (0.06, 0.20), (0.12, 0.70), (0.88, 0.35), (0.94, 0.75); rotations −8°, 6°, −5°, 9°; `scale` 0.9; `opacity` 0.7. They sit in the side space and never overlap the headline at 1280 px and up.
+- **Assembled state:** a centred row in the gap between the hero buttons and the product frame (row centre 48 px above the frame's top edge), 48 px between chips, left to right in the order above, joined by three `--accent` 1.5 px edges with small arrowheads (same style as the node graph preview).
+- **Driven by** the hero scroll progress (the same `useScroll` range as the hero frame tilt): progress 0 → 0.25 moves each chip from scattered to assembled (`x`, `y`, `rotate`, `scale`, `opacity` via `useTransform` with `EASE_OUT`); the edges draw with `pathLength` over 0.15 → 0.30. Fully reversible.
+- **Intro:** after mount the chips fade in at their scattered positions (`opacity` 0 → 0.7, 600 ms) together with the existing frame intro.
+- **Mouse parallax** (needs `motion`, `finePointer`, `wide`): while the pointer is over the hero, each chip shifts by the pointer's offset from the hero centre (normalised −1..1) × 12 px × its depth (0.4, 1, 0.7, 0.5 in chip order), multiplied by (1 − assembly progress) so the assembled row is still. Smoothed with Motion `useSpring` (stiffness 150, damping 20, mass 0.5: settles in under 600 ms, no visible overshoot). Pointer leaves the hero → springs back to 0.
+- **Below 1280 px, touch-only, or reduced motion:** below 1280 px no chips at all. Reduced motion at 1280 px and up: chips shown in the assembled state with edges drawn, static. Touch-only: assembly still runs with scroll, no parallax.
+
+**6. Wordmark.**
+- The marketing header and footer use a marketing wordmark: the existing square mark, then "Flow", a short joining line, then "Motion". The line is a decorative inline SVG (`aria-hidden="true"`), 16 px wide, 1.5 px `--accent` stroke, round caps, vertically centred on the text, 4 px of space on each side.
+- On `/`, in the header only, the line **draws on load** once after mount (`pathLength` 0 → 1, 600 ms `EASE_OUT`, 200 ms delay). In the footer, on `/privacy` and `/terms`, before mount, and under reduced motion it is static and fully drawn. The app shell and auth pages keep the shared `Wordmark` unchanged.
+- The link's accessible name and `textContent` are exactly "Flow Motion" (one space).
+
+**7. How it works transformation (desktop sticky variant only).**
+- In the sticky variant the time-based crossfade between the four visual states is **replaced** by a scroll-linked transformation; everything else about the sticky story stays (CSS sticky, ~70vh text steps, active step chosen by the middle of the viewport, white active text). Story progress `p` = Motion `useScroll` over the step list with offset `["start center", "end center"]`, 0..1; state *i* owns the quarter [i/4, (i+1)/4]. Every value below comes from `useTransform` on `p`, so scrolling up plays it backwards exactly.
+- **States crossfade** at each quarter boundary b (0.25, 0.5, 0.75) over [b − 0.04, b + 0.04] (opacity only on the state wrappers; the existing 12 px rise and `rotateX` settle follow the same window).
+- **Connect → Scan (files into the scanner):** in the scan state a 1 px `--accent` scanner bar (opacity 0.8, full width of the tree) moves from the tree's top to its bottom over p 0.25 → 0.40 (`translateY`). Each file row's status ("Read" / "Blocked for safety") and the masked finding fade in as the bar passes that row (row k of n at p = 0.25 + 0.15 × (k + 0.5) / n, 0.02 wide).
+- **Scan → Recommend (files become cards):** over p 0.44 → 0.56 the outgoing rows move up 24 px, scale to 0.96, and fade out; the incoming recommendation cards rise from 24 px below and scale 0.96 → 1 while fading in, 0.02 of progress apart per card.
+- **Recommend → Generate (cards become a graph):** over p 0.69 → 0.81 the outgoing cards scale to 0.6 toward the visual's centre and fade out; the incoming graph nodes scale 0.6 → 1 and fade in; the graph edges draw with `pathLength` over p 0.78 → 0.90 (instead of the time-based draw).
+- Phones (stacked) and reduced motion (static) are unchanged from the rules above.
+
+**8. Magnetic primary button.**
+- Only the two large "Get started" buttons (hero and Final CTA); not the header button. Needs `motion` and `finePointer`.
+- While the pointer is within the button's box grown by 24 px on each side, the button moves toward the pointer by 0.25 × the pointer's offset from the button centre, capped at 6 px on each axis (`transform` only, on a wrapper so focus ring and hit area move with it). Smoothed with `useSpring` (stiffness 300, damping 30, mass 0.5). Pointer leaves the zone → back to 0. Keyboard focus never moves it. The box is read once on pointer enter and cached (re-read after scroll or resize), never per move.
+
+**Phones (under 768 px), in short:** flow line (1 px) with output handle, curve, rail at 8 px, node lighting with pulses, 2 dots, intro settle and word reveal, wordmark draw; no hero chips, no parallax, no magnet, no story transformation (stacked panels as above), no Lenis.
+
+**Performance rules (all items):**
+- Animate only `transform`, `opacity`, and SVG stroke drawing (`pathLength`, which Motion turns into `stroke-dasharray` / `stroke-dashoffset`). No animated `d`, width, height, top, left, filter, blur, or box-shadow; no layout animation.
+- **Measuring:** the flow path, node positions, and the dot lookup table are computed only in a measure function that reads element boxes (sections, eyebrows or H2s, the hero frame, the container) relative to the wrapper. It runs after mount, from one `ResizeObserver` on the wrapper and the measured elements (this also covers FAQ items opening and fonts loading), and after `document.fonts.ready`; calls are batched into one `requestAnimationFrame`. Scroll, pointer, and frame callbacks never read layout; they only use the cached numbers and Motion values. Viewport height is cached on resize.
+- **Pausing:** the dot loop stops while `document.visibilityState` is `hidden` and restarts when visible; there is no other endless loop. Hero pointer listeners are attached only while the hero is in view; button pointer listeners only while that button is in view. All listeners are passive; none calls `preventDefault`. Scroll-linked values do no work when the page does not scroll.
+- No `will-change` beyond the two allowed above. No new dependency: Motion (`motion/react`) and the existing Lenis provider only; no Three.js, no canvas, no WebGL, no `framer-motion`, no other animation or scroll library. The landing route still imports no `@xyflow/react`.
+
+**Accessibility rules (all items):**
+- The flow layer (line, track, handle, nodes, pulses, dots), the hero chips and their edges, and the wordmark line are `aria-hidden="true"`, contain no focusable element, and take no pointer events.
+- **No content behind animation:** the server HTML contains every heading, paragraph, step, card, and link fully visible with no `opacity: 0` and no transform, and **no** flow layer, dot, or chip (decorative layers render only after mount). Content is hidden for an entry animation only after mount with motion on, and only while it is below the tip line.
+- Headings keep their exact accessible names and text (item 4); the wordmark link keeps "Flow Motion" (item 6).
+- Mouse parallax and the magnetic button need a fine hovering pointer; reduced motion turns off drawing, dots, pulses, chip motion, parallax, magnet, word reveal, settle, the wordmark draw, and the story transformation, leaving calm 200 ms fades at most.
+- Keyboard, focus, anchor, and find-in-page scrolling are unaffected; nothing traps or delays focus.
+
 ## App
 - Shell: left sidebar with wordmark, "Dashboard" (`/dashboard`), "Integrations" (`/integrations`, plug icon; Phase 2e-ui, D-54), "Settings" (`/settings`), and at the bottom the user's display name or email with "Sign out"; collapses to a sheet on small screens.
 - Dashboard: projects grid (card: repo full name, chosen branch `project.branch` in the mono font with a git-branch icon, status badge, created date; links to the project page; Phase 1.1), "Add repository" button opening the two-step dialog below, recent flows (empty state "No flows yet" until Phase 3). After the GitHub callback: `?connected=1` → notice "GitHub connected", `?error=github` → notice "Could not connect GitHub. Try again.", `?error=github_none` → notice with the "Connect GitHub" link (copy as amended in Phase 1.2 below).

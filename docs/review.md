@@ -608,3 +608,119 @@ Verified, no finding:
 - Fix: in the full 2e scope, state the exact `keyHint` regex (Unicode ellipsis U+2026, last 4 characters) in contract section 6 and use it in `src/schemas/ai-provider.ts`. No change is needed in the preview.
 
 Open: high 0 · medium 0 · low 5 (R2eu-1, -2, -4 frontend; R2eu-3 architect/frontend; R2eu-5 architect/backend). Phase 2e-ui can be committed. R2eu-1 and R2eu-2 are cheap to fix first.
+
+## Landing redesign (code review 2026-11-27)
+
+Scope: uncommitted working tree vs `a03bc29` (marketing route and layout, `globals.css`, `src/features/marketing/**`, `flow-node-card-body.tsx`, `node-type.ts`, `graph.ts`, `node-icon.tsx`, `package.json` and lockfile). Checks: `npm run typecheck` pass, `npm run lint` pass, `npx vitest run` pass (1638 passed, 90 skipped), `npm run build` pass (`/` static).
+
+**Confirmed OK:**
+- Copy in `copy.ts` matches design.md for every section, and tests check each string against design.md. "Plans coming soon" is unchanged and still exported from `plans-coming-soon.tsx`. There are exactly four `ComingSoonTag`s, all behind `isFlowGenerationLive()`, and the test also checks where they appear. The page has no testimonials, logos, counts, prices, simulation, `<img>`, or `<blockquote>`. "32" matches `ALLOWED_NODE_TYPES` (20 + 12). The delete route exists.
+- Lenis follows D-56:
+  - It is imported only by `smooth-scroll.tsx`, mounted only by `LandingPage`, and never by a layout.
+  - It is created only when reduced motion is off and `(hover: hover) and (pointer: fine)` matches. It is destroyed when either media query changes, and on unmount.
+  - Options are exactly `autoRaf`, `lerp 0.1`, `smoothWheel`, `syncTouch false`, `wheelMultiplier 1`. There is no wrapper, snapping, or key/wheel/touch listener.
+  - Anchors go through `scrollTo(target, { offset: -80 })`, then `pushState`, then focus on the heading with `preventScroll`.
+  - The tests would fail if Lenis started under reduced motion: that test sets `finePointer: true`, so only the reduced-motion check can stop it. They would also fail if it started without a fine pointer, if the options changed, or if unmount did not call `destroy`.
+- Motion animates only transform, opacity, and SVG `pathLength`. It has the three how-it-works variants. Server render is the stacked, static layout with no `opacity:0` or `rotateX` (tested). `useSyncExternalStore` server snapshots rule out hydration mismatches.
+- F10: the source test walks the runtime import graph from `(marketing)/page.tsx`. `@xyflow/react`, TanStack Query, Supabase, `queries`, and `framer-motion` are not reachable from it.
+- F9: the markup of `FlowNodeCard` is the same as before, the flow tests are unchanged and pass, and `graph.ts` re-exports `shortNodeType`.
+- Accessibility: there is one h1, and the order is h1, then h2 per section, then h3. Previews use `aria-hidden` and `inert`, have no focusable elements, and this is tested. Focus rings show on buttons, links, and summaries. `--fm-muted-2` is used only on `--background` (4.6:1). Header links are plain anchors and work with the keyboard.
+- Ownership: frontend paths plus backend's `package.json` and lockfile. The only `package.json` change is `lenis: "1.3.27"`. Nothing from `subscription.md` or `n8n.md` was built.
+
+**The five frontend deviations:** all five are accepted.
+1. `html.lenis { scroll-behavior: auto }`: needed. The `lenis.css` in 1.3.27 has no scroll-behavior rule, and CSS smooth scrolling would fight Lenis's per-frame `scrollTo`. Its specificity beats `html` inside `@layer base`.
+2. `shortNodeType` moved to `node-type.ts`: needed. `graph.ts` has runtime imports from `@xyflow/react` (`MarkerType`, `Position`), so `node-icon.tsx` would have pulled React Flow into `/`. Callers do not change because `graph.ts` re-exports it.
+3. Layout renders only the footer, and pages render `SiteHeader` and `<main>`: acceptable. The header stays a server component with no `usePathname`. All three marketing pages render it.
+4. `/` sets its own meta description: honest, but it is copy that is not in design.md (see RL-11).
+5. Hero sample "42 files read / 6 blocked for safety" and commit `4f2c9e1`: acceptable. It sits inside an `aria-hidden` example frame labelled `example/storefront · main` and mirrors the real analysis header and files summary. It is not a product or usage metric, and it is not key-shaped. It should be written down in design.md (RL-11).
+
+### RL-1: Desktop how-it-works changes height after hydration, so a deep link to a lower section can land in the wrong place
+- File: `src/features/marketing/components/how-it-works.tsx:40` (`layout = motionAllowed && desktop ? "sticky" : "stacked"`), `:157` vs `:245`
+- Severity: medium
+- Owner: frontend
+- Problem: the server render is the stacked story, as F5 requires: four grid rows of text plus visual. On desktop with motion allowed, the client then switches to the sticky story: four `min-h-[70vh]` text blocks with a 540 px absolutely positioned visual. The two have different heights, so everything below `#how-it-works` moves once JS hydrates.
+  - Loading `/#security` or `/#faq` directly (the privacy and terms header links do exactly this) first jumps to the server-rendered position. The content then shifts under the reader.
+  - Chrome and Firefox scroll anchoring usually hides this. Safari does not support `overflow-anchor`, so there it breaks F11.5 ("Loading `/#faq` directly lands on the FAQ") and adds CLS whenever the section is in view at hydration.
+- Fix (pick one):
+  - (a) Give the server and stacked render the same block heights from 768 px, using CSS only: `md:min-h-[70vh]` per step row plus the same visual height, so the switch does not change the section height.
+  - (b) After the layout first changes to `sticky`, if `location.hash` names a section below `#how-it-works`, re-align that section once with `scrollIntoView({ block: "start" })` (or `lenis.scrollTo(target, { immediate: true, offset: -80 })`). Do this only on that first change.
+  - Add a test that renders with `desktop: true` and a hash, then asserts the re-align call. Also add the case to the owner check in Safari.
+
+### RL-2: Content that is already visible goes blank, then fades in, after hydration
+- File: `src/features/marketing/components/how-it-works.tsx:164-178` (`AnimatedPanel`), `src/features/marketing/components/reveal.tsx:30-41`
+- Severity: low
+- Owner: frontend
+- Problem: when motion is allowed, the static `<li>` and `<div>` are replaced by Motion elements with `initial={{ opacity: 0, y: … }}`. A panel or feature card that is already on screen when hydration finishes (for example on a phone scrolled into the story, or after a deep link) flips from visible to invisible, then fades back in. That reads as a flicker, not an entrance.
+- Fix: use `initial={false}` for elements that are already in view at mount. For example, check `useInView` before the first animation, or measure once in a layout effect and skip the entrance animation for those elements. Elements below the fold keep the entrance animation.
+
+### RL-3: The hero frame tilts away from the reader right after load
+- File: `src/features/marketing/components/hero.tsx:85-93`
+- Severity: low
+- Owner: frontend (direction: architect)
+- Problem: the server render is flat, as it must be. `intro` then animates from 0 to 1, so 600 ms after hydration the frame rotates back to 14° and shrinks to 0.94, and only flattens again on scroll. The first motion the visitor sees is the hero image leaning away, which is the reverse of the "settles into place" feel the spec describes.
+- Fix: consider making the scroll-linked flatten the only motion. Start TiltingFrame already flat at scroll 0 (no intro), or apply the tilt only once the user has scrolled. If the owner prefers the current behaviour, the architect records it in design.md "Motion".
+
+### RL-4: The security example frame cannot stick
+- File: `src/features/marketing/components/security.tsx:17` (`overflow-hidden` on the section), `:42` (`lg:sticky lg:top-24`)
+- Severity: low
+- Owner: frontend
+- Problem: `overflow: hidden` on the section makes it the scroll container for the sticky child, and the section never scrolls, so `lg:sticky` has no effect. The class either does nothing or is a feature that silently fails.
+- Fix: use `overflow-clip` (which clips without creating a scroll container) on the section. Otherwise, remove `lg:sticky lg:top-24`.
+
+### RL-5: Unlayered `.fm-*` classes override Tailwind utilities
+- File: `src/app/globals.css:203-230` (`.fm-grid-bg`, `.fm-hero-glow`, `.fm-mono-label` outside any `@layer`), `src/features/marketing/previews/parts.tsx:46`
+- Severity: low
+- Owner: frontend
+- Problem: unlayered CSS beats every rule in `@layer utilities`. As a result, `text-[10px]` on the "Example" pill is ignored and it renders at 12 px, and any future `text-*`, `leading-*`, or `tracking-*` utility next to `fm-mono-label` will also fail silently.
+- Fix: declare these with Tailwind v4 `@utility fm-mono-label { … }` (or wrap them in `@layer components`), so utilities can override them. Then check the "Example" pill size.
+
+### RL-6: Preview copy is hard-coded instead of coming from `copy.ts`
+- File: `src/features/marketing/previews/parts.tsx:47` ("Example"), `:201-217` ("Analysis", "Branch … at", "Security findings", "Recommendations"); `src/features/marketing/copy.ts:131` (`SECURITY.exampleTag` is defined but never used)
+- Severity: low
+- Owner: frontend
+- Problem: F1 says components read every landing string from `copy.ts`. The design-mandated "Example" tag is typed in again in the preview, so the exact-copy test checks the constant, not what is rendered.
+- Fix: render `SECURITY.exampleTag`. Move the four preview labels into `preview-data.ts` or `copy.ts`.
+
+### RL-7: Import cycle between `copy.ts`, `plans-coming-soon.tsx`, and `primitives.tsx`
+- File: `src/features/marketing/copy.ts:7`
+- Severity: low
+- Owner: frontend
+- Problem: `copy.ts` re-exports `PLANS_*` from `plans-coming-soon.tsx`, which imports `primitives.tsx`, which imports `COMING_SOON` from `copy.ts`. It works today only because `COMING_SOON` is read at render time. It also makes the plain data module pull in `next/link` and `lucide-react`.
+- Fix: drop the re-export. The tests can import `PLANS_*` from `plans-coming-soon.tsx`, where F1 requires them to stay. If you keep it, import `COMING_SOON` in `primitives.tsx` from a leaf module.
+
+### RL-8: Two type scale and button size deviations
+- File: `src/features/marketing/components/features.tsx:50` (feature card titles are a fixed `text-xl leading-7`), `src/features/marketing/components/primitives.tsx:26` with `site-header.tsx:31` (header primary button is 36 px)
+- Severity: low
+- Owner: frontend
+- Problem: design.md gives card titles the H3 step (24/32 on desktop, 20/28 on mobile). They are 20/28 at every width. The primary button spec is 44 px tall; the header button is 36 px. The header size is a reasonable choice, but it is not in the spec.
+- Fix: use `h3Class` for feature card titles, or have the architect record that bento titles stay at 20 px. Ask the architect to add a "small primary (header) 36 px" variant to design.md, or make the header button 44 px.
+
+### RL-9: The sample graph shows a webhook flow that does not reply on the "true" path
+- File: `src/features/marketing/preview-data.ts:116-161`
+- Severity: low
+- Owner: frontend
+- Problem: Webhook goes to IF. On true it goes to Slack; on false it goes to Respond to Webhook. On the true path the webhook caller never gets a response, which is a broken pattern under `respond: "respondNode"`. This preview is shown as an example of Flow Motion's output, and node-catalog.md pairs `webhook` with `respondToWebhook`.
+- Fix: add an edge from `slack` to `respond`, so both branches reply. Alternatively, put a `noOp` on the false branch and drop Respond to Webhook. Update both layouts.
+
+### RL-10: "32" appears three times in copy, but no test links it to the allow list
+- File: `src/features/marketing/copy.ts:35,69,164`, `src/features/marketing/components/landing.test.tsx`
+- Severity: low
+- Owner: frontend
+- Problem: if `TIER1_NODE_NAMES` or `TIER2_NODE_NAMES` ever change, the fact strip, step 04, and the FAQ would make a false claim and nothing would fail.
+- Fix: add a test that imports `ALLOWED_NODE_TYPES` from `@/lib/n8n-catalog/allowlist` (import it only in the test, not in the landing bundle) and asserts that the number in the three strings equals `ALLOWED_NODE_TYPES.length`.
+
+### RL-11: Two shipped strings and the sample values are not in design.md
+- File: `src/features/marketing/copy.ts:191-194` (`LANDING_META.description`), `src/features/marketing/preview-data.ts:43-46` and `parts.tsx:203` ("42 files read", "6 blocked for safety", `4f2c9e1`)
+- Severity: low
+- Owner: architect
+- Problem: the rule is that every landing string is fixed in design.md. The meta description and the hero sample values are honest, but nobody has signed them off.
+- Fix: the architect adds the meta description and the hero sample values (counts, short SHA, recommendation titles, and confidences) to design.md "Landing page".
+
+### RL-12: The root metadata still says flows are simulated
+- File: `src/app/layout.tsx:15-16` (existed before this change)
+- Severity: low
+- Owner: frontend (copy: architect)
+- Problem: "…simulate them with mock data, and export the JSON." is the description for every route that does not override it, including `/login` and `/signup`, which are public. Phase 4 is not built, so this breaks the honesty rule that D-55 enforces on `/`.
+- Fix: use the `LANDING_META` sentence, or a neutral sentence approved by the architect, as the root description.
+
+Open: high 0 · medium 1 (RL-1 frontend) · low 11 (RL-2..RL-10, RL-12 frontend; RL-3 and RL-8 also need architect sign-off; RL-11 architect). After RL-1 is fixed, the landing redesign can be committed. The lows can follow later.

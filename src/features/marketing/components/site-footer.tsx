@@ -1,25 +1,31 @@
 import Link from "next/link";
 
 import { Wordmark } from "@/components/shared/wordmark";
+import { FOOTER } from "@/features/marketing/copy";
 
+/** Marketing footer (design.md "Landing page" item 10). */
 export function SiteFooter() {
   return (
     <footer className="border-t border-border bg-background">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-        <div className="flex flex-col gap-2">
+      <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-8 px-4 py-12 sm:px-8 md:flex-row md:items-start md:justify-between">
+        <div className="flex flex-col gap-3">
           <Wordmark />
-          <p className="text-sm text-muted-foreground">
-            Generates and exports n8n flows. Does not run them for you.
-          </p>
+          <p className="text-sm text-muted-foreground">{FOOTER.tagline}</p>
         </div>
-        <nav aria-label="Legal" className="flex items-center gap-6 text-sm">
-          <Link href="/privacy" className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-            Privacy
-          </Link>
-          <Link href="/terms" className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-            Terms
-          </Link>
-        </nav>
+        <div className="flex flex-col gap-3 md:items-end">
+          <nav aria-label={FOOTER.navLabel} className="flex items-center gap-6 text-sm">
+            {FOOTER.links.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="rounded-md text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+          <p className="text-sm text-muted-foreground">{FOOTER.disclaimer}</p>
+        </div>
       </div>
     </footer>
   );

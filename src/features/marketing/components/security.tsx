@@ -1,40 +1,50 @@
 import { CheckIcon } from "lucide-react";
-import Link from "next/link";
 
-import { Section } from "@/features/marketing/components/section";
+import { SECURITY } from "@/features/marketing/copy";
+import {
+  containerClass,
+  QuietLink,
+  sectionClass,
+  SectionIntro,
+} from "@/features/marketing/components/primitives";
+import { FindingRowPreview } from "@/features/marketing/previews/parts";
+import { ProductFrame } from "@/features/marketing/previews/preview-root";
+import { cn } from "@/lib/utils";
 
-const points = [
-  "Read-only GitHub App with Contents and Metadata permissions only. No write access, no broad OAuth tokens.",
-  "A path policy runs before any fetch: env files, keys, certificates, credentials, and lockfiles are never opened.",
-  "A secret scanner runs on every file that is read. Matches are masked in findings and redacted before anything is sent onward.",
-  "Redacted snippets are sent to the AI provider for analysis. No source code is stored; only derived results are kept.",
-  "Deleting a project deletes its analyses, findings, recommendations, flows, and test runs.",
-  "Exports never contain secrets or credential ids. The setup checklist tells you what to fill in yourself.",
-] as const;
-
+/** Security (design.md item 6): five guarantees left, an example finding right, on the background grid. */
 export function Security() {
   return (
-    <Section
-      id="security"
-      eyebrow="Security"
-      title="Flow Motion reads other people's code, so it reads carefully"
-      description="These rules are enforced in code and reviewed before every release."
-    >
-      <ul className="grid gap-3 sm:grid-cols-2">
-        {points.map((point) => (
-          <li key={point} className="flex gap-3 rounded-xl border border-border bg-card p-5 text-sm">
-            <CheckIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" />
-            <span className="text-muted-foreground">{point}</span>
-          </li>
-        ))}
-      </ul>
-      <p className="text-sm text-muted-foreground">
-        The full wording is on the{" "}
-        <Link href="/privacy" className="text-primary underline-offset-4 hover:underline">
-          privacy page
-        </Link>
-        .
-      </p>
-    </Section>
+    <section id="security" aria-labelledby="security-heading" className={cn(sectionClass, "relative isolate overflow-hidden")}>
+      <div
+        aria-hidden="true"
+        className="fm-grid-bg absolute inset-0 -z-10 [mask-image:radial-gradient(ellipse_at_70%_50%,black_30%,transparent_75%)]"
+      />
+      <div className={cn(containerClass, "grid gap-16 lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)] lg:items-start lg:gap-20")}>
+        <div className="flex flex-col gap-12">
+          <SectionIntro id="security" eyebrow={SECURITY.eyebrow} heading={SECURITY.heading} lead={SECURITY.lead} />
+          <ul className="flex flex-col">
+            {SECURITY.guarantees.map((item) => (
+              <li key={item.title} className="flex gap-4 border-t border-grid py-5 first:border-t-0 first:pt-0">
+                <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-background">
+                  <CheckIcon aria-hidden="true" strokeWidth={1.5} className="size-3.5 text-primary" />
+                </span>
+                <div className="flex flex-col gap-1">
+                  <h3 className="text-base leading-6 font-semibold text-foreground">{item.title}</h3>
+                  <p className="max-w-[65ch] text-base leading-[26px] text-muted-foreground">{item.body}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <QuietLink href={SECURITY.privacyLink.href} tone="foreground" className="self-start">
+            {SECURITY.privacyLink.label}
+          </QuietLink>
+        </div>
+        <div className="lg:sticky lg:top-24">
+          <ProductFrame name="security-finding" path={SECURITY.framePath}>
+            <FindingRowPreview example />
+          </ProductFrame>
+        </div>
+      </div>
+    </section>
   );
 }

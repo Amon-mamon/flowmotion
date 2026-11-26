@@ -1,15 +1,16 @@
 import type { ReactNode } from "react";
 
 import { SiteFooter } from "@/features/marketing/components/site-footer";
-import { SiteHeader } from "@/features/marketing/components/site-header";
 
+/**
+ * Shared marketing shell. Each page renders its own SiteHeader (same-page
+ * anchors on `/`, `/#…` on the legal pages) and `<main>`; this layout never
+ * mounts smooth scrolling (D-56).
+ */
 export default function MarketingLayout({ children }: { children: ReactNode }) {
   return (
     <>
-      <SiteHeader />
-      <main id="main" className="flex-1">
-        {children}
-      </main>
+      {children}
       <SiteFooter />
     </>
   );

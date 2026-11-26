@@ -1,55 +1,104 @@
-import { ArrowRightIcon } from "lucide-react";
+"use client";
+
+import { animate, motion, useMotionValue, useScroll, useTransform } from "motion/react";
 import Link from "next/link";
+import { useEffect, useRef, type ReactNode } from "react";
 
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { HERO } from "@/features/marketing/copy";
+import {
+  containerClass,
+  primaryButtonClass,
+  secondaryButtonClass,
+  Tag,
+} from "@/features/marketing/components/primitives";
+import { EASE_OUT, useMotionAllowed } from "@/features/marketing/hooks";
+import { AnalysisPreview } from "@/features/marketing/previews/parts";
+import { ProductFrame } from "@/features/marketing/previews/preview-root";
 
+/**
+ * Hero (design.md item 2): centred copy on the background grid, then the
+ * analysis preview in a product frame on the one accent glow. With motion
+ * allowed the frame starts tilted back (rotateX 14°, scale 0.94) and flattens
+ * over the first 60% of the hero's scroll range; the server render is flat.
+ */
 export function Hero() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const motionAllowed = useMotionAllowed();
+
+  const frame = (
+    <ProductFrame name="hero-analysis" path={HERO.framePath} bodyClassName="p-4 sm:p-6">
+      <AnalysisPreview />
+    </ProductFrame>
+  );
+
   return (
-    <section aria-labelledby="hero-heading" className="py-24 sm:py-32">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 sm:px-8">
-        <p className="text-sm font-medium uppercase tracking-wide text-primary">
-          From repository to n8n workflow
-        </p>
+    <section ref={sectionRef} aria-labelledby="hero-heading" className="relative isolate overflow-hidden">
+      <div
+        aria-hidden="true"
+        className="fm-grid-bg absolute inset-0 -z-10 [mask-image:linear-gradient(to_bottom,black_55%,transparent)]"
+      />
+      <div className={`${containerClass} flex flex-col items-center pt-20 text-center md:pt-32`}>
+        <Tag>{HERO.tag}</Tag>
         <h1
           id="hero-heading"
-          className="max-w-3xl text-4xl font-semibold leading-tight tracking-tight sm:text-6xl"
+          tabIndex={-1}
+          className="mt-6 max-w-[920px] text-[44px] leading-[48px] font-semibold tracking-[-0.04em] text-balance text-foreground outline-none md:text-[72px] md:leading-[76px]"
         >
-          Find the automations hiding in your codebase. Export them as n8n flows.
+          {HERO.heading}
         </h1>
-        <p className="max-w-2xl text-lg text-muted-foreground">
-          Flow Motion connects to a GitHub repository with read-only access, reads only safe
-          files, recommends automations, builds each one from an allowed set of n8n nodes,
-          simulates it with mock data, and gives you an importable JSON file. It never runs
-          flows for you.
+        <p className="mt-6 max-w-[640px] text-lg leading-7 text-pretty text-muted-foreground md:text-xl md:leading-[30px]">
+          {HERO.lead}
         </p>
-        <div className="flex flex-wrap items-center gap-4">
-          <Link href="/signup" className={cn(buttonVariants({ size: "lg" }), "h-11 px-5 text-base")}>
-            Get started
-            <ArrowRightIcon aria-hidden="true" />
+        <div className="mt-10 flex flex-col items-stretch gap-3 self-stretch sm:flex-row sm:items-center sm:justify-center sm:self-auto">
+          <Link href={HERO.primary.href} className={primaryButtonClass}>
+            {HERO.primary.label}
           </Link>
-          <Link
-            href="#how-it-works"
-            className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-          >
-            See how it works
-          </Link>
+          <a href={HERO.secondary.href} className={secondaryButtonClass}>
+            {HERO.secondary.label}
+          </a>
         </div>
-        <dl className="grid max-w-3xl grid-cols-1 gap-4 border-t border-border pt-8 sm:grid-cols-3">
-          <div>
-            <dt className="text-sm text-muted-foreground">Access</dt>
-            <dd className="font-medium">Read-only GitHub App</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-muted-foreground">Source code stored</dt>
-            <dd className="font-medium">None</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-muted-foreground">Output</dt>
-            <dd className="font-medium">n8n JSON plus setup checklist</dd>
-          </div>
-        </dl>
+      </div>
+
+      <div className={`${containerClass} relative pt-16 pb-20 md:pt-24 md:pb-32`}>
+        <div
+          aria-hidden="true"
+          className="fm-hero-glow absolute inset-x-0 top-0 -z-10 mx-auto h-full max-w-[1100px]"
+        />
+        <div className="mx-auto max-w-[1040px]" style={{ perspective: "1200px" }}>
+          {motionAllowed ? <TiltingFrame target={sectionRef}>{frame}</TiltingFrame> : frame}
+        </div>
       </div>
     </section>
+  );
+}
+
+function TiltingFrame({
+  target,
+  children,
+}: {
+  target: React.RefObject<HTMLElement | null>;
+  children: ReactNode;
+}) {
+  const { scrollYProgress } = useScroll({ target, offset: ["start start", "end start"] });
+  // A short settle on mount so the switch from the flat server render to the
+  // tilted start position is eased, not a jump.
+  const intro = useMotionValue(0);
+  useEffect(() => {
+    const controls = animate(intro, 1, { duration: 0.6, ease: EASE_OUT });
+    return () => controls.stop();
+  }, [intro]);
+
+  const flatten = useTransform(scrollYProgress, [0, 0.6], [1, 0], { clamp: true });
+  const rotateX = useTransform(() => 14 * intro.get() * flatten.get());
+  const scale = useTransform(() => 1 - 0.06 * intro.get() * flatten.get());
+
+  return (
+    <motion.div
+      data-hero-frame="tilt"
+      style={{ rotateX, scale, transformOrigin: "50% 0%" }}
+      className="will-change-transform"
+    >
+      {children}
+    </motion.div>
   );
 }
