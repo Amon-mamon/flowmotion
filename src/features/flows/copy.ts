@@ -55,6 +55,24 @@ export const FLOW_COPY = {
   generateNotReady: "Flow generation is being set up.",
   generateHelper: "Each flow is generated on its own. You can generate up to 30 flows per day.",
   generateFailed: "Could not start generation. Try again.",
+  /** exact (design.md "Card action area", DAILY_CAP_REACHED for generation) */
+  dailyCapGenerations: "Daily limit reached (30 flows per day). It resets at 00:00 UTC.",
+
+  // Stale-analysis dialog (design.md "Card action area", PROJECT_STALE_ANALYSIS)
+  staleTitle: "This analysis is out of date",
+  /** Followed by " <first 7 of commitSha>." or "." when the sha is null. */
+  staleBody: "New commits were pushed after this analysis. The flow would be built from the analyzed commit",
+  generateAnyway: "Generate anyway",
+  reanalyze: "Re-analyze",
+
+  // Dashboard "Recent flows" (design.md, Phase 3b)
+  noFlows: "No flows yet",
+  noFlowsDescription: "Generated flows will appear here once a project has been analyzed.",
+  flowsLoadFailed: "Could not load flows",
+  loadingFlows: "Loading flows",
+  statusGenerating: "Generating",
+  statusReady: "Ready",
+  statusFailed: "Failed",
 } as const;
 
 /** "1.74.3" → "1.74"; null when the version is missing or not numeric. */

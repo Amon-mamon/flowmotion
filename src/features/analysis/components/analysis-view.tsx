@@ -200,6 +200,7 @@ function AnalysisBody({
           <RecommendationsSection
             projectId={projectId}
             analysisId={analysis.id}
+            analysisCommitSha={analysis.commitSha}
             showCount={analysis.errorCode === null}
           />
         )

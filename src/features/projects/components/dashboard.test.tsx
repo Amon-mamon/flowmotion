@@ -7,16 +7,22 @@ vi.mock("next/navigation", () => ({
 }));
 let mockParams = new URLSearchParams();
 
+const generateReady = vi.fn(() => false);
+vi.mock("@/features/flows/readiness", () => ({ isGenerateApiReady: () => generateReady() }));
+
 import { fail, mockFetch, ok, renderWithQuery } from "@/features/test-utils/render";
 import { DashboardView } from "@/features/projects/components/dashboard-view";
 import { ProjectStatusBadge } from "@/features/projects/components/project-status-badge";
 import { projects } from "@/features/projects/fixtures";
 import { installations } from "@/features/github/fixtures";
+import { flowSummaries } from "@/features/flows/fixtures";
 import { render } from "@testing-library/react";
 
 afterEach(() => {
   vi.unstubAllGlobals();
   mockParams = new URLSearchParams();
+  generateReady.mockReset();
+  generateReady.mockImplementation(() => false);
 });
 
 const isProjects = (u: string) => u === "/api/projects";
@@ -267,5 +273,41 @@ describe("Phase 1.2 GitHub account isolation (D-43, D-44, D-45)", () => {
     expect(within(cards[2]!).getByText("Not connected to GitHub")).toBeInTheDocument();
     expect(within(cards[0]!).queryByText("Not connected to GitHub")).not.toBeInTheDocument();
     expect(within(cards[1]!).queryByText("Not connected to GitHub")).not.toBeInTheDocument();
+  });
+});
+
+describe("Dashboard Recent flows (OC-7)", () => {
+  const isFlows = (u: string) => u === "/api/flows";
+
+  it("gate closed: the empty state only and no request to /api/flows", async () => {
+    const fetchMock = mockFetch([
+      { match: isProjects, respond: () => ok({ projects: [] }) },
+      { match: isInstallations, respond: () => ok({ installations: [] }) },
+      { match: isFlows, respond: () => ok({ flows: flowSummaries }) },
+    ]);
+    renderWithQuery(<DashboardView />);
+    expect(await screen.findByText("No projects yet")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Recent flows" })).toBeInTheDocument();
+    expect(screen.getByText("No flows yet")).toBeInTheDocument();
+    expect(
+      screen.getByText("Generated flows will appear here once a project has been analyzed."),
+    ).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([u]) => String(u).startsWith("/api/flows"))).toBe(false);
+  });
+
+  it("gate open: Recent flows lists the rows under the same heading", async () => {
+    generateReady.mockImplementation(() => true);
+    mockFetch([
+      { match: isProjects, respond: () => ok({ projects: [] }) },
+      { match: isInstallations, respond: () => ok({ installations: [] }) },
+      { match: isFlows, respond: () => ok({ flows: flowSummaries }) },
+    ]);
+    renderWithQuery(<DashboardView />);
+    const section = screen.getByRole("heading", { name: "Recent flows" }).closest("section") as HTMLElement;
+    await waitFor(() => expect(within(section).getAllByRole("link")).toHaveLength(flowSummaries.length));
+    for (const flow of flowSummaries) {
+      expect(section.querySelector(`a[href="/flows/${flow.id}"]`)).not.toBeNull();
+    }
+    expect(within(section).queryByText("No flows yet")).not.toBeInTheDocument();
   });
 });

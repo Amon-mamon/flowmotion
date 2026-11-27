@@ -3,11 +3,14 @@
 import { CheckIcon, Loader2Icon, WorkflowIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useId } from "react";
+import { useId, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { Recommendation } from "@/features/analysis/schemas";
+import { ApiError } from "@/features/api/client";
+import { GenerateErrorNotice } from "@/features/flows/components/generate-error-notice";
+import { StaleAnalysisDialog } from "@/features/flows/components/stale-analysis-dialog";
 import { FLOW_COPY } from "@/features/flows/copy";
 import { useGenerate } from "@/features/flows/queries";
 import { isGenerateApiReady } from "@/features/flows/readiness";
@@ -21,13 +24,20 @@ const flowHref = (flowId: string) => `/flows/${encodeURIComponent(flowId)}`;
  */
 export function RecommendationAction({
   recommendation,
+  projectId,
+  analysisCommitSha,
 }: {
   recommendation: Pick<Recommendation, "id" | "status" | "flowId">;
+  projectId: string;
+  analysisCommitSha: string | null;
 }) {
   const { id, status, flowId } = recommendation;
   const router = useRouter();
   const generate = useGenerate();
   const hintId = useId();
+  const [staleOpen, setStaleOpen] = useState(false);
+  // Guards "Generate anyway" against a second click before React re-renders (R3bu-1).
+  const inFlight = useRef(false);
   const ready = isGenerateApiReady();
 
   if (status === "selected") {
@@ -64,16 +74,33 @@ export function RecommendationAction({
 
   // `new`: first attempt, or "Try again" when the newest flow failed (D-41).
   const retry = flowId !== null;
-  const start = () =>
+  const start = (allowStale: boolean) => {
+    if (inFlight.current || generate.isPending) return;
+    inFlight.current = true;
     generate.mutate(
-      { recommendationId: id },
+      allowStale ? { recommendationId: id, allowStale: true } : { recommendationId: id },
       {
         onSuccess: ({ flowIds }) => {
           const created = flowIds[0];
           if (created !== undefined) router.push(flowHref(created));
         },
+        onError: (error) => {
+          // The stale case asks first (design.md); "Generate anyway" repeats with allowStale.
+          if (!allowStale && error instanceof ApiError && error.code === "PROJECT_STALE_ANALYSIS") {
+            setStaleOpen(true);
+          }
+        },
+        onSettled: () => {
+          inFlight.current = false;
+        },
       },
     );
+  };
+  const generateAnyway = () => {
+    if (!staleOpen) return;
+    setStaleOpen(false);
+    start(true);
+  };
 
   return (
     <div className="flex flex-col gap-2" data-action={retry ? "retry" : "new"}>
@@ -87,7 +114,7 @@ export function RecommendationAction({
       ) : null}
       <div className="flex flex-wrap items-center gap-3">
         {ready ? (
-          <Button type="button" disabled={generate.isPending} onClick={start}>
+          <Button type="button" disabled={generate.isPending} onClick={() => start(false)}>
             <WorkflowIcon aria-hidden="true" />
             {generate.isPending ? FLOW_COPY.generatePending : retry ? FLOW_COPY.tryAgain : FLOW_COPY.generate}
           </Button>
@@ -103,10 +130,16 @@ export function RecommendationAction({
           </>
         )}
       </div>
-      {ready && generate.isError ? (
-        <p role="alert" data-notice="generate-error" className="text-sm">
-          {FLOW_COPY.generateFailed}
-        </p>
+      {ready && generate.isError ? <GenerateErrorNotice error={generate.error} /> : null}
+      {ready ? (
+        <StaleAnalysisDialog
+          open={staleOpen}
+          onOpenChange={setStaleOpen}
+          projectId={projectId}
+          analysisCommitSha={analysisCommitSha}
+          onGenerateAnyway={generateAnyway}
+          pending={generate.isPending}
+        />
       ) : null}
     </div>
   );

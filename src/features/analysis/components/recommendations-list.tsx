@@ -27,7 +27,15 @@ const TRIGGER_ICON: Readonly<Record<TriggerKind, LucideIcon>> = {
 };
 
 /** One recommendation: no checkbox and no selected state (D-42); each card starts its own flow. */
-function RecommendationCard({ recommendation: rec }: { recommendation: Recommendation }) {
+function RecommendationCard({
+  recommendation: rec,
+  projectId,
+  analysisCommitSha,
+}: {
+  recommendation: Recommendation;
+  projectId: string;
+  analysisCommitSha: string | null;
+}) {
   const TriggerIcon = TRIGGER_ICON[rec.triggerKind];
   const confidence = Math.round(rec.confidence * 100);
 
@@ -93,13 +101,21 @@ function RecommendationCard({ recommendation: rec }: { recommendation: Recommend
         {rec.rationale}
       </p>
 
-      <RecommendationAction recommendation={rec} />
+      <RecommendationAction recommendation={rec} projectId={projectId} analysisCommitSha={analysisCommitSha} />
     </li>
   );
 }
 
 /** Recommendation cards, each with its own action area, plus the helper text under the list. */
-export function RecommendationsList({ recommendations }: { recommendations: Recommendation[] }) {
+export function RecommendationsList({
+  recommendations,
+  projectId,
+  analysisCommitSha,
+}: {
+  recommendations: Recommendation[];
+  projectId: string;
+  analysisCommitSha: string | null;
+}) {
   if (recommendations.length === 0) {
     return (
       <EmptyState
@@ -114,7 +130,12 @@ export function RecommendationsList({ recommendations }: { recommendations: Reco
     <div className="flex flex-col gap-4">
       <ul className="flex flex-col gap-3">
         {recommendations.map((rec) => (
-          <RecommendationCard key={rec.id} recommendation={rec} />
+          <RecommendationCard
+            key={rec.id}
+            recommendation={rec}
+            projectId={projectId}
+            analysisCommitSha={analysisCommitSha}
+          />
         ))}
       </ul>
       <p className="text-sm text-muted-foreground" data-testid="generate-helper">
@@ -132,10 +153,12 @@ export function RecommendationsList({ recommendations }: { recommendations: Reco
 export function RecommendationsSection({
   projectId,
   analysisId,
+  analysisCommitSha,
   showCount = false,
 }: {
   projectId: string;
   analysisId: string;
+  analysisCommitSha: string | null;
   showCount?: boolean;
 }) {
   const recs = useRecommendations(projectId, analysisId, true);
@@ -157,7 +180,11 @@ export function RecommendationsSection({
       ) : recs.isError ? (
         <ErrorState title="Could not load recommendations" error={recs.error} onRetry={() => void recs.refetch()} />
       ) : (
-        <RecommendationsList recommendations={recs.data.recommendations} />
+        <RecommendationsList
+          recommendations={recs.data.recommendations}
+          projectId={projectId}
+          analysisCommitSha={analysisCommitSha}
+        />
       )}
     </section>
   );

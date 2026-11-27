@@ -44,6 +44,19 @@ describe("flow copy (design.md exact strings)", () => {
       openFlow: "Open flow",
       generateNotReady: "Flow generation is being set up.",
       generateHelper: "Each flow is generated on its own. You can generate up to 30 flows per day.",
+      generateFailed: "Could not start generation. Try again.",
+      dailyCapGenerations: "Daily limit reached (30 flows per day). It resets at 00:00 UTC.",
+      rateLimited: "Too many requests, try again in a minute",
+      staleTitle: "This analysis is out of date",
+      staleBody: "New commits were pushed after this analysis. The flow would be built from the analyzed commit",
+      generateAnyway: "Generate anyway",
+      reanalyze: "Re-analyze",
+      noFlows: "No flows yet",
+      noFlowsDescription: "Generated flows will appear here once a project has been analyzed.",
+      flowsLoadFailed: "Could not load flows",
+      statusGenerating: "Generating",
+      statusReady: "Ready",
+      statusFailed: "Failed",
     });
   });
 

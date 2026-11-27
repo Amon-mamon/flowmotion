@@ -10,6 +10,7 @@ import {
   isActiveStatus,
   recommendationsResponseSchema,
   type AnalysisStatus,
+  type RecommendationsResponse,
 } from "@/features/analysis/schemas";
 import { projectKeys } from "@/features/projects/queries";
 
@@ -30,6 +31,17 @@ export function analysisRefetchInterval(
   intervalMs: number = ANALYSIS_POLL_MS,
 ): number | false {
   return status !== undefined && isActiveStatus(status) ? intervalMs : false;
+}
+
+/** Poll interval while any recommendation has a flow `generating` (Phase 3b, OC-6). */
+export const RECOMMENDATIONS_POLL_MS = 3000;
+
+/** Interval for TanStack `refetchInterval`: poll while a card is `selected`, else stop. */
+export function recommendationsRefetchInterval(
+  data: RecommendationsResponse | undefined,
+  intervalMs: number = RECOMMENDATIONS_POLL_MS,
+): number | false {
+  return data?.recommendations.some((rec) => rec.status === "selected") ? intervalMs : false;
 }
 
 const id = (value: string) => encodeURIComponent(value);
@@ -74,7 +86,10 @@ export function useFindings(projectId: string, analysisId: string, enabled: bool
   });
 }
 
-/** `GET /api/projects/:id/recommendations?analysisId=` once the analysis is `done` or `failed`. */
+/**
+ * `GET /api/projects/:id/recommendations?analysisId=` once the analysis is
+ * `done` or `failed`; refetches every 3 s while a flow is generating.
+ */
 export function useRecommendations(projectId: string, analysisId: string, enabled: boolean) {
   return useQuery({
     queryKey: analysisKeys.recommendations(projectId, analysisId),
@@ -85,5 +100,7 @@ export function useRecommendations(projectId: string, analysisId: string, enable
         { signal },
       ),
     enabled,
+    refetchInterval: (query) => recommendationsRefetchInterval(query.state.data),
+    refetchIntervalInBackground: false,
   });
 }

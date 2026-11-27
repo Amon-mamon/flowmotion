@@ -189,9 +189,11 @@ describe("SignalsList", () => {
   });
 });
 
+const listProps = { projectId: "project-1", analysisCommitSha: null };
+
 describe("RecommendationsList", () => {
   it("shows title, trigger, confidence, credentials, risk, source files, rationale", () => {
-    renderWithQuery(<RecommendationsList recommendations={doneRecommendations} />);
+    renderWithQuery(<RecommendationsList recommendations={doneRecommendations} {...listProps} />);
     const card = document.querySelector(`[data-recommendation="${doneRecommendations[1]!.id}"]`) as HTMLElement;
     const c = within(card);
     expect(c.getByText("Nightly order summary email")).toBeInTheDocument();
@@ -209,7 +211,7 @@ describe("RecommendationsList", () => {
   });
 
   it("has no checkbox or selected bar; each card has its own gated Generate flow button (D-42)", () => {
-    renderWithQuery(<RecommendationsList recommendations={doneRecommendations} />);
+    renderWithQuery(<RecommendationsList recommendations={doneRecommendations} {...listProps} />);
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.queryByTestId("selected-count")).not.toBeInTheDocument();
     const buttons = screen.getAllByRole("button", { name: "Generate flow" });
@@ -228,6 +230,7 @@ describe("RecommendationsList", () => {
           { ...doneRecommendations[0]!, status: "selected", flowId },
           { ...doneRecommendations[1]!, status: "generated", flowId },
         ]}
+        {...listProps}
       />,
     );
     expect(screen.getByText("Generating")).toBeInTheDocument();
@@ -241,6 +244,7 @@ describe("RecommendationsList", () => {
     renderWithQuery(
       <RecommendationsList
         recommendations={[{ ...doneRecommendations[0]!, title: "<h1>Pwn</h1>", rationale: "<em>x</em> because" }]}
+        {...listProps}
       />,
     );
     expect(screen.getByText("<h1>Pwn</h1>")).toBeInTheDocument();
@@ -249,7 +253,7 @@ describe("RecommendationsList", () => {
   });
 
   it("empty state", () => {
-    renderWithQuery(<RecommendationsList recommendations={[]} />);
+    renderWithQuery(<RecommendationsList recommendations={[]} {...listProps} />);
     expect(screen.getByText("No automations found")).toBeInTheDocument();
   });
 });
