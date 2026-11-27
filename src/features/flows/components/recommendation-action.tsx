@@ -3,7 +3,7 @@
 import { CheckIcon, Loader2Icon, WorkflowIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useId, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,6 @@ import { GenerateErrorNotice } from "@/features/flows/components/generate-error-
 import { StaleAnalysisDialog } from "@/features/flows/components/stale-analysis-dialog";
 import { FLOW_COPY } from "@/features/flows/copy";
 import { useGenerate } from "@/features/flows/queries";
-import { isGenerateApiReady } from "@/features/flows/readiness";
 
 const linkClass = "text-sm text-primary underline-offset-4 hover:underline";
 const flowHref = (flowId: string) => `/flows/${encodeURIComponent(flowId)}`;
@@ -34,11 +33,9 @@ export function RecommendationAction({
   const { id, status, flowId } = recommendation;
   const router = useRouter();
   const generate = useGenerate();
-  const hintId = useId();
   const [staleOpen, setStaleOpen] = useState(false);
   // Guards "Generate anyway" against a second click before React re-renders (R3bu-1).
   const inFlight = useRef(false);
-  const ready = isGenerateApiReady();
 
   if (status === "selected") {
     return (
@@ -113,34 +110,20 @@ export function RecommendationAction({
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-3">
-        {ready ? (
-          <Button type="button" disabled={generate.isPending} onClick={() => start(false)}>
-            <WorkflowIcon aria-hidden="true" />
-            {generate.isPending ? FLOW_COPY.generatePending : retry ? FLOW_COPY.tryAgain : FLOW_COPY.generate}
-          </Button>
-        ) : (
-          <>
-            <Button type="button" disabled aria-describedby={hintId}>
-              <WorkflowIcon aria-hidden="true" />
-              {retry ? FLOW_COPY.tryAgain : FLOW_COPY.generate}
-            </Button>
-            <span id={hintId} className="text-xs text-muted-foreground">
-              {FLOW_COPY.generateNotReady}
-            </span>
-          </>
-        )}
+        <Button type="button" disabled={generate.isPending} onClick={() => start(false)}>
+          <WorkflowIcon aria-hidden="true" />
+          {generate.isPending ? FLOW_COPY.generatePending : retry ? FLOW_COPY.tryAgain : FLOW_COPY.generate}
+        </Button>
       </div>
-      {ready && generate.isError ? <GenerateErrorNotice error={generate.error} /> : null}
-      {ready ? (
-        <StaleAnalysisDialog
-          open={staleOpen}
-          onOpenChange={setStaleOpen}
-          projectId={projectId}
-          analysisCommitSha={analysisCommitSha}
-          onGenerateAnyway={generateAnyway}
-          pending={generate.isPending}
-        />
-      ) : null}
+      {generate.isError ? <GenerateErrorNotice error={generate.error} /> : null}
+      <StaleAnalysisDialog
+        open={staleOpen}
+        onOpenChange={setStaleOpen}
+        projectId={projectId}
+        analysisCommitSha={analysisCommitSha}
+        onGenerateAnyway={generateAnyway}
+        pending={generate.isPending}
+      />
     </div>
   );
 }

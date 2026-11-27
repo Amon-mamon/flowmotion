@@ -13,7 +13,6 @@ import {
   useFlows,
   useGenerate,
 } from "@/features/flows/queries";
-import { isGenerateApiReady } from "@/features/flows/readiness";
 import { FLOW_STATUSES, type FlowDetail } from "@/features/flows/schemas";
 import { fail, mockFetch, ok } from "@/features/test-utils/render";
 
@@ -94,10 +93,6 @@ describe("useFlows", () => {
 });
 
 describe("useGenerate", () => {
-  it("the Phase 3a gate is off", () => {
-    expect(isGenerateApiReady()).toBe(false);
-  });
-
   it("POSTs one recommendation id and returns the flow ids", async () => {
     const fetchMock = mockFetch([
       {

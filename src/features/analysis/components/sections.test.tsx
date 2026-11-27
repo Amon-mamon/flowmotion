@@ -210,15 +210,15 @@ describe("RecommendationsList", () => {
     expect(c.getByText(/A cron entry in vercel.json/)).toBeInTheDocument();
   });
 
-  it("has no checkbox or selected bar; each card has its own gated Generate flow button (D-42)", () => {
+  it("has no checkbox or selected bar; each card has its own live Generate flow button (D-42)", () => {
     renderWithQuery(<RecommendationsList recommendations={doneRecommendations} {...listProps} />);
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.queryByTestId("selected-count")).not.toBeInTheDocument();
     const buttons = screen.getAllByRole("button", { name: "Generate flow" });
     expect(buttons).toHaveLength(doneRecommendations.length);
     for (const button of buttons) {
-      expect(button).toBeDisabled();
-      expect(button).toHaveAccessibleDescription("Flow generation is being set up.");
+      expect(button).toBeEnabled();
+      expect(button).not.toHaveAttribute("aria-describedby");
     }
   });
 

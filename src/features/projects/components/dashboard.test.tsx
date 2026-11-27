@@ -7,9 +7,6 @@ vi.mock("next/navigation", () => ({
 }));
 let mockParams = new URLSearchParams();
 
-const generateReady = vi.fn(() => false);
-vi.mock("@/features/flows/readiness", () => ({ isGenerateApiReady: () => generateReady() }));
-
 import { fail, mockFetch, ok, renderWithQuery } from "@/features/test-utils/render";
 import { DashboardView } from "@/features/projects/components/dashboard-view";
 import { ProjectStatusBadge } from "@/features/projects/components/project-status-badge";
@@ -21,8 +18,6 @@ import { render } from "@testing-library/react";
 afterEach(() => {
   vi.unstubAllGlobals();
   mockParams = new URLSearchParams();
-  generateReady.mockReset();
-  generateReady.mockImplementation(() => false);
 });
 
 const isProjects = (u: string) => u === "/api/projects";
@@ -39,6 +34,7 @@ describe("Dashboard projects grid", () => {
     mockFetch([
       { match: isProjects, respond: () => ok({ projects: [] }) },
       { match: isInstallations, respond: () => ok({ installations: [] }) },
+      { match: (u) => u === "/api/flows", respond: () => ok({ flows: [] }) },
     ]);
     renderWithQuery(<DashboardView />);
     expect(await screen.findByText("No projects yet")).toBeInTheDocument();
@@ -49,7 +45,7 @@ describe("Dashboard projects grid", () => {
       "href",
       "/api/github/authorize",
     );
-    expect(screen.getByText("No flows yet")).toBeInTheDocument();
+    expect(await screen.findByText("No flows yet")).toBeInTheDocument();
   });
 
   it("empty + an installation: Add repository opens the dialog, no Connect GitHub", async () => {
@@ -82,7 +78,11 @@ describe("Dashboard projects grid", () => {
   });
 
   it("shows an error state with retry", async () => {
-    mockFetch([{ match: isProjects, respond: () => fail("INTERNAL", "boom", 500) }]);
+    // Recent flows always loads now (OC-8); keep its own Try again out of the way.
+    mockFetch([
+      { match: isProjects, respond: () => fail("INTERNAL", "boom", 500) },
+      { match: (u) => u === "/api/flows", respond: () => ok({ flows: [] }) },
+    ]);
     renderWithQuery(<DashboardView />);
     expect(await screen.findByText("Could not load projects")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
@@ -179,6 +179,7 @@ describe("Dashboard empty state with a failed installations request (R11-8)", ()
     mockFetch([
       { match: isProjects, respond: () => ok({ projects: [] }) },
       { match: isInstallations, respond: () => fail("INTERNAL", "boom", 500) },
+      { match: (u) => u === "/api/flows", respond: () => ok({ flows: [] }) },
     ]);
     renderWithQuery(<DashboardView />);
     expect(await screen.findByText("Could not load GitHub connections")).toBeInTheDocument();
@@ -279,24 +280,23 @@ describe("Phase 1.2 GitHub account isolation (D-43, D-44, D-45)", () => {
 describe("Dashboard Recent flows (OC-7)", () => {
   const isFlows = (u: string) => u === "/api/flows";
 
-  it("gate closed: the empty state only and no request to /api/flows", async () => {
+  it("an empty list shows the empty state under the Recent flows heading", async () => {
     const fetchMock = mockFetch([
       { match: isProjects, respond: () => ok({ projects: [] }) },
       { match: isInstallations, respond: () => ok({ installations: [] }) },
-      { match: isFlows, respond: () => ok({ flows: flowSummaries }) },
+      { match: isFlows, respond: () => ok({ flows: [] }) },
     ]);
     renderWithQuery(<DashboardView />);
     expect(await screen.findByText("No projects yet")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Recent flows" })).toBeInTheDocument();
-    expect(screen.getByText("No flows yet")).toBeInTheDocument();
+    expect(await screen.findByText("No flows yet")).toBeInTheDocument();
     expect(
       screen.getByText("Generated flows will appear here once a project has been analyzed."),
     ).toBeInTheDocument();
-    expect(fetchMock.mock.calls.some(([u]) => String(u).startsWith("/api/flows"))).toBe(false);
+    expect(fetchMock.mock.calls.filter(([u]) => String(u) === "/api/flows").length).toBeGreaterThan(0);
   });
 
-  it("gate open: Recent flows lists the rows under the same heading", async () => {
-    generateReady.mockImplementation(() => true);
+  it("Recent flows always loads and lists the rows under the same heading", async () => {
     mockFetch([
       { match: isProjects, respond: () => ok({ projects: [] }) },
       { match: isInstallations, respond: () => ok({ installations: [] }) },

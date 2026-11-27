@@ -172,10 +172,10 @@ describe("AnalysisView: done", () => {
     expect(screen.queryByRole("heading", { name: /^Queue consumers/ })).not.toBeInTheDocument();
 
     expect(await screen.findByText("Notify Slack on new orders")).toBeInTheDocument();
-    // Per-card buttons, gated off until the Generate API is ready (D-42, Phase 3a).
+    // Per-card buttons, live since OC-8 (D-42, Phase 3b).
     const generateButtons = screen.getAllByRole("button", { name: "Generate flow" });
     expect(generateButtons).toHaveLength(recommendationsFor(doneAnalysis.id).length);
-    for (const button of generateButtons) expect(button).toBeDisabled();
+    for (const button of generateButtons) expect(button).toBeEnabled();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.queryByText(COPY.aiDisabled)).not.toBeInTheDocument();
   });

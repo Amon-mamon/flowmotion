@@ -42,7 +42,6 @@ describe("flow copy (design.md exact strings)", () => {
       viewProgress: "View progress",
       flowReady: "Flow ready",
       openFlow: "Open flow",
-      generateNotReady: "Flow generation is being set up.",
       generateHelper: "Each flow is generated on its own. You can generate up to 30 flows per day.",
       generateFailed: "Could not start generation. Try again.",
       dailyCapGenerations: "Daily limit reached (30 flows per day). It resets at 00:00 UTC.",

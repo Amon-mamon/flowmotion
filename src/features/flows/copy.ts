@@ -51,8 +51,6 @@ export const FLOW_COPY = {
   viewProgress: "View progress",
   flowReady: "Flow ready",
   openFlow: "Open flow",
-  /** Phase 3a only, while the Generate API is not ready. */
-  generateNotReady: "Flow generation is being set up.",
   generateHelper: "Each flow is generated on its own. You can generate up to 30 flows per day.",
   generateFailed: "Could not start generation. Try again.",
   /** exact (design.md "Card action area", DAILY_CAP_REACHED for generation) */

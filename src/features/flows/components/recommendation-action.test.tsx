@@ -4,9 +4,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
-const ready = vi.fn(() => false);
-vi.mock("@/features/flows/readiness", () => ({ isGenerateApiReady: () => ready() }));
-
 import { RecommendationsList } from "@/features/analysis/components/recommendations-list";
 import { doneRecommendations } from "@/features/analysis/fixtures";
 import type { Recommendation } from "@/features/analysis/schemas";
@@ -16,19 +13,16 @@ import { fail, mockFetch, ok, renderWithQuery } from "@/features/test-utils/rend
 afterEach(() => {
   vi.unstubAllGlobals();
   push.mockReset();
-  ready.mockReset();
-  ready.mockImplementation(() => false);
 });
 
 const base = doneRecommendations[0]!;
 const rec = (overrides: Partial<Recommendation>): Recommendation => ({ ...base, ...overrides });
 const card = () => within(document.querySelector(`[data-recommendation="${base.id}"]`) as HTMLElement);
-const HINT = "Flow generation is being set up.";
 const SHA = "abc1234def5678900000000000000000000000ab";
 const PROJECT_ID = "proj/1";
 const listProps = { projectId: PROJECT_ID, analysisCommitSha: SHA };
 
-describe("recommendation card action area (D-42), Generate API gated off", () => {
+describe("recommendation card action area (D-42)", () => {
   it("has no checkbox, no selected state, and no selected bar", () => {
     renderWithQuery(<RecommendationsList recommendations={doneRecommendations} {...listProps} />);
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
@@ -43,25 +37,19 @@ describe("recommendation card action area (D-42), Generate API gated off", () =>
     ).toBeInTheDocument();
   });
 
-  it("new without a flow: disabled Generate flow with the set-up hint", () => {
-    const fetchMock = mockFetch([]);
+  it("new without a flow: an enabled Generate flow with no hint and no link", () => {
     renderWithQuery(<RecommendationsList recommendations={[rec({ status: "new", flowId: null })]} {...listProps} />);
     const button = card().getByRole("button", { name: "Generate flow" });
-    expect(button).toBeDisabled();
-    expect(button).toHaveAccessibleDescription(HINT);
-    expect(card().getByText(HINT)).toBeInTheDocument();
+    expect(button).toBeEnabled();
+    expect(button).not.toHaveAttribute("aria-describedby");
     expect(card().queryByRole("link")).not.toBeInTheDocument();
-    fireEvent.click(button);
-    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("new with a failed flow: the last-attempt text, View details, and a disabled Try again", () => {
+  it("new with a failed flow: the last-attempt text, View details, and an enabled Try again", () => {
     renderWithQuery(<RecommendationsList recommendations={[rec({ status: "new", flowId: flowId(12) })]} {...listProps} />);
     expect(card().getByText("The last attempt did not produce a flow.")).toBeInTheDocument();
     expect(card().getByRole("link", { name: "View details" })).toHaveAttribute("href", `/flows/${flowId(12)}`);
-    const button = card().getByRole("button", { name: "Try again" });
-    expect(button).toBeDisabled();
-    expect(button).toHaveAccessibleDescription(HINT);
+    expect(card().getByRole("button", { name: "Try again" })).toBeEnabled();
     expect(card().queryByRole("button", { name: "Generate flow" })).not.toBeInTheDocument();
   });
 
@@ -70,7 +58,6 @@ describe("recommendation card action area (D-42), Generate API gated off", () =>
     expect(card().getByText("Generating")).toBeInTheDocument();
     expect(card().getByRole("link", { name: "View progress" })).toHaveAttribute("href", `/flows/${flowId(1)}`);
     expect(card().queryByRole("button")).not.toBeInTheDocument();
-    expect(card().queryByText(HINT)).not.toBeInTheDocument();
   });
 
   it("generated: Flow ready badge with Open flow and no button", () => {
@@ -78,13 +65,11 @@ describe("recommendation card action area (D-42), Generate API gated off", () =>
     expect(card().getByText("Flow ready")).toBeInTheDocument();
     expect(card().getByRole("link", { name: "Open flow" })).toHaveAttribute("href", `/flows/${flowId(2)}`);
     expect(card().queryByRole("button")).not.toBeInTheDocument();
-    expect(card().queryByText(HINT)).not.toBeInTheDocument();
   });
 });
 
-describe("recommendation card action area once the Generate API is ready (Phase 3b switch)", () => {
+describe("Generate flow (live, OC-8)", () => {
   it("posts one id, shows Starting…, and goes to the new flow", async () => {
-    ready.mockImplementation(() => true);
     let release: () => void = () => {};
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -102,7 +87,6 @@ describe("recommendation card action area once the Generate API is ready (Phase 
     renderWithQuery(<RecommendationsList recommendations={[rec({ status: "new", flowId: null })]} {...listProps} />);
     const button = card().getByRole("button", { name: "Generate flow" });
     expect(button).toBeEnabled();
-    expect(card().queryByText(HINT)).not.toBeInTheDocument();
     fireEvent.click(button);
     expect(await card().findByRole("button", { name: "Starting…" })).toBeDisabled();
     release();
@@ -111,8 +95,42 @@ describe("recommendation card action area once the Generate API is ready (Phase 
     expect(JSON.parse(String(post[1]?.body))).toEqual({ recommendationIds: [base.id] });
   });
 
+  it("a double-click on Generate flow posts { recommendationIds: [id] } exactly once and navigates", async () => {
+    const fetchMock = mockFetch([
+      {
+        method: "POST",
+        match: (u) => u === "/api/recommendations/generate",
+        respond: () => ok({ flowIds: [flowId(7)] }, 202),
+      },
+    ]);
+    renderWithQuery(<RecommendationsList recommendations={[rec({ status: "new", flowId: null })]} {...listProps} />);
+    const button = card().getByRole("button", { name: "Generate flow" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(push).toHaveBeenCalledWith(`/flows/${flowId(7)}`));
+    const sent = fetchMock.mock.calls
+      .filter(([, init]) => init?.method === "POST")
+      .map(([, init]) => JSON.parse(String(init?.body)) as unknown);
+    expect(sent).toEqual([{ recommendationIds: [base.id] }]);
+    expect(push).toHaveBeenCalledTimes(1);
+  });
+
+  it("Try again posts the same body and navigates to the new flow", async () => {
+    const fetchMock = mockFetch([
+      {
+        method: "POST",
+        match: (u) => u === "/api/recommendations/generate",
+        respond: () => ok({ flowIds: [flowId(8)] }, 202),
+      },
+    ]);
+    renderWithQuery(<RecommendationsList recommendations={[rec({ status: "new", flowId: flowId(12) })]} {...listProps} />);
+    fireEvent.click(card().getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith(`/flows/${flowId(8)}`));
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST")!;
+    expect(JSON.parse(String(post[1]?.body))).toEqual({ recommendationIds: [base.id] });
+  });
+
   it("a failed start shows a plain notice inside the card", async () => {
-    ready.mockImplementation(() => true);
     mockFetch([{ method: "POST", match: () => true, respond: () => fail("INTERNAL", "boom", 500) }]);
     renderWithQuery(<RecommendationsList recommendations={[rec({ status: "new", flowId: null })]} {...listProps} />);
     fireEvent.click(card().getByRole("button", { name: "Generate flow" }));
@@ -193,8 +211,7 @@ describe("generate errors inside the card (OC-4)", () => {
 
   for (const c of cases) {
     it(`${c.code} (${c.status}) "${c.message}" shows its notice inside the card and does not navigate`, async () => {
-      ready.mockImplementation(() => true);
-      mockFetch([{ method: "POST", match: (u) => u === GENERATE_URL, respond: () => fail(c.code, c.message, c.status) }]);
+        mockFetch([{ method: "POST", match: (u) => u === GENERATE_URL, respond: () => fail(c.code, c.message, c.status) }]);
       renderNew();
       fireEvent.click(card().getByRole("button", { name: "Generate flow" }));
       expect(await card().findByText(c.text)).toBeInTheDocument();
@@ -205,7 +222,6 @@ describe("generate errors inside the card (OC-4)", () => {
   }
 
   it("GITHUB_REFRESH_REQUIRED shows the Refresh repository access link", async () => {
-    ready.mockImplementation(() => true);
     mockFetch([{ method: "POST", match: () => true, respond: () => fail("GITHUB_REFRESH_REQUIRED", "x", 403) }]);
     renderNew();
     fireEvent.click(card().getByRole("button", { name: "Generate flow" }));
@@ -216,7 +232,6 @@ describe("generate errors inside the card (OC-4)", () => {
   });
 
   it("a network failure shows the generic notice", async () => {
-    ready.mockImplementation(() => true);
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
@@ -226,15 +241,6 @@ describe("generate errors inside the card (OC-4)", () => {
     renderNew();
     fireEvent.click(card().getByRole("button", { name: "Generate flow" }));
     expect(await card().findByText("Could not start generation. Try again.")).toBeInTheDocument();
-  });
-
-  it("with the gate off no fetch happens and no notice renders", () => {
-    const fetchMock = mockFetch([]);
-    renderNew();
-    fireEvent.click(card().getByRole("button", { name: "Generate flow" }));
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(document.querySelector("[data-notice]")).toBeNull();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
 
@@ -257,7 +263,6 @@ describe("stale-analysis dialog (OC-5)", () => {
   }
 
   it("a 409 stale envelope opens the dialog with the exact title, body, and 7-character sha; no inline notice", async () => {
-    ready.mockImplementation(() => true);
     staleThen(() => ok({ flowIds: [flowId(9)] }, 202));
     renderNew();
     fireEvent.click(card().getByRole("button", { name: "Generate flow" }));
@@ -270,7 +275,6 @@ describe("stale-analysis dialog (OC-5)", () => {
   });
 
   it("the body ends without a sha when the analysis commitSha is null", async () => {
-    ready.mockImplementation(() => true);
     staleThen(() => ok({ flowIds: [flowId(9)] }, 202));
     renderNew(null);
     fireEvent.click(card().getByRole("button", { name: "Generate flow" }));
@@ -279,7 +283,6 @@ describe("stale-analysis dialog (OC-5)", () => {
   });
 
   it("Generate anyway posts allowStale once, closes the dialog, and navigates", async () => {
-    ready.mockImplementation(() => true);
     const fetchMock = staleThen(() => ok({ flowIds: [flowId(9)] }, 202));
     renderNew();
     fireEvent.click(card().getByRole("button", { name: "Generate flow" }));
@@ -292,7 +295,6 @@ describe("stale-analysis dialog (OC-5)", () => {
   });
 
   it("a double-click on Generate anyway sends exactly one allowStale POST (R3bu-1)", async () => {
-    ready.mockImplementation(() => true);
     const fetchMock = staleThen(() => ok({ flowIds: [flowId(9)] }, 202));
     renderNew();
     fireEvent.click(card().getByRole("button", { name: "Generate flow" }));
@@ -306,7 +308,6 @@ describe("stale-analysis dialog (OC-5)", () => {
   });
 
   it("an error from Generate anyway shows through the card notice", async () => {
-    ready.mockImplementation(() => true);
     staleThen(() => fail("DAILY_CAP_REACHED", "cap", 429));
     renderNew();
     fireEvent.click(card().getByRole("button", { name: "Generate flow" }));
@@ -318,7 +319,6 @@ describe("stale-analysis dialog (OC-5)", () => {
   });
 
   it("Re-analyze links to the project page", async () => {
-    ready.mockImplementation(() => true);
     staleThen(() => ok({ flowIds: [flowId(9)] }, 202));
     renderNew();
     fireEvent.click(card().getByRole("button", { name: "Generate flow" }));
@@ -330,7 +330,6 @@ describe("stale-analysis dialog (OC-5)", () => {
   });
 
   it("Esc closes the dialog without a request", async () => {
-    ready.mockImplementation(() => true);
     const fetchMock = staleThen(() => ok({ flowIds: [flowId(9)] }, 202));
     renderNew();
     fireEvent.click(card().getByRole("button", { name: "Generate flow" }));
