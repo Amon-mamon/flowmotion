@@ -41,6 +41,36 @@ Shared between **Claude Code (coordinator)** and **OpenCode (worker)**. OpenCode
 
 **Coordinator review (2026-11-28):** accepted. Diff touched only the listed files; the new test fails when the attribute is removed; typecheck, lint, build pass; 1678 tests pass. Model: `opencode/deepseek-v4.1-flash-free`.
 
+### OC-2 · Phase 3a fixes: canvas node clicks and empty "used by" · status: assigned
+**Goal:** Phase 3a review fixes, frontend items 1-3 (`docs/contract.md` section 11, "Phase 3a review fixes", **Frontend**). (1) R3a-1, high: clicking a node card on the flow canvas with the mouse must open the node inspector in a real browser. Today React Flow puts `pointer-events: none` on read-only node wrappers because there is no `onNodeClick`, so mouse clicks never reach the card. (2) R3a-7: placeholder and credential entries with an empty `usedBy` list must render without the "used by" part. (3) Confirm the OQ-27 fallback copy matches `docs/design.md`.
+**Read first:** `AGENTS.md`; `docs/contract.md` section 11 "Phase 3a review fixes" (Frontend items 1-3, read them in full); `docs/design.md` (flow page, node inspector, export panel copy); `docs/review.md` sections R3a-1 and R3a-7; the files below.
+**Files you may change:**
+- `src/features/flows/components/flow-canvas.tsx`
+- `src/features/flows/components/flow-node-card.tsx`
+- `src/features/flows/components/flow-view.tsx`
+- `src/features/flows/components/export-panel.tsx`
+- `src/features/flows/copy.ts`
+- `src/features/flows/fixtures.ts`
+- `src/features/flows/components/flow-view.test.tsx`
+- `src/features/flows/copy.test.ts`
+- `src/features/flows/components/flow-canvas.test.tsx` (new, if you need it)
+- `docs/opencode-tasks.md` (only the Report and status of OC-2)
+**Do not change:** `src/features/flows/components/flow-node-card-body.tsx` and `src/features/flows/node-type.ts` (the landing page reuses them), anything in `src/schemas`, `src/lib`, or the marketing feature.
+**Do:**
+1. R3a-1: pass `onNodeClick` to `ReactFlow` that opens the inspector for `node.id`. Keep `elementsSelectable={false}` and `nodesDraggable={false}`. Keep the card `<button>` for keyboard use (Enter and Space). A single mouse click must open the inspector exactly once, not twice and not toggle it closed. Add the classes `nodrag nopan` to the card button.
+2. R3a-1 tests: the rendered `.react-flow__node` wrapper's inline `pointer-events` is not `none`; a click on the wrapper opens the inspector; Enter on the card still opens it; Esc closes it.
+3. R3a-7: entries whose `usedBy` is empty render without the "used by" text, using the exact strings in `docs/design.md`. Tests: a placeholder used only by the flow name, a credential with an empty list, exact strings.
+4. OQ-27: check that the fallback copy for a ready flow without an n8n version matches `docs/design.md`. Change nothing if it already matches; say so in the report.
+**Acceptance checks:**
+- Only the files listed above changed.
+- Existing flow tests still pass unchanged, except where a test must be updated for the new behaviour (explain each in the report).
+- `npm run typecheck`, `npm run lint`, `npx vitest run`, `npm run build` pass.
+**Report (OpenCode fills in):**
+- Changed:
+- Files touched:
+- Checks:
+- Questions:
+
 <!--
 Template (the coordinator copies this for each task):
 
