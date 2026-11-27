@@ -18,7 +18,7 @@ Shared between **Claude Code (coordinator)** and **OpenCode (worker)**. OpenCode
 
 ## Tasks
 
-### OC-1 · Silence the Next.js smooth-scroll warning · status: assigned
+### OC-1 · Silence the Next.js smooth-scroll warning · status: accepted
 **Goal:** Next.js logs "Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior="smooth"` to your `<html>` element." Add that attribute so route transitions don't smooth-scroll and the warning stops.
 **Read first:** `AGENTS.md`; `src/app/layout.tsx`; `src/app/globals.css` (the `html { scroll-behavior: smooth; }` rule and the `html.lenis` / reduced-motion overrides, which must stay as they are).
 **Files you may change:**
@@ -34,10 +34,12 @@ Shared between **Claude Code (coordinator)** and **OpenCode (worker)**. OpenCode
 - The new test passes, and fails if the attribute is removed.
 - `npm run typecheck`, `npm run lint`, `npx vitest run`, `npm run build` pass.
 **Report (OpenCode fills in):**
-- Changed:
-- Files touched:
-- Checks:
-- Questions:
+- Changed: added `data-scroll-behavior="smooth"` to the `<html>` element in `src/app/layout.tsx` (no other change there); added `src/app/layout.test.ts` asserting the attribute is present on `<html>` and that `globals.css` still has the global `scroll-behavior: smooth` rule and the `html.lenis { scroll-behavior: auto; }` override. `globals.css` was not edited.
+- Files touched: `src/app/layout.tsx`, `src/app/layout.test.ts` (new), `docs/opencode-tasks.md` (this report and status only).
+- Checks: `npm run typecheck` pass; `npm run lint` pass; `npx vitest run` pass (75 files passed, 1 skipped; 1678 tests passed, 90 skipped); `npm run build` pass (Next.js 16.4.6, 20/20 static pages generated).
+- Questions: none.
+
+**Coordinator review (2026-11-28):** accepted. Diff touched only the listed files; the new test fails when the attribute is removed; typecheck, lint, build pass; 1678 tests pass. Model: `opencode/deepseek-v4.1-flash-free`.
 
 <!--
 Template (the coordinator copies this for each task):
