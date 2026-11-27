@@ -72,7 +72,7 @@
         "statusCode": 200,
         "body": [
           { "name": "received", "value": true },
-          { "name": "orderId", "value": "{{ $node[\"Shape Order\"].json.orderId }}" },
+          { "name": "status", "value": "queued" },
           { "name": "note", "value": "Thanks, we got \"it\"" }
         ]
       }

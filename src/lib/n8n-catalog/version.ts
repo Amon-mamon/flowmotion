@@ -13,4 +13,4 @@ export const N8N_VERSION = "2.49.5";
 export const NODES_BASE_VERSION = "2.49.5";
 
 /** The `fm<n>` suffix is bumped whenever a node profile changes. */
-export const CATALOG_VERSION = "2.49.5+fm1";
+export const CATALOG_VERSION = "2.49.5+fm2";

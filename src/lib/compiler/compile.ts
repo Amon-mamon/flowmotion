@@ -34,9 +34,10 @@ function markExpressions(value: JsonValue): JsonValue {
   if (typeof value === "string") return value.includes("{{") ? `=${value}` : value;
   if (Array.isArray(value)) return value.map(markExpressions);
   if (value !== null && typeof value === "object") {
-    const result: Record<string, JsonValue> = {};
-    for (const [key, child] of Object.entries(value)) result[key] = markExpressions(child);
-    return result;
+    // Own properties only (D-49): `Object.fromEntries` defines keys, never assigns them.
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]): [string, JsonValue] => [key, markExpressions(child)]),
+    );
   }
   return value;
 }
@@ -57,10 +58,12 @@ export function compileFlow(spec: FlowSpec): CompiledFlow {
     const params = profile.paramsSchema.safeParse(node.params);
     if (!params.success) throw new CompileError("invalid_params", node.key);
     const position = positions.get(node.key) ?? { x: 0, y: 0 };
-    const parameters: Record<string, JsonValue> = {};
-    for (const [name, value] of Object.entries(profile.toParameters(params.data))) {
-      parameters[name] = markExpressions(value);
-    }
+    const parameters: Record<string, JsonValue> = Object.fromEntries(
+      Object.entries(profile.toParameters(params.data)).map(([name, value]): [string, JsonValue] => [
+        name,
+        markExpressions(value),
+      ]),
+    );
     return {
       id: stableId(`node:${node.key}`),
       name: node.label,

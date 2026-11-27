@@ -28,6 +28,15 @@ const plainText = (min: number, max: number) =>
       message: "Control characters are not allowed",
     });
 
+/**
+ * Flow `name` and `description` (D-53, R3a-8): display text, never an n8n
+ * expression, so no leading `=` and no `{{`.
+ */
+const displayText = (min: number, max: number) =>
+  plainText(min, max).refine((value) => !value.startsWith("=") && !value.includes("{{"), {
+    message: "Display text cannot be an expression",
+  });
+
 export const nodeKeySchema = z.string().regex(NODE_KEY_PATTERN);
 export const nodeLabelSchema = z.string().regex(NODE_LABEL_PATTERN);
 
@@ -79,8 +88,8 @@ export type FlowSpecEdge = z.infer<typeof flowSpecEdgeSchema>;
 /** Model output. Counts and uniqueness are rules F1..F12, not Zod, so a failure carries a rule id. */
 export const flowSpecDraftSchema = z.strictObject({
   version: z.literal(1),
-  name: plainText(3, 80),
-  description: plainText(10, 600),
+  name: displayText(3, 80),
+  description: displayText(10, 600),
   nodes: z.array(flowSpecNodeSchema).max(200),
   edges: z.array(flowSpecEdgeSchema).max(400),
   tests: testSpecSchema,

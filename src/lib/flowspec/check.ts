@@ -6,7 +6,7 @@ import { loopBackEdges, longestPathDepths, normalizeEdges, reachableFrom, upstre
 import { TEXT_RULE_MESSAGE } from "@/lib/flowspec/values";
 import { isAllowedNodeType, NODE_TYPE_PREFIX } from "@/lib/n8n-catalog/allowlist";
 import { nodeProfile } from "@/lib/n8n-catalog/profiles";
-import { scan } from "@/lib/security/secret-scanner";
+import { scanFindsSecret } from "@/lib/security/scan-render";
 import {
   MAX_FLOW_NODES,
   MAX_FLOWSPEC_BYTES,
@@ -42,18 +42,6 @@ const TRIGGER_KINDS: Readonly<Record<string, "manual" | "webhook" | "schedule">>
 
 /** The path the scanner sees: a plain JSON file, so no file-specific rule applies. */
 const SCAN_PATH = "flowspec.json";
-
-/**
- * The text the scanner reads for F9: the draft as pretty JSON, with each
- * node's `key` property written as `node`. A node key is an identifier of ours
- * (`^[a-z][a-z0-9_]{0,39}$`), but as `"key": "…"` the scanner's
- * secret-name rule would read every longer key as a secret assigned to a
- * name containing "key". The value itself is still scanned.
- */
-function renderForScan(draft: FlowSpecDraft): string {
-  const nodes = draft.nodes.map(({ key, ...rest }) => ({ node: key, ...rest }));
-  return JSON.stringify({ ...draft, nodes }, null, 2);
-}
 
 function byteLength(text: string): number {
   return new TextEncoder().encode(text).length;
@@ -201,8 +189,9 @@ export function checkFlowSpec(draft: FlowSpecDraft): CheckFlowSpecResult {
     }
   }
 
-  // F9: no secrets anywhere in the draft.
-  if (scan(SCAN_PATH, renderForScan(draft)).findings.length > 0) errors.push({ rule: "F9" });
+  // F9: no secrets anywhere in the draft, over the shared scan rendering (D-49).
+  // Never throws: a draft too deep to render fails F9 (R3aR-1).
+  if (scanFindsSecret(SCAN_PATH, draft)) errors.push({ rule: "F9" });
 
   // F10: respondToWebhook only with a webhook trigger set to "respondNode", and then at least one.
   const responders = nodes.filter((node) => node.nodeType === RESPOND_TYPE);

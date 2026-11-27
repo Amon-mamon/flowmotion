@@ -861,3 +861,142 @@ Checks:
 - Fix: add `let cancelled = false` as in `flow-line.tsx`, and check it in `schedule` and `read`.
 
 Open: high 0 · medium 2 (RM-1, RM-2 frontend) · low 6 (RM-3, RM-4 architect plus frontend; RM-5..RM-8 frontend), plus RL-11 (architect). Commit once RM-1 and RM-2 are fixed. Both are small: one CSS change and one test change. RM-1 existed before this work, so the coordinator may instead accept it and commit now with RM-1 tracked. The lows can follow, but RM-3 needs an owner or architect decision on the hero tilt before the owner browser check.
+
+## Phase 3b UI tasks OC-4..OC-7 (code review 2026-11-28)
+
+Scope: uncommitted frontend files for OC-4..OC-7 vs `f663eef` (`src/features/flows/copy.ts`(+test), `generate-error-notice.tsx`(+test), `stale-analysis-dialog.tsx`(+test), `recent-flows.tsx`(+test), `recommendation-action.tsx`(+test), `src/features/analysis/components/recommendations-list.tsx`, `analysis-view.tsx`, `sections.test.tsx`, `src/features/analysis/queries.ts`(+test), `src/features/projects/components/dashboard-view.tsx`, `dashboard.test.tsx`). `src/lib/**` and `tests/lib/**` were not reviewed (backend work in progress).
+
+Checks run: `npm run typecheck` pass, `npm run lint` pass, `npx vitest run src/features` 29 files / 441 tests pass. `npm run build` was not run in this review.
+
+Verified:
+- Only files on the OC-4..OC-7 allow-lists changed. `flow-node-card-body.tsx`, `node-type.ts`, `readiness.ts`, `fixtures.ts`, `src/features/github/**` (import only), `src/features/marketing/**`, `src/schemas`, `src/app/api`, `src/server`, and `supabase` are untouched. `analysis-view.test.tsx` did not need changing.
+- The gate is still `false` in app code (`readiness.ts` unchanged; `flows/queries.test.tsx:98` still asserts it). `DashboardView` renders `RecentFlowsEmpty` and never mounts `useFlows` while the gate is closed. `dashboard.test.tsx` "gate closed" asserts that no request starts with `/api/flows`.
+- OC-4: each code maps to the exact design.md string with its own `data-notice` value. `VALIDATION_ERROR` with an empty message falls back to the generic text. Non-`ApiError`s and `NETWORK` get the generic text. `<b>x</b>` renders literally. The gated branch is unchanged.
+- OC-5: the title, both bodies, the 7-character sha in mono, and the button labels match design.md exactly. The dialog is labelled by its title. "Generate anyway" closes the dialog, then sends `{ recommendationIds: [id], allowStale: true }` once. The test compares the full list of POST bodies, so a second POST would fail it. Esc calls only `onOpenChange(false)`, and the test asserts one POST in total. "Re-analyze" links to `/projects/<encodeURIComponent(projectId)>`. The stale code shows no inline notice. `allowStale` is only ever set by the dialog path, so the dialog cannot reopen in a loop.
+- OC-6: `RECOMMENDATIONS_POLL_MS = 3000`. The helper returns `false` for no data, an empty list, and lists with only `new` or `generated`. The hook sets `refetchIntervalInBackground: false`. With fake timers, the hook test checks no refetch at 2.9 s, a refetch at 3.1 s, then no further fetch for 10 s once nothing is `selected`. Removing `refetchInterval` would fail it.
+- OC-7: rows use `Link` to `/flows/<encodeURIComponent(id)>`, the name and repo (in mono) render as text, the status shows icon plus text, the date uses `formatDate`, and at most 20 rows render. Loading shows skeletons, the empty state reuses the existing copy, and errors show `ErrorState` "Could not load flows" whose retry refetches. A `<script>` name stays literal. The "Recent flows" heading is unchanged.
+- No `dangerouslySetInnerHTML` under `src/features`. No `any`.
+
+Deviations judged:
+- **Retry label "Try again"** (`recent-flows.tsx:43`, from the shared `ErrorState`): accepted. Every list error state in the app uses the shared component, and design.md says "a Retry button", not an exact label. See R3bu-2 for the doc wording.
+- **Screen-reader label "Loading flows"** (`FLOW_COPY.loadingFlows`, `recent-flows.tsx:35`): accepted. It is not visible copy and follows `projects-grid.tsx:26` ("Loading projects"). Nothing in design.md conflicts with it.
+- **Stale early return in `GenerateErrorNotice` written during OC-4**: accepted. OC-5 explicitly lists this file "only so `PROJECT_STALE_ANALYSIS` shows no notice". The intermediate OC-4-only state (stale error with no dialog) was never committed, and the final tree matches OC-5.
+
+### R3bu-1: "Generate anyway" can fire twice during the dialog's exit animation
+- File: `src/features/flows/components/recommendation-action.tsx:91` (`generateAnyway`), `src/features/flows/components/stale-analysis-dialog.tsx:61`
+- Severity: low
+- Owner: frontend
+- Problem: `generateAnyway` closes the dialog and calls `start(true)` with no guard. Base UI keeps the popup mounted and clickable during its exit transition, and `AlertDialogAction` is a plain `Button` that does not disable itself. A fast double-click (or Enter pressed twice) can therefore send two `allowStale` POSTs. The second POST gets "A flow already exists for this recommendation." (or races the partial unique index), so an error notice flashes while the first request navigates. The server keeps the data correct (at most one active flow), so this is cosmetic, but it breaks the "exactly once" intent.
+- Fix: return early when a request is already in flight, using a ref set on the first call (`if (sentRef.current) return; sentRef.current = true;`, reset in `onSettled`), or `if (generate.isPending) return;`. Then add a test that double-clicks "Generate anyway" and asserts two POSTs in total (the stale POST plus one).
+
+### R3bu-2: design.md says "Retry button", but the shared ErrorState label is "Try again"
+- File: `docs/design.md:236` (Dashboard "Recent flows"), `docs/contract.md` OC-7 ("with Retry")
+- Severity: low
+- Owner: architect
+- Problem: the docs name the button "Retry", while the shared `ErrorState` (used by every list, including "Could not load recommendations") renders "Try again". The code is consistent with the rest of the app, but a reader of the "exact copy" rule could flag it again.
+- Fix: change the wording to "with the shared error state's \"Try again\" button" (and optionally list the "Loading flows" screen-reader label), or record that `ErrorState`'s label is the app-wide retry copy.
+
+Open: high 0 · medium 0 · low 2 (R3bu-1 frontend, R3bu-2 architect). OC-4..OC-7 can be committed (after the coordinator's `npm run build` and full `npx vitest run`, which excludes the backend's in-progress `tests/lib/validator/review-fixes-3a.test.ts`). The lows can follow.
+
+## Phase 3a review fixes — backend code re-review (2026-11-28)
+
+Scope: uncommitted backend changes vs `HEAD` f663eef in `src/lib/**`, `src/schemas/flowspec.ts`, `scripts/**`, `tests/lib/**`, `tests/conformance/**`, plus the new `src/lib/security/scan-render.ts`, `src/lib/validator/allowed-params.ts`, `tests/lib/security/secret-scanner-d48.test.ts`, `tests/lib/validator/review-fixes-3a.test.ts`. Checked against contract section 11 "Phase 3a review fixes" backend items 1-11, sections 7-8, D-46..D-53, `security.md` sections 2 and 9, `testing.md` rules 5-8, `node-catalog.md`, and the backend entry of 2026-11-28 in `requests.md`. `src/features/**` was not reviewed (frontend, reviewed separately).
+
+Commands: `npm run typecheck` pass. `npm run lint` pass. `npx vitest run` 1814 passed / 90 skipped (RLS suite, no `SUPABASE_TEST_*`). `npm run build` pass. `npm run check:worker-deno` printed "skipped: deno not installed" (exit 0).
+
+Mutation check: a scratch copy outside the repo, with one rule removed at a time, then the engine tests re-run. Every removal turned tests red:
+- validator rule 6 `respondToWebhook` body check: 1 red
+- the pair line in `renderForScan`: 6 red (postgres `password`, set `api_key`, supabase column, header `apikey`, every-conformance-pair, rendering-shape)
+- the URL query secret detector: 3 red
+- the reserved-name refine on `identSchema`: 4 red
+- the validator table check (`isAllowedByTable`): 4 red
+- the destination check: 3 red
+- `hasReservedKey` in `assertExportSafe`: 4 red
+- validator `://` narrowed back to `http://`: 2 red
+- the validator header rule: 8 red (one per refused name)
+- the workflow `name` rule 6 check: 3 red
+- the `Text` `://` check: 4 red
+
+Verified:
+- **Item 1 (S3a-1).** Three detectors in `secret-scanner.ts`: Authorization scheme, URL credentials, and query secret. Each redacts only the secret part. Every positive case in the contract is tested: exact `redacted` text, masked type, and no 6-character run of the raw value left in `redacted` or the findings. The two curl cases are tested with their categories (`ci_secret`, `hardcoded_secret`), redis is `db_connection_string`, and Basic is built with `btoa` at test time. All 21 negatives are tested, plus two lowercase `your_` placeholders. All 7 linear-time inputs are 200 KB each. The existing scanner tests are unchanged and pass.
+- **Item 2 (R3a-2, S3a-2, S3a-4).** One `renderForScan` in `src/lib/security/scan-render.ts` is used by `F9` (`check.ts`), rule 7 (`validate.ts`), and `assertExportSafe`. Both old copies are deleted, and `grep` finds no other renderer. It is iterative, reads own keys only, writes one line per leaf, adds the pair lines for `name`/`value` and `fieldId`/`fieldValue`, and renames only at the two exact positions (a test shows `key` / `currentKey` elsewhere keep their names). Every test the contract lists is there, including the every-conformance-pair property (asserted unconditionally, which is stricter than written) and both S3a-2 probes.
+- **Item 3.** `__proto__`, `constructor`, and `prototype` are refused in `fieldNameSchema`, every `fieldPathSchema` part, and `identSchema`. `markExpressions`, the compiler `parameters`, and `defineBelowColumns` `value` use `Object.fromEntries`. Rule 1 and `assertExportSafe` `shape` refuse those keys at any depth. The 20-column test is present.
+- **Item 4 (S3a-3, R3a-5).** `allowed-params.ts` imports nothing from `profiles/`. Rule 5 checks names, modes, and container keys from it. Rule 8 checks destinations (the full list in `security.md` section 9; for a resource locator, its `value`). `assertExportSafe` has rule `type`, and `isExcludedNodeType` is shared with rule 8. All 9 mutated-golden cases are tested and fail. The invariant test covers operations and forbidden names and checks that the table and the profiles cover the same 32 types.
+- **Items 5-8.** `Text` refuses `://`, and rule 8 refuses `://` in any parameter string. The sixth warning is in the right place, and the order test is updated. The header rule is in both layers (7 refused, 2 accepted). `respondToWebhook` uses `LiteralPair`, enforced by `F7` and by rule 6 on `responseBody`. Flow `name` and `description` use `displayText` (schema), and rule 6 checks the workflow `name`. Each is tested in both layers.
+- **Item 9.** `CATALOG_VERSION = "2.49.5+fm2"`. Not regenerating `catalog.generated.json` is correct: that file holds only n8n facts for the unchanged `n8nVersion` / `nodesBaseVersion` 2.49.5, and the `+fm<n>` suffix lives only in `version.ts` (`catalog-consistency.test.ts:120` checks its form).
+- **Golden.** `order-webhook` (spec plus export) is the only golden change: the `orderId` expression became the literal `status: "queued"`, and the `responseBody` lost its leading `=`. The byte-for-byte and two-run stability tests pass for all 5 goldens.
+- **Existing tests.** Changed only where the new rules require it: `validate.test.ts` (3 expectations gain rule 5 or 8 from the table and destination rules, and `authentication: "oAuth2"` is now refused), `compile.test.ts` (golden reply text, sixth warning), and `profiles.test.ts` (respond sample is now literal).
+- **Item 10 (S3a-9).** Read by hand: there is no test for the scripts. `n8n-import-test.mjs` runs the `npx` fallback only with `--allow-npx`, and prints the download and install-script notice before the first `npx n8n` call. Without the flag it prints the exact skip line and exits 0. In `generate-node-catalog.mjs`, `fail()` throws inside `try`, and the exit code is set after the `finally` cleanup.
+- **Boundaries.** No change to `package.json` or lockfiles. No backend change under `src/features/**`, `src/app/**`, `src/server/**`, or `supabase/**`. No `any`. No migration or route. Nothing from Phase 4, `subscription.md`, or `n8n.md`. R3a-4 is untouched and R3a-9 is not started, as instructed.
+
+Deviations judged:
+- **`removeDuplicates` exemption in the table invariant: accept.** `removeDuplicateInputItems` removes duplicates from the current items in memory and touches no data. The exemption is exact (one value on one type), and every other operation is still checked. Keeping the explicit operation is safer than relying on an n8n default that the catalog cannot show (see R3aR-2). It still needs recording in `security.md` (R3aR-3).
+- **Rule 8 fails on a missing destination: accept.** "Exactly one `YOUR_…` token" is not met by an absent value. Every profile emits its destinations on every path (checked in `airtable`, `email-send`, `github`, `gmail`, `google-sheets`, `notion`, `slack`, `telegram`), so no valid export is refused.
+- **Validator header rule refuses hyphens: accept.** This is what D-51 (b) and OQ-28 say ("names stay `FieldName`, no `-`"), so it is not stricter than the decision. It matches the profile, which already used `pairSchema`. The old hyphenated entries (`proxy-authorization`, `x-api-key`) are covered by the pattern.
+
+### R3aR-1: `checkFlowSpec` throws on a Zod-valid draft with deep params or test data
+- File: `src/lib/flowspec/check.ts:195` (F9 call), `src/lib/security/scan-render.ts:112`
+- Severity: medium
+- Owner: backend
+- Problem: `renderForScan` throws `ScanRenderError` once a frame reaches `JSON_MAX_DEPTH` (32), counted from the value passed in. `F9` passes the whole draft, but `jsonValueSchema` limits depth from each `params`, `payload`, `mocks`, or `outputs` value, which already sits 3 to 6 levels down. Reproduced in the scratch copy: `baseDraft()` with `params.deep` nested 31 objects, or `tests.cases[0].trigger.payload` nested 31, passes `flowSpecDraftSchema`, and then `checkFlowSpec` throws `ScanRenderError: Value too deep to render for the scanner`. It does not return `{ ok: false, errors }`. Before this change F9 used `JSON.stringify` and never threw. Model output is untrusted, and in 3b this turns a retryable rule failure into an unexpected exception in the `ai` step. `ScanRenderError` is not caught or tested anywhere. Rule 7 and `assertExportSafe` are not affected, because each checks `isJsonValue` on the whole workflow first.
+- Fix: in `check.ts`, catch `ScanRenderError` around the F9 scan and push `{ rule: "F9" }` (fail closed). Alternatively, give `renderForScan` a `maxDepth` parameter and call it with `JSON_MAX_DEPTH + 6` for drafts. Add tests: deep `params` and a deep test `payload` each return `ok: false` and do not throw.
+- Status: **fixed** (round-2 verification 2026-11-28). `scanFindsSecret` in `scan-render.ts` catches `ScanRenderError` and returns a finding; F9, rule 7 and `assertExportSafe` all call it. Deep `params` and deep test `payload` (31 levels, Zod-valid) give F9 without throwing; a deep `responseBody` gives rules 6 + 7 and export `secret`. Removing the catch turns 3 tests red.
+
+### R3aR-2: Validator mode values are checked only when present; an omitted `operation` falls back to an unseen n8n default
+- File: `src/lib/validator/validate.ts` (`isAllowedByTable`), `src/lib/validator/allowed-params.ts`
+- Severity: low
+- Owner: backend
+- Problem: `modes` are enforced only when the parameter exists. An export built without the compiler can drop `operation` or `resource` on `postgres`, `supabase`, `googleSheets`, `airtable`, and similar nodes, and n8n then uses its built-in default. The generated catalog removes defaults, so the validator cannot show that default is safe. The D-50 aim ("any code path that writes `n8n_json` without the compiler still cannot ship ... deletes") then depends on n8n's defaults, not on the table. The compiler always emits these values, so there is no live exposure today.
+- Fix: add a `required` list per entry (at least every `resource` and `operation` the table lists) and fail rule 5 when one is missing. Add a mutated-golden test that deletes `operation` from the `postgres` node and expects rule 5.
+- Status: **fixed** (round-2 verification 2026-11-28). `requiredModes` (table modes minus `optionalModes`) must all be present in rule 5; a test deletes every required mode of every golden node (>40 cases) and expects rule 5. Removing the check turns 2 tests red.
+
+### R3aR-3: Backend deviation entry still open; security.md does not record the exemption
+- File: `docs/requests.md` (backend → architect, 2026-11-28), `docs/security.md` section 9, `docs/testing.md` rule 8
+- Severity: low
+- Owner: architect
+- Problem: `security.md` section 9 states the table invariant without the `removeDuplicates` exemption. `testing.md` rule 8 does not say that a missing destination fails. All three items are accepted above, but the request is still `Status: open`.
+- Fix: record the exact exemption (`n8n-nodes-base.removeDuplicates` / `removeDuplicateInputItems`) under the rule 5 invariant, add "a missing destination fails" to rule 8, and close the request.
+
+### R3aR-4: Double cast hides the optional fields F9 passes to `renderForScan`
+- File: `src/lib/flowspec/check.ts:195` (`draft as unknown as JsonValue`), `src/lib/security/scan-render.ts:107`
+- Severity: low
+- Owner: backend
+- Problem: `FlowSpecDraft` has optional `sourceFiles` and `notes`, so it is not a `JsonValue`. The cast through `unknown` hides this, and `renderForScan` then needs its own `(current as unknown) === undefined` escape. This is strict-TypeScript-legal, but it is the one cast that crosses the shared rendering's typed boundary.
+- Fix: type the input as `JsonValue | FlowSpecDraft`, or as an exported `ScanInput` that allows `undefined` property values, and drop both casts.
+- Status: **fixed** (round-2 verification 2026-11-28). `ScanInput` allows `undefined` properties; no `as unknown` cast is left in `check.ts` or `scan-render.ts`; typecheck passes.
+
+### Status of the Phase 3a findings (backend parts)
+- R3a-2: **fixed.** One shared rendering is used, and the property test covers every conformance pair.
+- R3a-3: **fixed.** Reserved names are refused in all three schemas, the compiler uses own properties, and rule 1 / `shape` check every depth.
+- R3a-4: **open, backlog** (D-53). Untouched, as instructed.
+- R3a-5: **fixed.** The validator table, destinations, and `://` anywhere (see R3aR-2 for one gap left).
+- R3a-6: **accepted** (D-53, contract section 7 "Known exception"). The near-limit test is in the backlog.
+- R3a-8: **fixed.** Both layers.
+- R3a-9: **carried to 3b** (backend item 6).
+- R3a-10: **fixed** in `contract.md` sections 7 and 8, and in `node-catalog.md` (architect). R3aR-3 covers the 2026-11-28 additions.
+- R3a-1 and R3a-7 are frontend findings and not in this scope.
+
+Open: high 0 · medium 1 (R3aR-1 backend) · low 3 (R3aR-2, R3aR-4 backend; R3aR-3 architect). Commit after R3aR-1 is fixed and tested. It is a small change: one `try`/`catch` and two tests. The lows can follow. For the 3b start condition, R3a-2 is verified fixed here. S3a-1 and S3a-2 also need security-reviewer confirmation.
+
+## Phase 3a review fixes — round-2 verification (2026-11-28)
+
+Scope: uncommitted backend round-2 changes vs `HEAD` 300d032 for R3aR-1, R3aR-2, R3aR-4 and S3aR-1..S3aR-5 (`src/lib/**`, `scripts/**`, `tests/lib/**`, `tests/conformance/**`, the newest backend entry in `requests.md`).
+
+Commands: `npm run typecheck` pass. `npm run lint` pass. `npx vitest run` 81 files passed / 1 skipped, 1862 passed / 90 skipped (RLS suite). `npm run build` pass.
+
+Mutation check (scratch copy outside the repo, one change at a time, `tests/lib` re-run, baseline 1169 green): R3aR-1 catch removed 3 red; F9 calling `renderForScan` directly 2 red; required modes removed 2 red; S3aR-1 token-run condition removed 12 red; Anthropic lookbehind back to `\b` 1 red; S3aR-2 lone-literal refusal removed 11 red; joined-literal separator check removed 2 red; S3aR-4 prefixes removed from the validator 10 red, from the profile 10 red; S3aR-5 body rendering removed 3 red; flat-body rule 6 removed 2 red.
+
+Regressions: only the `order-webhook` golden (spec + export) differs from HEAD. The lone-literal expectations in `expression.test.ts` moved into comparisons, and every lone literal is now a rejection test. The four D-28 placeholder values that carried a real 20/30-character run were replaced by plain placeholders and the old values became positive tests; detection is stronger, not weaker. The seven D-48 200 KB cases still pass, but see R3aR-5.
+
+Backend decisions (requests.md 2026-11-28, items 1-7): all acceptable as fail-closed defaults. (1) Literal only inside a comparison: no golden used one. (2) `:\`, `:/\`, `://` refused raw and after joining literal parts; `C:\` false positives are acceptable. A separator supplied at run time by a `$json` value is out of reach of a text check (caller data, same limit as bare domains). (3) Marker exemptions only without a token run: correct design, implementation defect in R3aR-5. A token split by `-`/`_` into runs under 20 characters after `YOUR_`, or a run of 19 characters after `example`, is still exempt (accepted limit of the D-48 threshold, informational). (4) `optionalModes` lists only parameters the profiles omit on some paths, none of them a data operation. (5) Underscore prefixes: both layers. (6) Flat-object body: both layers agree. (7) Deep input as F9 / rule 7 / `secret`: fail closed (a deep whole workflow is refused earlier as rule 1 / `shape`, also fine).
+
+### R3aR-5: `isPlaceholderValue` is quadratic on `${…}` / `{{…}}` runs (new, from the S3aR-1 fix)
+- File: `src/lib/security/secret-scanner.ts` (`withoutReferences`, called from `isPlaceholderValue`)
+- Severity: medium
+- Owner: backend
+- Problem: each loop step calls both `value.indexOf("{{", pos)` and `value.indexOf("${", pos)`. When one marker never occurs, its search scans to the end of the string on every step, so the cost is O(n²). Measured in the scratch copy: `isPlaceholderValue("${}".repeat(66_666))` (200 KB) takes 20.7 s, 100 KB takes 5.1 s (4× for 2×). Through the real scanner, a repository file `src/a.ts` holding `api_key = "${a}${a}…"` at 200 KB (allowed by `MAX_FILE_BYTES` 204 800) takes 11.7 s in `scan`. Repository files are untrusted (security.md), and the D-48 rule requires linear time on 200 KB adversarial input; the existing seven 200 KB tests do not cover this shape.
+- Fix: keep the next position of each marker and recompute it only once `pos` has passed it (or do one left-to-right pass looking for `{` / `$`). Add 200 KB tests through `scan` for `api_key = "${a}…"`, `api_key = "{{a}}…"` and `api_key = "{{a}${a}…"`, each under the same bound as the other D-48 linear-time tests.
+
+Open: high 0 · medium 1 (R3aR-5 backend) · low 1 (R3aR-3 architect, docs). R3aR-1, R3aR-2, R3aR-4 fixed. Phase 3a is not ready to commit until R3aR-5 is fixed and tested (small: one loop change and three tests).
+
+- **R3aR-5 status (coordinator, 2026-11-28):** fixed. `withoutReferences` is one linear pass; three new 200 KB adversarial tests through `scan()` finish in 3-10 ms (budget 1 s). Verified by the coordinator with the full suite (1865 passed).

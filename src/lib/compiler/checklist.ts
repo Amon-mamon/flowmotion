@@ -16,6 +16,8 @@ export const WARNING_REVIEW = "Review every node before you activate the workflo
 export const WARNING_WEBHOOK =
   "n8n creates a new webhook URL on import. Copy it from the Webhook node into the service that calls it.";
 export const WARNING_HTTP = "Add authentication to each HTTP Request node in n8n if your API needs it.";
+export const WARNING_HTTP_PATH =
+  "An HTTP Request node builds its URL path from incoming data. Make sure callers cannot reach endpoints they should not.";
 export const WARNING_WRITES = "This flow writes data. Try it with test data before using production.";
 export const WARNING_MESSAGES = "This flow sends messages. Point it at a test channel or address first.";
 
@@ -34,6 +36,10 @@ function writes(nodeType: string, params: Record<string, unknown>): boolean {
   if (nodeType === type("postgres") || nodeType === type("supabase")) return params.operation === "insert";
   if (nodeType === type("googleSheets")) return params.operation === "append";
   return false;
+}
+
+function pathHasExpression(params: Record<string, unknown>): boolean {
+  return typeof params.path === "string" && params.path.includes("{{");
 }
 
 function collectTokens(value: unknown, into: Set<string>): void {
@@ -81,6 +87,10 @@ export function buildChecklist(spec: FlowSpec, workflow: N8nWorkflow): SetupChec
   const warnings = [WARNING_REVIEW];
   if (types.includes(type("webhook"))) warnings.push(WARNING_WEBHOOK);
   if (types.includes(type("httpRequest"))) warnings.push(WARNING_HTTP);
+  // D-51 / S3a-6: whoever triggers the flow chooses part of the path on the user's API.
+  if (spec.nodes.some((node) => node.nodeType === type("httpRequest") && pathHasExpression(node.params))) {
+    warnings.push(WARNING_HTTP_PATH);
+  }
   if (spec.nodes.some((node) => writes(node.nodeType, node.params))) warnings.push(WARNING_WRITES);
   if (types.some((nodeType) => MESSAGING.has(nodeType))) warnings.push(WARNING_MESSAGES);
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { parseTemplate } from "@/lib/flowspec/expression";
+import { containsSchemeSeparator, parseTemplate } from "@/lib/flowspec/expression";
 
 /**
  * Value types used by the node profiles (docs/contract.md section 7, D-39).
@@ -22,8 +22,9 @@ const TEXT_CONTROL_CHARS = /[\u0000-\u0009\u000b-\u001f\u007f]/;
 export function isValidText(value: string): boolean {
   if (value.startsWith("=")) return false;
   if (TEXT_CONTROL_CHARS.test(value)) return false;
-  // Validator rule 8: no plain-http URL anywhere in an export.
-  if (value.toLowerCase().includes("http://")) return false;
+  // D-51 / S3a-6 / S3aR-2: no link or host of any scheme, in any form
+  // (`://`, `:\\`, `:/\\`, or rebuilt around an expression). Validator rule 8 agrees.
+  if (value.includes("://") || containsSchemeSeparator(value)) return false;
   return parseTemplate(value).ok;
 }
 
@@ -56,7 +57,15 @@ export type Value = z.infer<typeof valueSchema>;
 export const placeholderSchema = z.string().regex(PLACEHOLDER_PATTERN);
 export type Placeholder = z.infer<typeof placeholderSchema>;
 
-export const fieldNameSchema = z.string().regex(FIELD_NAME_PATTERN);
+/** Refused as a `FieldName`, any `FieldPath` part, and an `Ident` (D-49, exact, case-sensitive). */
+export const RESERVED_NAMES: ReadonlySet<string> = new Set(["__proto__", "constructor", "prototype"]);
+
+const notReserved = (value: string): boolean => !RESERVED_NAMES.has(value);
+
+export const fieldNameSchema = z
+  .string()
+  .regex(FIELD_NAME_PATTERN)
+  .refine(notReserved, { message: "Reserved name" });
 export type FieldName = z.infer<typeof fieldNameSchema>;
 
 /** `FieldPath`: 1..6 `FieldName`s joined by `.`. */
@@ -65,12 +74,19 @@ export const fieldPathSchema = z
   .max(400)
   .refine((value) => {
     const parts = value.split(".");
-    return parts.length >= 1 && parts.length <= 6 && parts.every((part) => FIELD_NAME_PATTERN.test(part));
+    return (
+      parts.length >= 1 &&
+      parts.length <= 6 &&
+      parts.every((part) => FIELD_NAME_PATTERN.test(part) && notReserved(part))
+    );
   });
 export type FieldPath = z.infer<typeof fieldPathSchema>;
 
 /** `Ident`: SQL table or column name. */
-export const identSchema = z.string().regex(IDENT_PATTERN);
+export const identSchema = z
+  .string()
+  .regex(IDENT_PATTERN)
+  .refine(notReserved, { message: "Reserved name" });
 export type Ident = z.infer<typeof identSchema>;
 
 export const pairSchema = z.strictObject({ name: fieldNameSchema, value: valueSchema });

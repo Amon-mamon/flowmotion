@@ -8,10 +8,12 @@ import type { N8nParameters } from "./types";
  * (used by googleSheets, airtable, and postgres at the pinned versions).
  */
 export function defineBelowColumns(columns: readonly { name: string; value: Value }[]): N8nParameters {
-  const value: Record<string, JsonValue> = {};
+  // Own properties only (D-49): never assign a model-chosen key.
+  const value: Record<string, JsonValue> = Object.fromEntries(
+    columns.map((column): [string, JsonValue] => [column.name, column.value]),
+  );
   const schema: JsonValue[] = [];
   for (const column of columns) {
-    value[column.name] = column.value;
     schema.push({
       id: column.name,
       displayName: column.name,

@@ -312,43 +312,52 @@ Counts: high 0 · medium 1 (S3a-1, pre-existing scanner gap, not introduced by 3
   - **Risk:** a hardcoded token in the most common HTTP shapes is not detected, so it is not redacted before the text goes to the AI provider. Probe, 0 findings and the raw value still present in `redacted` for each of: `Authorization: "Bearer <36-char token>"` (TypeScript and Python), `f"Token <token>"`, `curl -H "Authorization: Bearer <token>"` in a workflow file and a shell script, `"Basic <base64 user:pass>"`, `fetch("https://api.test/v1?api_key=<token>")`, and `"https://user:<password>@api.test/v1"`. Cause: since D-34 a non-password name does not match a quoted value containing whitespace, and URL credentials are covered only for database schemes.
   - **Scenario:** a repository has `headers: { Authorization: "Bearer 9f…" }` for an internal API. Analysis sends it unredacted to the provider today. In 3b the generation step re-reads that file and the model can copy the token into a `set` field, a body value, or a message text; F9, validator rule 7, and `assertExportSafe` all use the same scanner and pass it (probe: `{"value": "Bearer <token>"}` gives 0 findings), so it lands in the stored flow and the downloaded file.
   - **Fix:** add detectors for `Bearer|Token|Basic` followed by a token of 20+ characters (entropy rule as for the generic rule, placeholders exempt), for `scheme://user:password@host` on any scheme, and for query parameters whose name matches `SECRET_NAME` with a 20+ character value. Add positive and placeholder tests, and update `security.md` section 2.
+  - **Status:** resolved (2026-11-28 re-review): three D-48 detectors added; all contract cases verified by probe; residual placeholder weakness tracked as S3aR-1 (low).
 
 - **S3a-2 · low** — `src/lib/validator/validate.ts:140-148` (`renderForScan`), used by rule 7 (`:424`) and `src/lib/validator/export-safe.ts:30`. Owner: backend.
   - **Risk:** the secret scan can be bypassed for any value inside a `renameKeys` node. The replacer copies keys into a fresh object and writes `currentKey` as `from`; if the object already has a `from` key, the later write replaces it and that value is never scanned. A `"__proto__"` key holding an object is assigned as the prototype and disappears from the scanned text entirely. Probe: `{ "from": "sk-ant-…", "currentKey": "a", "newKey": "b" }` and `"keys": { "__proto__": { "x": "sk-ant-…" }, … }` both return `{ ok: true }` from `validateWorkflow` and do not throw in `assertExportSafe`, while the serialized export contains the key. Rule 5 does not help because it checks top-level parameter names only.
   - **Reachability:** not through `checkFlowSpec` → `compileFlow` (the profile emits fixed keys, and the FlowSpec-side `renderForScan` in `check.ts:53-56` is safe because the node schema is strict). It needs a stored export that did not come from the compiler, which is exactly the case `assertExportSafe` exists for.
   - **Fix:** do not rebuild objects. Either refuse (rule `shape`) a `renameKeys` parameter object that has a `from`, `to`, or `__proto__` key, or keep the rename and additionally scan a flat rendering of every string value and key in the workflow (one per line). Add both probes as tests.
+  - **Status:** resolved (2026-11-28 re-review): one shared `renderForScan` (no object rebuild); `from`+`currentKey` and `__proto__` probes now fail rule 7 / rule 1 and throw in `assertExportSafe`.
 
 - **S3a-3 · low** — `src/lib/validator/validate.ts:367-386` (rule 5), `src/lib/validator/export-safe.ts:23-31`. Owner: architect (decision, `testing.md` rule 5, `security.md` section 9), then backend.
   - **Risk:** the "independent second check" does not enforce the section 9 guarantees on its own. Rule 5 checks top-level parameter names and option values against the full n8n catalog, so everything n8n supports passes. Probe, all `{ ok: true }` on a mutated golden: postgres `operation: "executeQuery"` with `query: "DROP TABLE users; --"`; postgres `deleteTable`; `emailSend` with a literal `toEmail` and with `options.bccEmail`; `httpRequest` with `options.proxy` + `allowUnauthorizedCerts` and with a raw `jsonBody`. `assertExportSafe` checks no node types at all: a workflow with an added `n8n-nodes-base.code` node does not throw. "No raw SQL, no delete, destinations are placeholders" therefore rests on one layer, the profile schemas.
   - **Scenario:** a later profile change (OQ-26 invites them) adds, say, `cc: textSchema` to `emailSend`; the model, steered by repository text, sets a literal address; the validator passes it. Or any later code path writes `flows.n8n_json` without the compiler; the export route as specified runs only `assertExportSafe`.
   - **Fix:** in 3b the export route and the `validate` step both run `validateWorkflow` and `assertExportSafe` on the stored JSON. Add to the validator a small table, independent of the profiles, of the allowed `resource` / `operation` values and forbidden parameter names per type (`query`, `jsonBody`, `jsonQuery`, `body`, `proxy`, …), and require destination parameters to hold a `YOUR_…` token.
+  - **Status:** resolved (2026-11-28 re-review): validator-owned table `allowed-params.ts`, destination tokens, `assertExportSafe` rule `type`; residual: mode parameters may be omitted (S3aR-3, low).
 
 - **S3a-4 · low** — `src/lib/validator/validate.ts:134-151`, `src/lib/flowspec/check.ts:53-56`. Owner: backend.
   - **Risk:** the generic secret rule reads `"name": "value"` assignments, but n8n stores most user values as pairs, so the secret-looking name and its value are never adjacent. Probe, 0 findings: `{ "name": "apikey", "value": "<36-char token>" }` (header, query, body, `set`), `{ "fieldId": "api_key", "fieldValue": "…" }` (supabase). Only the resource-mapper shape (`"api_key": "…"`) is caught. Provider-prefixed keys are still caught everywhere.
   - **Scenario:** a model copies a non-prefixed token it saw (see S3a-1) into a header named `apikey`; all three scans pass.
   - **Fix:** in both scan renderings, append one synthetic line `"<name>": "<value>"` for every pair-shaped object (`name`/`value`, `fieldId`/`fieldValue`) so the generic rule applies.
+  - **Status:** resolved (2026-11-28 re-review): pair lines for `name`/`value` and `fieldId`/`fieldValue`; header, body and Supabase probes fail rule 7 and export.
 
 - **S3a-5 · low** — `src/lib/n8n-catalog/profiles/http-request.ts:9-14,37-41`, `src/lib/validator/validate.ts:56-61`. Owner: backend; architect when deciding OQ-28.
   - **Risk:** the header deny list has four names. Probe: `Host`, `apikey`, `X_API_KEY`, and `Authentication` headers pass F7 and validator rule 8. A `Host` header sends the request to the user's configured origin but asks for another virtual host, which on shared front ends can reach a different site with the user's later-added authentication.
   - **Fix:** deny `host` and `apikey` (case-insensitive) now. If OQ-28 allows `-` in header names, switch to an allowlist or also deny `x-forwarded-*`, `x-original-url`, `x-rewrite-url`, `x-http-method-override`, `forwarded`, `te`, `transfer-encoding`, `content-length`.
+  - **Status:** resolved (2026-11-28 re-review): D-51 header rule in both layers; residual underscore forms (S3aR-4, low).
 
 - **S3a-6 · low** — `src/lib/flowspec/values.ts:22-28`, `src/lib/validator/validate.ts:392`. Owner: architect.
   - **Risk:** `security.md` section 9 says no literal host ships in an export. That holds for the HTTP origin only. Probe, all pass both layers: path `/redirect?to=https://evil.test/`, path `/r?to=file:///etc/passwd&b=gopher://x`, body value `callback: "https://evil.test/collect"`, and any message text with a link. Only the lowercase-insensitive substring `http://` is refused. Separately, a path such as `/{{ $json.body.path }}` lets whoever calls the user's webhook choose the path on the user's API at run time.
   - **Scenario:** repository text steers the model into a Slack or email step whose text is "Re-authenticate at https://evil.test/login", or into posting a `callback` URL to the user's own API.
   - **Fix:** decide whether a `Text` may contain `<scheme>://` at all (a link to the user's app can be written `YOUR_APP_URL/orders/{{ … }}`); if not, refuse it in `isValidText` and in validator rule 8. Add a checklist warning when an `httpRequest` URL path contains an expression.
+  - **Status:** resolved as specified (2026-11-28 re-review): `://` refused in F8 and rule 8, path warning added; bypass via a constant expression tracked as S3aR-2 (low).
 
 - **S3a-7 · low (OQ-29)** — `src/lib/n8n-catalog/profiles/respond-to-webhook.ts:12-23,38-44`. Owner: architect (OQ-29), backend.
   - **Risk:** expression values are placed inside a quoted JSON string without escaping at run time. Compiled sample: `={"ok": false, "msg": "hi {{ $json.body.msg }}"}`. A caller who sends `msg` = `x", "ok": "true` gets a response with a second `ok` key (the last one wins in most parsers); a value with a lone `"` makes the node fail. Literal parts are escaped correctly and cannot open a new expression (probe: quotes, backslashes, `}}`).
   - **Fix:** restrict `respondToWebhook` body values to literals, numbers, and booleans in v1, or emit each expression value as `{{ JSON.stringify(…) }}` built by the compiler only and add that single form to validator rule 6.
+  - **Status:** resolved (2026-11-28 re-review): `respondToWebhook` bodies literal in both layers (D-52).
 
 - **S3a-8 · low** — `src/lib/flowspec/values.ts:12-13,63-69`, `src/lib/n8n-catalog/profiles/mapping.ts:14`, `rename-keys.ts:18`. Owner: backend.
   - **Risk:** expression paths refuse `__proto__`, `constructor`, and `prototype`, but `FieldName`, `FieldPath`, and `Ident` accept them. Probe: a postgres column named `__proto__` passes every rule and is silently dropped from the mapping `value` (the assignment to `value["__proto__"]` of a string is ignored) while it stays in `schema`; pair names `__proto__` / `constructor` reach `bodyParameters`; `renameKeys` accepts `from: "constructor.prototype.x"`. No pollution happens inside Flow Motion (values are primitives; Zod drops a `__proto__` params key, probe). In the user's n8n the outcome depends on n8n's own guards.
   - **Fix:** refuse the three names in `FIELD_NAME_PATTERN` users (`fieldNameSchema`, each `FieldPath` part, `identSchema`) and build the mapping `value` with `Object.defineProperty` or a null-prototype object.
+  - **Status:** resolved (2026-11-28 re-review): reserved names refused in `FieldName`, `FieldPath`, `Ident`; compiler and mapping use `Object.fromEntries`; reserved keys refused at any depth before parsing.
 
 - **S3a-9 · low** — `scripts/n8n-import-test.mjs:103-104,113-119`; `scripts/generate-node-catalog.mjs:20-23,141-157`. Owner: backend; owner of the machine that runs it.
   - **Risk (import test, npx fallback):** without Docker the script runs `npx --yes n8n@2.49.5`. That downloads n8n and its full transitive tree with no lockfile, **runs install scripts**, and executes n8n with network access and the developer's `HOME` (the environment is trimmed to ten names, which is good, but files under the home directory stay readable). `security.md` section 9 promises `--ignore-scripts` only for the generator. The Docker path is sound: `--network none`, one temporary mount, no credentials; it uses a tag, not a digest, and makes the temporary folder mode 0777.
   - **Risk (generator):** verified it executes no package code (reads `package.json` and `dist/types/nodes.json` only), installs with `--ignore-scripts --no-save --prefix <mkdtemp>`, validates the version with `^\d+\.\d+\.\d+$` before use, passes arguments as an array (no shell on macOS or Linux), and leaves `package.json` and the lockfile untouched (confirmed: no `n8n` entry in either). Two gaps: `fail()` calls `process.exit(1)` inside the `try`, so the `finally` cleanup does not run and the temporary install stays behind; and the tarball has no integrity pin, so the committed catalog trusts the registry response (limited impact: type names come from `allowlist.ts`, and the diff is reviewed).
   - **Fix:** make the npx fallback opt-in (`--allow-npx`) and print what it will do; prefer Docker in the owner instructions; throw instead of `process.exit` inside the `try`; optionally record the tarball `integrity` next to `NODES_BASE_VERSION` and compare it.
+  - **Status:** resolved without the integrity pin (2026-11-28 re-review): npx fallback opt-in with `--allow-npx` and a notice; generator cleans up on failure; integrity pin stays backlog (D-53).
 
 ### Verified, no finding
 
@@ -414,3 +423,115 @@ Result: **0 high, 0 medium, 3 low.** The incident is closed in code and in the s
 - `npx vitest run`: 65 files passed, 1 skipped; 1,537 tests passed, 90 skipped (RLS suite skipped without `SUPABASE_TEST_*`).
 - `npm audit`: 0 vulnerabilities.
 - `.env` and `.env.*` are git-ignored; only `.env.example` is tracked; no `.env*` file was opened.
+
+## Phase 3a review fixes — security re-review (2026-11-28)
+
+Scope: uncommitted backend changes against `f663eef` in `src/lib/**` (scanner, new `scan-render.ts`, validator, new `allowed-params.ts`, `flowspec`, compiler, profiles, `version.ts`), `src/schemas/flowspec.ts`, `scripts/**`, `tests/lib/**`, `tests/conformance/**`. `src/features/**` was not reviewed. Every verdict below comes from running the real modules on hostile input from a scratch directory outside the repository (jiti, `@/` alias). No source file was edited.
+
+Counts (new): high 0 · medium 0 · low 5 (S3aR-1..S3aR-5). S3a-1..S3a-9 are all **resolved** (status lines added above). **Phase 3b gate (D-59): R3a-2, S3a-1 and S3a-2 are verified fixed.** From the security side, 3b backend may start. None of the new findings blocks 3b. S3aR-2 and S3aR-3 should be fixed before the export route ships.
+
+### Per-item verdicts
+
+1. **S3a-1 scanner HTTP rules: verified.**
+   - All 14 positive contract cases give exactly one finding with the right category and masked type: TS and Python Bearer, `f"Token …"`, curl in `ci.yml` (`ci_secret`) and `deploy.sh`, Basic, `?api_key=`, `&access_token=`, `&sig=`, `deploy:hunter2pass@`, `x-access-token:T@`, a token used as the user name, `redis://:…@` (`db_connection_string`), and the flow line `"value": "Bearer T"`.
+   - Only the secret part is replaced, for example `Bearer [REDACTED]`, `deploy:[REDACTED]@api.test`, `?api_key=[REDACTED]`. The raw value appears in no finding and nowhere in `redacted`.
+   - All 22 negative cases give 0 findings.
+   - Extra checks pass: upper-case `BEARER`, a tab gap, `my_Bearer`, `Basic` without padding, an `@` inside the password (the last `@` is used, so the whole `hu@nter2pass` is redacted), a percent-encoded password, a short `admin:pw` Basic value, and a `${…}` suffix (the credential run stops at `$`).
+   - Placeholder abuse is **possible**. This is S3aR-1 (low).
+   - Linear time, measured at 200 KB on 19 shapes, each in a normal and a CI path. The worst case is 117 ms (`Basic` + a base64 run). The other worst cases are about 110 ms for a scheme-character run, 104 ms for `Bearer` + a token run and for `&key=` + a long value, and 90 ms for `https://` + no terminator + `@`. Everything else, including repeated `Bearer `, `a://`, `https://a:`, `?token=`, `https://a@`, `@@@` and colon runs, is under 20 ms.
+   - D-28/D-33/D-34 show no regression: the four older scanner suites pass unchanged.
+2. **R3a-2 / S3a-2 / S3a-4 shared rendering: verified.**
+   - `renderForScan` exists once, in `src/lib/security/scan-render.ts`. `check.ts:195` (F9), `validate.ts:435` (rule 7) and `export-safe.ts:55` all call it. Both old copies are deleted, and `grep` finds no other definition.
+   - It walks the value iteratively, writes one line per leaf, never rebuilds objects, and renames only `nodes[i].key` and renameKeys `currentKey`/`newKey` (by position).
+   - Postgres column `password` with a 32-character high-entropy literal fails F9, rule 7 and the export check. A `set` field `api_key` = T fails all three.
+   - A header pair `apikey` = T, a body pair `apikey` = T and a Supabase pair `fieldId: "api_key"` all fail rule 7 and throw `secret`.
+   - `{ from: "sk-ant-…", currentKey, newKey }` fails rule 7 and throws `secret`. `"keys": { "__proto__": { x: "sk-ant-…" } }` fails rule 1 and throws `shape`.
+   - `constructor` under `parameters` and `prototype` four levels deep in `settings` fail rule 1 and throw `shape`.
+   - `hasReservedKey` runs before `workflowSchema.safeParse` and before `assertExportSafe`'s top-level shape check, after the size bound.
+   - The positional rename still hides the generic name rule for `currentKey` = T. D-49 accepts this; the provider patterns and the Bearer rule still fire there (`currentKey: "Bearer T"` fails).
+3. **S3a-3 validator independence: verified, one residual (S3aR-3).**
+   - `allowed-params.ts` imports nothing, and `validate.ts` imports no profile.
+   - Probes on mutated goldens, each refused:
+     - Rule 5: postgres `executeQuery` + `query`, `deleteTable`, `upsert`; supabase `delete`; Sheets `appendOrUpdate` and `clear`; `bccEmail`, `ccEmail`; a raw `jsonBody`; a raw `body`; `respondWith: "text"`; `responseHeaders`; webhook `allowedOrigins`; an unknown top-level parameter; method `TRACE`; removeDuplicates `removeItemsRepeatedWithinPreviousExecutions` and `clearDeduplicationHistory`.
+     - Rules 5 and 8: `proxy` + `allowUnauthorizedCerts`; `jsonHeaders`; Discord `webhookUri`.
+     - Rule 8: a literal `toEmail`; `YOUR_A,attacker@…`; an expression `toEmail`; a missing `toEmail`; literal Slack, Gmail, Telegram, GitHub and Notion destinations.
+     - `assertExportSafe` throws `type` for added `code`, `executeCommand` and langchain `code` nodes.
+   - Invariant: running my own check over the table finds only removeDuplicates `removeDuplicateInputItems`, plus HTTP and webhook `DELETE` methods, which are not operations.
+   - **Backend deviation (requests.md 2026-11-28 (1)), accepted.** `removeDuplicateInputItems` drops duplicates among the items of the current run, in memory. It touches no external store and no history. The two operations that do persist or clear history are not in the table, and probes confirm they are refused. The exemption covers one exact value on one type.
+   - **Deviation (2), accepted.** Requiring every destination to be present, and requiring a `FieldName` header name in the validator, is stricter and fails closed.
+   - Residual: a mode parameter that is absent is never checked (S3aR-3).
+4. **Outbound targets: verified as specified, one bypass (S3aR-2).**
+   - `isValidText` (`values.ts:26`) and rule 8 (`validate.ts:390`) refuse `://` in any case.
+   - Probes refused: a literal URL, `HTTPS://` in a query value, an origin built as `https{{ ':' }}//`, protocol-relative `//evil`, `YOUR_API_URL@evil.test`, and a bare-host URL.
+   - The header rule is the same in both layers. `Host`, ` host`, `apikey`, `X_API_KEY`, `Authentication`, `X_Auth_Token`, `Session_Id`, `Connection` and `X-Forwarded-For` are refused, and `Accept` passes. Residual: S3aR-4.
+   - `respondToWebhook` (OQ-29 closed, D-52): `LiteralPair` in the profile (F7), and rule 6 refuses `{{` in `responseBody`. `responseBody` is now plain `JSON.stringify` output.
+   - Flow `name`/`description` with a leading `=` or a `{{` fail the draft schema. A workflow `name` with either fails rule 6.
+   - Bypass: S3aR-2. `respondToWebhook` scan gap: S3aR-5.
+5. **S3a-9 scripts: verified.**
+   - Import test: when Docker is absent and `--allow-npx` is not passed, `pickRunner` returns the skip object with the exact message from the contract and the script exits 0. With the flag it prints what will be downloaded and that install scripts will run before calling `npx`.
+   - Generator: `fail()` throws `GenerateError` once the temporary directory exists. The `catch` stores the error, `finally` runs `rmSync`, and `process.exitCode = 1` is set after cleanup. `catalog.generated.json` is written last, so a failure leaves it unchanged.
+   - `package.json` and `package-lock.json` are unchanged against HEAD and contain no `n8n` entry.
+   - Neither script was run.
+6. **Phase 3b gate.** R3a-2 is verified fixed: one shared rendering, and the postgres `password` / `api_key` regression fails F9, rule 7 and the export check alike. S3a-1 is verified fixed. S3a-2 is verified fixed. D-59 is met from the security side.
+
+### New findings
+
+- **S3aR-1 · low** — `src/lib/security/secret-scanner.ts:188-195` (`isPlaceholderValue`), `:511` and the other `\b`-anchored provider patterns. Owner: backend, with the architect for `security.md` section 2.
+  - **Risk:** the placeholder rule was written for source code, and it exempts a whole value whenever any of the following holds:
+    - the value starts with `your-` or `your_` (any case, and the D-48 rules use this check too);
+    - the value contains `{{` or `${`;
+    - the value contains `example` or `xxx` as a whole word.
+  - Separately, provider patterns start with `\b`, so a word character glued in front (`YOUR_sk-ant-…`, `zsk-ant-…`) stops them from matching at all.
+  - Probes that pass F9, rule 7 and `assertExportSafe` while the raw token is in the export:
+    - `set` field `api_key` = `YOUR_<T>`;
+    - `password` = `=<T>{{ $json.body.id }}`;
+    - `password` = `example <T>`;
+    - note = `YOUR_sk-ant-api03-…`;
+    - note = `Bearer YOUR_<T>`.
+  - The same inputs in a repository file give 0 findings: `Bearer YOUR_<T>`, `?api_key=your-<T>`, `https://u:your_<T>@…`, `https://u:example-<T>@…`, `Bearer xxx-<T>`.
+  - **Scenario and reach:** the model can only copy a secret it has seen. Any secret the scanner detects reaches it as `[REDACTED]`, and the input and output scans use the same placeholder rule. So this is not an exfiltration path today. It is a defense-in-depth gap: one prefix defeats the export scan, so it cannot catch a stored export that did not come from the compiler. The `{{` case is new in kind, because flow Text mixes literals and expressions, which source code does not.
+  - **Fix:**
+    - Treat `your_` / `your-` as a placeholder only when the remainder is not token-like, for example `^YOUR_[A-Z0-9_]{2,40}$` for flows and the same remainder test (`isTokenLike` false) for the D-48 rules.
+    - In flow scans, remove `{{ … }}` segments and scan the literal parts instead of exempting the whole value.
+    - Apply the whole-word `example` / `xxx` exemption only when the value has no token-like run of 20 or more characters.
+    - Replace the leading `\b` in provider patterns with `(?<![A-Za-z0-9])`, so `_` and `-` no longer hide a key.
+    - Add each probe above as a test.
+  - **Status:** fixed for detection (round-2 verification 2026-11-28): marker exemptions apply only without a token run after `{{ … }}`/`${ … }` removal; provider patterns use `(?<![A-Za-z0-9])`; all probes tested in flow and repository text. The new helper is quadratic on `${…}` runs (11.7 s for a 200 KB file), tracked as R3aR-5 (medium) in `review.md`.
+
+- **S3aR-2 · low** — `src/lib/flowspec/expression.ts:5-6` (a whole expression may be a lone string literal), `src/lib/flowspec/values.ts:26`, `src/lib/validator/validate.ts:390`. Owner: architect (grammar, `contract.md` section 7), then backend.
+  - **Risk:** D-51(a) checks the raw text for `://`, but the grammar lets an expression be just a string constant. So `https:{{ '//' }}evil.test/login` and `https:/{{ '/' }}evil.test` pass `isValidText` (F8) and rule 8, and n8n evaluates them to `https://evil.test/login`.
+  - Probe: a query value `=https:/{{ '/' }}evil.test` validates OK and passes `assertExportSafe`.
+  - `https:\\evil.test` also passes, and WHATWG URL parsers read it as `https://evil.test`.
+  - **Scenario:** repository text steers the model into a Slack or email text such as "Re-authenticate at https:{{ '//' }}evil.test/login", or into a body `callback` URL posted to the user's own API. That is exactly the case D-51 exists to stop.
+  - Bare domains such as `evil.com/login` and `www.…` also pass and are auto-linked by Slack, Gmail and Telegram. That is an inherent limit of a text check and should be documented as accepted.
+  - **Fix:**
+    - In the grammar, allow a string, number, boolean or null only as the right-hand side of a comparison, never as a whole expression (a constant expression has no use).
+    - Also refuse `:\\` and `:/\` in Text and in rule 8.
+    - Add the probes as tests in both layers.
+    - Record the bare-domain limit in `security.md` section 9.
+  - **Status:** fixed (round-2 verification 2026-11-28): lone literals refused by the grammar; `:\`, `:/\`, `://` refused raw and after joining literal parts, in F8 and rule 8; tested in both layers.
+
+- **S3aR-3 · low** — `src/lib/validator/validate.ts:149-167` (`isAllowedByTable`). Owner: backend, with the architect for `testing.md` rule 5.
+  - **Risk:** a mode parameter is checked only when it is present. A stored export that omits `operation` on `postgres`, `supabase`, `googleSheets` or `airtable` (also `resource`, and `authentication` on `httpRequest`) passes rule 5 and rule 8 (probe: all four `validate: OK`). n8n then uses its own default operation, which the validator does not know: the generated catalog records no defaults, and the n8n source was not available here to check it. This weakens D-50's "fails closed" for the non-compiler path the export check exists for.
+  - **Fix:** require every key in `modes` to be present (the compiler always emits them, so every golden still passes), or mark the required ones in the table. Add a test that drops each mode parameter from a golden and expects rule 5.
+  - **Status:** fixed (round-2 verification 2026-11-28): every table mode is required unless listed in `optionalModes`; every required mode of every golden node, deleted, fails rule 5.
+
+- **S3aR-4 · low** — `src/lib/validator/allowed-params.ts:200-214`, `src/lib/n8n-catalog/profiles/http-request.ts:13-36`. Owner: backend, with the architect for the D-51 list.
+  - **Risk:** the underscore forms `X_Forwarded_For`, `X_Real_IP`, `X_HTTP_Method_Override`, `X_Original_URL`, `X_Rewrite_URL`, `Transfer_Encoding` and `Content_Length` pass both layers (probe: three of these validate OK). Back ends that map headers to CGI-style names (Rack/Puma, some PHP and WSGI setups) treat `_` and `-` the same. On those, a generated request can spoof the client IP or override the method on the user's own API, with the value chosen by whoever calls the webhook when it is an expression.
+  - **Fix:** add to both deny lists any name that, lowercased with `_` treated as `-`, equals or starts with `x-forwarded-`, `x-real-ip`, `x-original-`, `x-rewrite-`, `x-http-method`, `x-method-override`, `transfer-encoding`, `content-length` or `proxy-`. Test each in both layers.
+  - **Status:** fixed (round-2 verification 2026-11-28): prefixes matched after `_` → `-` in the profile and the validator; ten underscore names tested in both layers.
+
+- **S3aR-5 · low** — `src/lib/security/scan-render.ts` (no expansion of `responseBody`), `src/lib/n8n-catalog/profiles/respond-to-webhook.ts:39`. Owner: backend.
+  - **Risk:** the compiled `respondToWebhook` body is one JSON text string, so the pair rule never sees its names. A stored export with `responseBody: '{"api_key": "<T>"}'` or `'{"password": "<32-char literal>"}'` passes rule 7 and `assertExportSafe` (probe). Through the compiler, F9 catches the same pair, as the documented "FlowSpec side may be stricter" property allows. Provider-shaped keys are still caught.
+  - **Fix:** since D-52 makes the body literal JSON, have rule 6 require `responseBody` to `JSON.parse` to a flat object of scalars. Then let `renderForScan` (or rule 7 and `assertExportSafe`) also render the parsed body under the node, so both layers agree.
+  - **Status:** fixed (round-2 verification 2026-11-28): rule 6 requires a flat JSON object of scalars; the shared rendering parses the body and renders its leaves; `api_key` and `password` body pairs fail rule 7 and export `secret`.
+
+### Informational (not findings)
+- A header such as `X_Note` holding a token-like value without a scheme word passes the scan, which is the accepted D-48 limit. The header-name rule is the control there.
+- A resource-locator destination object may carry extra keys (`url`) and any `mode`. Only `value` is checked. That is harmless while `value` must be a `YOUR_…` token.
+- The import script's Docker path still uses a tag and a 0777 temporary folder. The integrity pin and digest stay in the backlog (D-53).
+
+### Commands
+- `npx vitest run`: 80 files passed, 1 skipped; 1,814 tests passed, 90 skipped (RLS suite skipped without `SUPABASE_TEST_*`). This includes `secret-scanner-d48.test.ts` (13 tests, with the seven 200 KB cases) and `review-fixes-3a.test.ts` (25 tests).
+- `npm audit --omit=dev`: 0 vulnerabilities. `npm audit`: 0 vulnerabilities.
+- No `.env*` file was opened. Neither script was run, and no n8n was started.

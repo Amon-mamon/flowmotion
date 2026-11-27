@@ -5,13 +5,58 @@ import { boundedText, pairSchema, placeholderSchema, uniqueNames, type Pair } fr
 import { asString, defineProfile, one, unnamed, type N8nParameters } from "./types";
 import { HTTP_METHODS } from "./webhook";
 
-/** Authentication is added by the user in n8n, never by a generated flow. */
-export const FORBIDDEN_HEADER_NAMES: ReadonlySet<string> = new Set([
-  "authorization",
-  "proxy-authorization",
-  "cookie",
-  "x-api-key",
+/**
+ * Header rule (D-51, S3a-5, OQ-28): names stay `FieldName` (no `-`) and are
+ * refused when, lowercased, they equal a routing header or contain a
+ * credential word. Authentication is added by the user in n8n.
+ */
+export const FORBIDDEN_HEADER_EXACT: ReadonlySet<string> = new Set([
+  "host",
+  "forwarded",
+  "te",
+  "connection",
+  "upgrade",
+  "expect",
 ]);
+export const FORBIDDEN_HEADER_PARTS: readonly string[] = [
+  "auth",
+  "token",
+  "secret",
+  "key",
+  "cookie",
+  "session",
+  "password",
+  "passwd",
+  "signature",
+];
+
+/**
+ * S3aR-4: routing, method-override, and framing headers. Matched after `_`
+ * is read as `-`, because CGI-style back ends treat the two alike
+ * (`X_Forwarded_For` reaches them as `X-Forwarded-For`).
+ */
+export const FORBIDDEN_HEADER_PREFIXES: readonly string[] = [
+  "x-forwarded",
+  "x-real-ip",
+  "x-original",
+  "x-rewrite",
+  "x-http-method",
+  "x-method-override",
+  "transfer-encoding",
+  "content-length",
+  "proxy-",
+];
+
+export function isForbiddenHeaderName(name: string): boolean {
+  const lower = name.toLowerCase();
+  const normalized = lower.replace(/_/g, "-");
+  return (
+    FORBIDDEN_HEADER_EXACT.has(lower) ||
+    FORBIDDEN_HEADER_EXACT.has(normalized) ||
+    FORBIDDEN_HEADER_PARTS.some((part) => lower.includes(part)) ||
+    FORBIDDEN_HEADER_PREFIXES.some((prefix) => normalized.startsWith(prefix))
+  );
+}
 
 function keypairs(pairs: readonly Pair[]): N8nParameters {
   return { parameters: pairs.map((pair) => ({ name: pair.name, value: asString(pair.value) })) };
@@ -35,8 +80,8 @@ export const httpRequestProfile = defineProfile({
     path: boundedText(1, 500).refine((value) => value.startsWith("/"), { message: "Must start with /" }),
     query: pairs(10).optional(),
     headers: pairs(10)
-      .refine((items) => items.every((item) => !FORBIDDEN_HEADER_NAMES.has(item.name.toLowerCase())), {
-        message: "Authentication headers are not allowed",
+      .refine((items) => items.every((item) => !isForbiddenHeaderName(item.name)), {
+        message: "Authentication and routing headers are not allowed",
       })
       .optional(),
     jsonBody: pairs(20).optional(),
@@ -67,5 +112,5 @@ export const httpRequestProfile = defineProfile({
     return parameters;
   },
   promptReference:
-    'httpRequest: calls an HTTP API. params: { method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", baseUrl: Placeholder ending in _URL (for example YOUR_APP_URL; never a literal host), path: Text starting with "/", query?: Pair[0..10], headers?: Pair[0..10], jsonBody?: Pair[0..20] }. Never set authorization, proxy-authorization, cookie, or x-api-key headers: the user adds authentication in n8n.',
+    'httpRequest: calls an HTTP API. params: { method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", baseUrl: Placeholder ending in _URL (for example YOUR_APP_URL; never a literal host), path: Text starting with "/", query?: Pair[0..10], headers?: Pair[0..10], jsonBody?: Pair[0..20] }. Header names are FieldNames (no "-"); never Host, Forwarded, TE, Connection, Upgrade, Expect, or a name containing auth, token, secret, key, cookie, session, password, passwd, or signature: the user adds authentication in n8n. No "://" in any text.',
 });

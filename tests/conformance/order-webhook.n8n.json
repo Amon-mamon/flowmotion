@@ -176,7 +176,7 @@
       ],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={\"received\": true, \"orderId\": \"{{ $node[\"Shape Order\"].json.orderId }}\", \"note\": \"Thanks, we got \\\"it\\\"\"}",
+        "responseBody": "{\"received\": true, \"status\": \"queued\", \"note\": \"Thanks, we got \\\"it\\\"\"}",
         "options": {
           "responseCode": 200
         }

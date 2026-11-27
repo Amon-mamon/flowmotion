@@ -162,8 +162,8 @@ describe("validator: one failing case per rule (testing.md)", () => {
     expect(mutated("order-webhook", (f) => (node(f, "Notify Sales").parameters.operation = "explode"))).toEqual([5]);
     expect(mutated("order-webhook", (f) => (node(f, "Order Webhook").parameters.responseMode = "sometimes"))).toEqual([5]);
     expect(mutated("nightly-report", (f) => (node(f, "Top Fifty").parameters.keep = ["firstItems"]))).toEqual([5]);
-    // A real n8n parameter the profiles never emit still has to hold a catalog value.
-    expect(mutated("order-webhook", (f) => (node(f, "Notify Sales").parameters.authentication = "oAuth2"))).toEqual([]);
+    // A real n8n parameter the profiles never emit is refused by the validator's own table (D-50).
+    expect(mutated("order-webhook", (f) => (node(f, "Notify Sales").parameters.authentication = "oAuth2"))).toEqual([5]);
     expect(NODE_CATALOG.nodes["n8n-nodes-base.slack"]?.properties.some((property) => property.name === "authentication")).toBe(true);
   });
 
@@ -188,7 +188,7 @@ describe("validator: one failing case per rule (testing.md)", () => {
       mutated("order-webhook", (f) => {
         node(f, "Notify Sales").parameters.channelId = { __rl: true, mode: "id", value: "={{ $vars.channel }}" };
       }),
-    ).toEqual([6]);
+    ).toEqual([6, 8]); // also not a single YOUR_… destination token (D-50)
     // An upstream $node reference is fine.
     expect(
       mutated("order-webhook", (f) => (node(f, "Notify Sales").parameters.text = '={{ $node["Order Webhook"].json.body.id }}')),
@@ -207,7 +207,7 @@ describe("validator: one failing case per rule (testing.md)", () => {
       mutated("order-webhook", (f) => {
         node(f, "Notify Sales").parameters.otherOptions = { credentials: { id: "1" } };
       }),
-    ).toEqual([7]);
+    ).toEqual([5, 7]); // also an option key outside the validator's table (D-50)
   });
 
   it("rule 7: a planted key inside a renameKeys field is still found", () => {
@@ -254,7 +254,7 @@ describe("validator: one failing case per rule (testing.md)", () => {
       ).toEqual([8]);
     }
     expect(mutated("nightly-report", (f) => (node(f, "Push To CRM").parameters.authentication = "predefinedCredentialType"))).toContain(8);
-    expect(mutated("nightly-report", (f) => (node(f, "Push To CRM").parameters.jsonHeaders = '{"X-Trace": "x"}'))).toEqual([8]);
+    expect(mutated("nightly-report", (f) => (node(f, "Push To CRM").parameters.jsonHeaders = '{"X-Trace": "x"}'))).toEqual([5, 8]);
   });
 
   it("rule 9: a YOUR_X placeholder missing from the checklist", () => {

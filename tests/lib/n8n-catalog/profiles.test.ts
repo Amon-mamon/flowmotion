@@ -25,7 +25,7 @@ const SAMPLES: Record<string, Sample> = {
     wrongType: { path: "new-order", method: "post", respond: "immediately" },
   },
   scheduleTrigger: { ok: { cron: "*/15 * * * 1-5" }, wrongType: { cron: 5 } },
-  respondToWebhook: { ok: { statusCode: 201, body: [pair] }, wrongType: { statusCode: "201", body: [pair] } },
+  respondToWebhook: { ok: { statusCode: 201, body: [{ name: "ok", value: true }] }, wrongType: { statusCode: "201", body: [{ name: "ok", value: true }] } },
   if: { ok: { conditions: [condition], combine: "and" }, wrongType: { conditions: condition, combine: "and" } },
   filter: {
     ok: { conditions: [{ left: "{{ $json.active }}", op: "isTrue" }], combine: "or" },
@@ -208,16 +208,20 @@ describe("profile details", () => {
     }
   });
 
-  it("respondToWebhook JSON-escapes literal text and keeps expressions whole", () => {
-    const parameters = NODE_PROFILES["n8n-nodes-base.respondToWebhook"].toParameters({
+  it("respondToWebhook JSON-escapes literal text; a {{ in a body value is refused (D-52)", () => {
+    const profile = NODE_PROFILES["n8n-nodes-base.respondToWebhook"];
+    const parameters = profile.toParameters({
       statusCode: 200,
       body: [
-        { name: "note", value: 'say "hi"\n{{ $json["a"] }}' },
+        { name: "note", value: 'say "hi"\nbye' },
         { name: "count", value: 3 },
+        { name: "ok", value: true },
       ],
     });
-    expect(parameters.responseBody).toBe('{"note": "say \\"hi\\"\\n{{ $json["a"] }}", "count": 3}');
-    expect(NODE_PROFILES["n8n-nodes-base.respondToWebhook"].toParameters({ statusCode: 204, body: [] }).responseBody).toBe("{}");
+    expect(parameters.responseBody).toBe('{"note": "say \\"hi\\"\\nbye", "count": 3, "ok": true}');
+    expect(profile.toParameters({ statusCode: 204, body: [] }).responseBody).toBe("{}");
+    expect(profile.paramsSchema.safeParse({ statusCode: 200, body: [{ name: "id", value: "{{ $json.id }}" }] }).success).toBe(false);
+    expect(profile.paramsSchema.safeParse({ statusCode: 200, body: [{ name: "id", value: "order {{ $json.id }}" }] }).success).toBe(false);
   });
 
   it("stableId is deterministic, UUID-shaped, and distinct per seed", () => {

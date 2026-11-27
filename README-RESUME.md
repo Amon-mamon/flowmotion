@@ -40,6 +40,12 @@ The code reviewer accepted every backend deviation listed in `docs/requests.md` 
 
 **Build order (D-46, 2026-11-27):** Phase 3a review fixes → Phase 3b → Phase 2e own AI key. Everything deferred or not built is listed in `BACKLOG.md`.
 
+## Where we are (2026-11-28) — START HERE NEXT SESSION
+- **Done today:** landing motion identity (`2cbc9cf`), OpenCode set up as a worker (`6a91133`; tasks OC-1..OC-3 accepted, then its free quota ran out), Phase 3a review fixes (frontend by OpenCode, backend by Claude, three review rounds), Phase 3b UI OC-4..OC-7 behind the gate (`300d032`). **Phase 3a is complete.**
+- **Next:** Phase 3b backend items 1-9 (contract section 11 "Phase 3b"), Claude backend + code and security review; the owner applies `supabase/migrations/20261126000000_phase3_flows.sql` when it exists; then OC-8 opens the Generate gate; then the owner's first real-browser check (Generate a flow, click canvas nodes, export). Estimated 12-18% of weekly usage.
+- **OpenCode:** free quota exhausted on 2026-11-28. To reuse it: wait for the reset, connect OpenRouter (`opencode auth login`), or OpenCode Go. Board: `docs/opencode-tasks.md`.
+- **Weekly usage** was 42% at the start of this round (2026-11-28); ask the owner before the 3b backend.
+
 ## Brand identity and landing interactivity (owner, 2026-11-27) — BUILT 2026-11-28 (owner browser check pending)
 
 **What the owner wants:** visitors must *feel* the brand name **Flow Motion** — motion and flow — while scrolling. The first landing build (vercel.com look, Flow Motion colours, Lenis smooth scrolling, Motion scroll animations) was judged "just scroll to the bottom, not that interactive". The owner approved this concept:

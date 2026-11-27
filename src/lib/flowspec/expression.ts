@@ -2,8 +2,12 @@
  * The expression subset (docs/contract.md section 7). The only grammar a
  * generated flow may use; anything else fails rule F8 and validator rule 6.
  *
- *   expr    := operand ( cmp operand )?
- *   operand := ref | string | number | "true" | "false" | "null"
+ *   expr    := ref ( cmp operand )? | literal cmp operand
+ *   operand := ref | literal
+ *   literal := string | number | "true" | "false" | "null"
+ *
+ * A lone literal (`{{ '//' }}`) is refused (S3aR-2): a constant expression
+ * has no use and could rebuild text the `://` rule refuses.
  *   ref     := "$json" path | "$node[" string "].json" path
  *   path    := ( "." FieldName | "[" string "]" | "[" integer "]" ){1,6}
  *   cmp     := "==" | "!=" | ">" | ">=" | "<" | "<="
@@ -49,6 +53,8 @@ function isSpace(code: number): boolean {
 class Scanner {
   pos = 0;
   readonly nodeRefs: string[] = [];
+  /** Whether the last operand parsed was a `$json` / `$node` reference. */
+  lastWasRef = false;
 
   constructor(readonly source: string) {}
 
@@ -140,6 +146,7 @@ class Scanner {
   }
 
   operand(): boolean {
+    this.lastWasRef = this.source.startsWith("$json", this.pos) || this.source.startsWith("$node[", this.pos);
     if (this.take("$json")) return this.path() && this.boundary();
     if (this.take("$node[")) {
       const label = this.string();
@@ -175,7 +182,10 @@ export function parseExpression(source: string): ExpressionResult {
   const scanner = new Scanner(source);
   scanner.skipSpaces();
   if (!scanner.operand()) return { ok: false };
+  const firstIsRef = scanner.lastWasRef;
   scanner.skipSpaces();
+  // S3aR-2: a literal stands alone never; only inside a comparison.
+  if (!firstIsRef && scanner.pos >= source.length) return { ok: false };
   if (scanner.pos < source.length) {
     if (!scanner.comparator()) return { ok: false };
     scanner.skipSpaces();
@@ -218,4 +228,25 @@ export function parseTemplate(text: string): TemplateResult {
     pos = close + 2;
   }
   return { ok: true, hasExpression, segments, nodeRefs };
+}
+
+/** `:` followed by `//`, `/\\`, `\\`, or `\\/`: a scheme separator in any form (D-51, S3aR-2). */
+const SCHEME_SEPARATOR = /:(?:\\|\/[\\/])/;
+
+/**
+ * True when `text` holds a scheme separator, either as written or once every
+ * `{{ … }}` is removed and the literal parts are joined (so
+ * `https:/{{ $json.a }}/evil.test` is caught). Shared by `Text` (F8) and
+ * validator rule 8. Linear.
+ */
+export function containsSchemeSeparator(text: string): boolean {
+  if (SCHEME_SEPARATOR.test(text)) return true;
+  if (!text.includes("{{")) return false;
+  const parsed = parseTemplate(text);
+  if (!parsed.ok) return false;
+  const literal = parsed.segments
+    .filter((segment) => segment.kind === "literal")
+    .map((segment) => segment.text)
+    .join("");
+  return SCHEME_SEPARATOR.test(literal);
 }

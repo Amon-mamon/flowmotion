@@ -17,7 +17,13 @@ const PREFIX = "n8n-nodes-base.";
 /** Display-only entries, not parameters. */
 const NON_PARAMETER_TYPES = new Set(["notice", "callout"]);
 
+class GenerateError extends Error {}
+
+/** True once the temporary directory exists: a failure must then throw so `finally` removes it (S3a-9). */
+let insideTempDir = false;
+
 function fail(message) {
+  if (insideTempDir) throw new GenerateError(message);
   console.error(`catalog:generate failed: ${message}`);
   process.exit(1);
 }
@@ -136,6 +142,8 @@ if (allowlisted.length === 0) fail("the allowlist is empty");
 if (!/^\d+\.\d+\.\d+$/.test(nodesBaseVersion)) fail("NODES_BASE_VERSION is not an exact version");
 
 const tempDir = mkdtempSync(join(tmpdir(), "flowmotion-catalog-"));
+insideTempDir = true;
+let failure = null;
 try {
   console.log(`Installing n8n-nodes-base@${nodesBaseVersion} into a temporary directory...`);
   const install = spawnSync(
@@ -198,6 +206,14 @@ try {
   const output = `${JSON.stringify(sortKeys({ n8nVersion, nodesBaseVersion, nodes }), null, 2)}\n`;
   writeFileSync(join(catalogDir, "catalog.generated.json"), output, "utf8");
   console.log(`Wrote catalog.generated.json: ${Object.keys(nodes).length} node types, n8n ${n8nVersion}.`);
+} catch (error) {
+  failure = error;
 } finally {
   rmSync(tempDir, { recursive: true, force: true, maxRetries: 3 });
+}
+// Exit code set only after the cleanup above.
+if (failure !== null) {
+  const message = failure instanceof GenerateError ? failure.message : String(failure);
+  console.error(`catalog:generate failed: ${message}`);
+  process.exitCode = 1;
 }

@@ -6,8 +6,8 @@ Last updated: 2026-11-27 (after Phase 1.2).
 
 ## Planned and approved (build order)
 1. ~~Phase 1.2: GitHub account isolation~~ done 2026-11-27 (D-43..D-45). Owner and teammate must each click "Refresh repository access" once.
-2. **Phase 3a review fixes:** planned 2026-11-27 (D-46..D-53, contract section 11 "Phase 3a review fixes": backend items 1-11, frontend items 1-3). Not built yet. Gate: R3a-1, R3a-2, S3a-1, S3a-2 verified fixed before 3b starts.
-3. **Phase 3b: flow generation** (Generate button, generate/flows/export API, migration `20261126000000_phase3_flows.sql`).
+2. ~~Phase 3a review fixes~~ done 2026-11-28; Phase 3a complete, 3b security gate passed. Open low: R3aR-3 (architect records the backend deviations in security.md / testing.md).
+3. **Phase 3b: flow generation** — UI OC-4..OC-7 done (`300d032`, behind the gate). Next: Claude backend items 1-9 (migration `20261126000000_phase3_flows.sql`, owner applies it), then OC-8 (open the gate), then the owner's first real-browser check. OC-9 (remove landing "Coming soon") on the owner's word.
 4. **Phase 2e: own AI key** — UI preview being built 2026-11-27 (D-54); the working backend waits for the owner's go-ahead. (Integrations page, OpenRouter + Anthropic, any model, free and paid). Approved 2026-11-27; moved after 3b by D-46 (generation reuses the same provider switch, so per-user keys change one place for both). Details in `FEATURE-PROPOSAL.md`.
 5. **Phase 4: simulation** (mock-data test runs).
 6. **Phase 5: hardening** (full security review, rate limits, audit log, MFA, accessibility).

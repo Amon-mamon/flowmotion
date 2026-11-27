@@ -1,9 +1,11 @@
 import { z } from "zod";
 
-import { parseTemplate } from "@/lib/flowspec/expression";
+import { containsSchemeSeparator, parseTemplate } from "@/lib/flowspec/expression";
 import { isAllowedNodeType, NODE_TYPE_PREFIX } from "@/lib/n8n-catalog/allowlist";
 import { catalogNode, type CatalogNode } from "@/lib/n8n-catalog/catalog";
-import { scan } from "@/lib/security/secret-scanner";
+import { hasReservedKey, scanFindsSecret } from "@/lib/security/scan-render";
+
+import { allowedParams, DESTINATION_TOKEN, isAllowedHeaderName, requiredModes } from "./allowed-params";
 import { isJsonValue, jsonValueSchema, setupChecklistSchema, type JsonValue } from "@/schemas/flow";
 
 /**
@@ -30,6 +32,7 @@ const NODE_KEYS: ReadonlySet<string> = new Set(["id", "name", "type", "typeVersi
 const SPLIT_IN_BATCHES = `${NODE_TYPE_PREFIX}splitInBatches`;
 const HTTP_REQUEST = `${NODE_TYPE_PREFIX}httpRequest`;
 const SWITCH = `${NODE_TYPE_PREFIX}switch`;
+const RESPOND_TO_WEBHOOK = `${NODE_TYPE_PREFIX}respondToWebhook`;
 const MERGE = `${NODE_TYPE_PREFIX}merge`;
 
 /** Excluded in v1 (docs/node-catalog.md): never allowed in an export. */
@@ -53,12 +56,15 @@ export const EXCLUDED_NODE_NAMES: ReadonlySet<string> = new Set([
 ]);
 const ALLOWED_TRIGGER_NAMES: ReadonlySet<string> = new Set(["manualTrigger", "scheduleTrigger"]);
 
-const FORBIDDEN_HEADER_NAMES: ReadonlySet<string> = new Set([
-  "authorization",
-  "proxy-authorization",
-  "cookie",
-  "x-api-key",
-]);
+/** True for a type outside the allowlist that is excluded (or not an n8n-nodes-base type at all). */
+export function isExcludedNodeType(type: string): boolean {
+  if (isAllowedNodeType(type)) return false;
+  const short = type.startsWith(NODE_TYPE_PREFIX) ? type.slice(NODE_TYPE_PREFIX.length) : null;
+  return (
+    short === null || EXCLUDED_NODE_NAMES.has(short) || (short.endsWith("Trigger") && !ALLOWED_TRIGGER_NAMES.has(short))
+  );
+}
+
 /** httpRequest parameters that could carry headers, credentials, or a body the header check cannot see. */
 const FORBIDDEN_HTTP_PARAMETERS: readonly string[] = [
   "jsonHeaders",
@@ -121,35 +127,6 @@ function walk(value: unknown, onString: (text: string) => void, onKey?: (key: st
   }
 }
 
-const RENAME_KEYS = `${NODE_TYPE_PREFIX}renameKeys`;
-
-/**
- * The text the scanner reads (rule 7 and `assertExportSafe`): the export as
- * pretty JSON. One adjustment: in a `renameKeys` node n8n names the field
- * paths `currentKey` / `newKey`, and the scanner's secret-name rule would read
- * every longer field path as a secret assigned to a name containing "key".
- * Those two properties are written as `from` / `to`; their values are still
- * scanned.
- */
-export function renderForScan(workflow: JsonValue): string {
-  const nodes = asRecord(workflow)?.nodes;
-  if (!Array.isArray(nodes)) return JSON.stringify(workflow, null, 2);
-  const neutral = nodes.map((node) => {
-    const record = asRecord(node);
-    if (record === null || record.type !== RENAME_KEYS) return node;
-    const text = JSON.stringify(record.parameters ?? null, (_key, value: unknown) => {
-      if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
-      const renamed: Record<string, unknown> = {};
-      for (const [key, child] of Object.entries(value)) {
-        renamed[key === "currentKey" ? "from" : key === "newKey" ? "to" : key] = child;
-      }
-      return renamed;
-    });
-    return { ...record, parameters: JSON.parse(text) as JsonValue };
-  });
-  return JSON.stringify({ ...asRecord(workflow), nodes: neutral }, null, 2);
-}
-
 /** True when any object anywhere in `value` has a `credentials` key. */
 export function hasCredentialsKey(value: unknown): boolean {
   let found = false;
@@ -165,6 +142,44 @@ export function hasCredentialsKey(value: unknown): boolean {
 
 function asRecord(value: JsonValue | undefined): Record<string, JsonValue> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : null;
+}
+
+/** Rule 6 (D-52, S3aR-5): a respondToWebhook body is JSON text holding one flat object of scalars, no `{{`. */
+function isLiteralJsonBody(body: JsonValue | undefined): boolean {
+  if (typeof body !== "string" || body.includes("{{")) return false;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return false;
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+  return Object.values(parsed).every(
+    (value) => value === null || ["string", "number", "boolean"].includes(typeof value),
+  );
+}
+
+/** Rule 5 (D-50): names, mode values, and option keys from the validator's own table. */
+function isAllowedByTable(node: WorkflowNode): boolean {
+  const table = allowedParams(node.type);
+  if (table === undefined) return false;
+  // R3aR-2 / S3aR-3: a mode the profile always emits must be present, so n8n never falls back to its own default.
+  if (!requiredModes(table).every((name) => Object.hasOwn(node.parameters, name))) return false;
+  for (const [name, value] of Object.entries(node.parameters)) {
+    if (!table.names.includes(name)) return false;
+    const modes = Object.hasOwn(table.modes, name) ? table.modes[name] : undefined;
+    if (modes !== undefined) {
+      if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") return false;
+      if (!modes.includes(value)) return false;
+    }
+    const keys = Object.hasOwn(table.containers, name) ? table.containers[name] : undefined;
+    if (keys !== undefined) {
+      const container = asRecord(value);
+      if (container === null) return false;
+      if (!Object.keys(container).every((key) => keys.includes(key))) return false;
+    }
+  }
+  return true;
 }
 
 function outputCount(node: WorkflowNode, catalog: CatalogNode): number {
@@ -279,10 +294,13 @@ export function validateWorkflow(workflow: unknown, checklist: unknown): Validat
   const serialized = JSON.stringify(workflow, null, 2);
   if (byteLength(serialized) > MAX_EXPORT_BYTES) return { ok: false, errors: [{ rule: 10 }] };
 
-  // Rule 1: shape.
+  // Rule 1: shape. Reserved own keys are refused before any parsing (D-49).
+  if (hasReservedKey(workflow)) return { ok: false, errors: [{ rule: 1 }] };
   const parsed = workflowSchema.safeParse(workflow);
   if (!parsed.success) return { ok: false, errors: [{ rule: 1 }] };
   const flow = parsed.data;
+  // Rule 6 (D-53): the workflow name is display text, never an expression.
+  if (flow.name.startsWith("=") || flow.name.includes("{{")) add(6);
   for (const node of flow.nodes) {
     for (const key of Object.keys(node)) {
       if (!NODE_KEYS.has(key) && key !== "credentials") add(1, node.name);
@@ -299,14 +317,7 @@ export function validateWorkflow(workflow: unknown, checklist: unknown): Validat
     const catalog = isAllowedNodeType(node.type) ? catalogNode(node.type) : undefined;
     if (catalog === undefined || catalog.typeVersion !== node.typeVersion) add(4, node.name);
     else catalogs.set(node.name, catalog);
-    if (!isAllowedNodeType(node.type)) {
-      const short = node.type.startsWith(NODE_TYPE_PREFIX) ? node.type.slice(NODE_TYPE_PREFIX.length) : null;
-      const excluded =
-        short === null ||
-        EXCLUDED_NODE_NAMES.has(short) ||
-        (short.endsWith("Trigger") && !ALLOWED_TRIGGER_NAMES.has(short));
-      if (excluded) add(8, node.name);
-    }
+    if (isExcludedNodeType(node.type)) add(8, node.name);
   }
 
   // Rule 2: unique names, connections between existing nodes, indexes in range.
@@ -384,12 +395,17 @@ export function validateWorkflow(workflow: unknown, checklist: unknown): Validat
           if (!allowed) add(5, node.name);
         }
       }
+      // Rule 5 (D-50): the validator's own parameter table; fails closed.
+      if (!isAllowedByTable(node)) add(5, node.name);
     }
 
     // Rule 6: expressions only in the supported subset. Rule 8: no plain-http URL.
     let nodeRefs: string[] = [];
     walk(node.parameters, (text) => {
-      if (text.toLowerCase().includes("http://")) add(8, node.name);
+      // Rule 8 (D-51, S3aR-2): no literal link or host of any scheme, in any form.
+      if (text.includes("://") || containsSchemeSeparator(text.startsWith("=") ? text.slice(1) : text)) {
+        add(8, node.name);
+      }
       if (text.startsWith("=")) {
         const template = parseTemplate(text.slice(1));
         if (!template.ok || !template.hasExpression) add(6, node.name);
@@ -398,6 +414,9 @@ export function validateWorkflow(workflow: unknown, checklist: unknown): Validat
         add(6, node.name);
       }
     });
+    // Rule 6 (D-52): a respondToWebhook reply is literal JSON text.
+    // S3aR-5: and it is a flat JSON object of scalars, so the scan sees every pair.
+    if (node.type === RESPOND_TO_WEBHOOK && !isLiteralJsonBody(node.parameters.responseBody)) add(6, node.name);
     if (nodeRefs.length > 0) {
       const ancestors = ancestorsOf(node.name, edges);
       if (!nodeRefs.every((name) => name !== node.name && ancestors.has(name))) add(6, node.name);
@@ -415,13 +434,21 @@ export function validateWorkflow(workflow: unknown, checklist: unknown): Validat
       if (node.parameters.headerParameters !== undefined && !Array.isArray(headers)) add(8, node.name);
       for (const header of Array.isArray(headers) ? headers : []) {
         const name = asRecord(header)?.name;
-        if (typeof name !== "string" || FORBIDDEN_HEADER_NAMES.has(name.trim().toLowerCase())) add(8, node.name);
+        if (typeof name !== "string" || !isAllowedHeaderName(name)) add(8, node.name);
       }
+    }
+
+    // Rule 8 (D-50): every destination is exactly one YOUR_… token.
+    for (const name of allowedParams(node.type)?.destinations ?? []) {
+      const value = node.parameters[name];
+      const locatorValue = asRecord(value)?.value;
+      const text = typeof value === "string" ? value : locatorValue;
+      if (typeof text !== "string" || !DESTINATION_TOKEN.test(text)) add(8, node.name);
     }
   }
 
   // Rule 7: no secrets, no `credentials` key anywhere.
-  if (scan(SCAN_PATH, renderForScan(workflow)).findings.length > 0) add(7);
+  if (scanFindsSecret(SCAN_PATH, workflow)) add(7);
   if (hasCredentialsKey(workflow)) add(7);
 
   // Rule 9: every YOUR_… placeholder is listed in the setup checklist.

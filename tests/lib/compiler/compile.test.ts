@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { compileFlow, CompileError, layoutFlow, serializeWorkflow, type N8nNode } from "@/lib/compiler";
 import {
   WARNING_HTTP,
+  WARNING_HTTP_PATH,
   WARNING_MESSAGES,
   WARNING_REVIEW,
   WARNING_WEBHOOK,
@@ -216,7 +217,7 @@ describe("compiler: expressions", () => {
     expect(http?.parameters.url).toBe("=YOUR_CRM_API_URL/v1/orders/{{ $json.id }}");
     const reply = workflow.nodes.find((node) => node.name === "Reply");
     expect(reply?.parameters.responseBody).toBe(
-      '={"received": true, "orderId": "{{ $node["Shape Order"].json.orderId }}", "note": "Thanks, we got \\"it\\""}',
+      '{"received": true, "status": "queued", "note": "Thanks, we got \\"it\\""}',
     );
   });
 });
@@ -293,7 +294,12 @@ describe("compiler: setup checklist", () => {
 
   it("warnings are the fixed sentences, in the contract order", () => {
     expect(compileSpec("order-webhook").checklist.warnings).toEqual([WARNING_REVIEW, WARNING_WEBHOOK, WARNING_MESSAGES]);
-    expect(compileSpec("nightly-report").checklist.warnings).toEqual([WARNING_REVIEW, WARNING_HTTP, WARNING_MESSAGES]);
+    expect(compileSpec("nightly-report").checklist.warnings).toEqual([
+      WARNING_REVIEW,
+      WARNING_HTTP,
+      WARNING_HTTP_PATH,
+      WARNING_MESSAGES,
+    ]);
     expect(compileSpec("support-triage").checklist.warnings).toEqual([
       WARNING_REVIEW,
       WARNING_WEBHOOK,
@@ -305,7 +311,7 @@ describe("compiler: setup checklist", () => {
     expect(compileFlow(specOf(baseDraft())).checklist).toEqual({ credentials: [], placeholders: [], warnings: [WARNING_REVIEW] });
   });
 
-  it("all five warnings together, in order", () => {
+  it("all six warnings together, in order (D-51 adds the HTTP path warning)", () => {
     const draft = baseDraft();
     draft.nodes[0] = {
       key: "start",
@@ -315,17 +321,25 @@ describe("compiler: setup checklist", () => {
     };
     draft.tests.cases[0]!.trigger.kind = "webhook";
     draft.nodes.push(
-      { key: "call", nodeType: "n8n-nodes-base.httpRequest", label: "Call", params: { method: "GET", baseUrl: "YOUR_APP_URL", path: "/x" } },
+      { key: "call", nodeType: "n8n-nodes-base.httpRequest", label: "Call", params: { method: "GET", baseUrl: "YOUR_APP_URL", path: "/x/{{ $json.id }}" } },
       { key: "page", nodeType: "n8n-nodes-base.notion", label: "Page", params: { databaseId: "YOUR_NOTION_DATABASE_ID", title: "x" } },
       { key: "post", nodeType: "n8n-nodes-base.discord", label: "Post", params: { text: "See YOUR_APP_URL and YOUR_STATUS_PAGE" } },
     );
     draft.edges.push({ from: "shape", to: "call" }, { from: "call", to: "page" }, { from: "page", to: "post" });
     const { checklist } = compileFlow(specOf(draft));
-    expect(checklist.warnings).toEqual([WARNING_REVIEW, WARNING_WEBHOOK, WARNING_HTTP, WARNING_WRITES, WARNING_MESSAGES]);
+    expect(checklist.warnings).toEqual([
+      WARNING_REVIEW,
+      WARNING_WEBHOOK,
+      WARNING_HTTP,
+      WARNING_HTTP_PATH,
+      WARNING_WRITES,
+      WARNING_MESSAGES,
+    ]);
     expect(checklist.warnings).toEqual([
       "Review every node before you activate the workflow in n8n.",
       "n8n creates a new webhook URL on import. Copy it from the Webhook node into the service that calls it.",
       "Add authentication to each HTTP Request node in n8n if your API needs it.",
+      "An HTTP Request node builds its URL path from incoming data. Make sure callers cannot reach endpoints they should not.",
       "This flow writes data. Try it with test data before using production.",
       "This flow sends messages. Point it at a test channel or address first.",
     ]);

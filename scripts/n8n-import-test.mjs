@@ -3,12 +3,15 @@
 // deployed, no user data, no credentials.
 //
 // Starts the pinned n8n in an isolated temporary user folder (Docker image tag
-// N8N_VERSION, or `npx --yes n8n@N8N_VERSION` when Docker is absent), imports
+// N8N_VERSION, or, only with --allow-npx (S3a-9), `npx --yes n8n@N8N_VERSION`
+// when Docker is absent), imports
 // every golden export in tests/conformance/, checks that the import succeeded
 // and that node and connection counts match, then writes
 // tests/conformance/verified.json. When no runner is available it prints
 // "skipped: no n8n runner available" and exits 0 without touching verified.json.
-// Usage: npm run test:n8n-import
+// Without Docker and without --allow-npx it prints the skip message with a hint
+// and exits 0.
+// Usage: npm run test:n8n-import [-- --allow-npx]
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -27,6 +30,8 @@ import { fileURLToPath } from "node:url";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const conformanceDir = join(repoRoot, "tests", "conformance");
 const SKIPPED = "skipped: no n8n runner available";
+const SKIPPED_NO_NPX = "skipped: no n8n runner available (pass --allow-npx to download n8n with npx)";
+const ALLOW_NPX = process.argv.slice(2).includes("--allow-npx");
 const SHELL = process.platform === "win32";
 const TIMEOUT_MS = 20 * 60 * 1000;
 const PROBLEM_OUTPUT = /unrecognized node type|unknown node|an error occurred|could not be imported/i;
@@ -110,7 +115,13 @@ function pickRunner() {
       n8n: (args) => run("docker", [...flags, image, ...args]),
     };
   }
+  // S3a-9: the npx fallback downloads n8n and runs its install scripts, so it is opt-in.
+  if (!ALLOW_NPX) return { skip: SKIPPED_NO_NPX };
   if (succeeded(run("npx", ["--version"], { stdio: "ignore" }))) {
+    console.log(
+      `--allow-npx: downloading n8n@${n8nVersion} and its dependencies from the npm registry with npx ` +
+        "(several hundred MB). npm runs the packages' install scripts on this machine.",
+    );
     const env = { ...baseEnv(), ...N8N_ENV, N8N_USER_FOLDER: userDir };
     return {
       name: `npx n8n@${n8nVersion}`,
@@ -140,7 +151,9 @@ function typeList(workflow) {
 try {
   const runner = pickRunner();
   // The first call downloads n8n when needed; without a network there is no runner.
-  if (runner === null || !succeeded(runner.n8n(["--version"]))) {
+  if (runner !== null && "skip" in runner) {
+    console.log(runner.skip);
+  } else if (runner === null || !succeeded(runner.n8n(["--version"]))) {
     console.log(SKIPPED);
   } else {
     console.log(`Importing ${goldens.length} golden exports into n8n ${n8nVersion} (${runner.name})...`);

@@ -25,13 +25,14 @@ describe("expression subset (contract section 7): accepted productions", () => {
     ["mixed path of six segments", '$json.a["b"][2].c.d.e'],
     ["$node reference", '$node["Shape Order"].json.total'],
     ["$node reference, single quotes", "$node['Shape Order'].json[\"total\"]"],
-    ["string operand", '"paid"'],
-    ["single-quoted string operand", "'paid'"],
-    ["number operand", "42"],
-    ["negative decimal operand", "-3.25"],
-    ["true", "true"],
-    ["false", "false"],
-    ["null", "null"],
+    ["string operand in a comparison", '$json.s == "paid"'],
+    ["single-quoted string operand", "$json.s == 'paid'"],
+    ["number operand", "$json.n == 42"],
+    ["negative decimal operand", "$json.n > -3.25"],
+    ["true", "$json.b == true"],
+    ["false", "$json.b == false"],
+    ["null", "$json.a == null"],
+    ["literal on the left of a comparison", "'paid' == $json.s"],
     ["==", '$json.status == "paid"'],
     ["!=", "$json.status != 'open'"],
     [">", "$json.total > 100"],
@@ -92,9 +93,13 @@ describe("expression subset: rejected", () => {
   ])("%s", (_label, source) => rejects(source));
 
   it("accepts a 100-char string and a 64-char field name (the limits)", () => {
-    accepts(`"${"a".repeat(100)}"`);
+    accepts(`$json.s == "${"a".repeat(100)}"`);
     accepts(`$json.${"a".repeat(64)}`);
   });
+});
+
+describe("S3aR-2: a lone literal is never a whole expression", () => {
+  it.each(['"paid"', "'//'", "42", "-3.25", "true", "false", "null", " '/' "])("%s", (source) => rejects(source));
 });
 
 describe("templates", () => {

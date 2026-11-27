@@ -169,6 +169,56 @@ const PUBLIC_PREFIX = /^(?:NEXT_PUBLIC_|VITE_|EXPO_PUBLIC_|REACT_APP_)/;
 const PLACEHOLDER_WORD = /(?<![A-Za-z0-9])(?:changeme|example|x{3,})(?![A-Za-z0-9])/i;
 const BARE_VARIABLE_NAME = /^[A-Z][A-Z0-9_]*$/;
 
+/**
+ * True when `value` holds a token-like run: 20+ letters and digits in a row
+ * (no separator), with a digit, a letter, and entropy ≥ 3.5 (S3aR-1). One
+ * linear pass.
+ */
+export function hasTokenRun(value: string): boolean {
+  let start = 0;
+  for (let index = 0; index <= value.length; index += 1) {
+    const code = index < value.length ? value.charCodeAt(index) : 0;
+    const alnum = (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+    if (alnum) continue;
+    if (index - start >= 20) {
+      const run = value.slice(start, index);
+      if (/[0-9]/.test(run) && /[A-Za-z]/.test(run) && shannonEntropy(run) >= 3.5) return true;
+    }
+    start = index + 1;
+  }
+  return false;
+}
+
+/** The value with every closed `{{ … }}` and `${ … }` reference removed (linear). */
+function withoutReferences(value: string): string {
+  let out = "";
+  let pos = 0;
+  // Next known position of each marker (-1 = none left). Searched again only
+  // once `pos` has passed it, so the whole walk is one linear pass (R3aR-5).
+  let nextA = value.indexOf("{{");
+  let nextB = value.indexOf("${");
+  while (pos < value.length) {
+    if (nextA !== -1 && nextA < pos) nextA = value.indexOf("{{", pos);
+    if (nextB !== -1 && nextB < pos) nextB = value.indexOf("${", pos);
+    const a = nextA;
+    const b = nextB;
+    const open = a === -1 ? b : b === -1 ? a : Math.min(a, b);
+    if (open === -1) {
+      out += value.slice(pos);
+      break;
+    }
+    out += `${value.slice(pos, open)} `;
+    const close = value.indexOf("}", open + 2);
+    if (close === -1) {
+      // Unclosed: keep the rest so a token after it is still seen (fail closed).
+      out += value.slice(open);
+      break;
+    }
+    pos = value.startsWith("}}", close) ? close + 2 : close + 1;
+  }
+  return out;
+}
+
 export interface PlaceholderOptions {
   /** Generic assignment rule only: skip bare variable names (D-33). */
   bareName?: boolean;
@@ -188,11 +238,18 @@ export interface PlaceholderOptions {
 export function isPlaceholderValue(value: string, options: PlaceholderOptions = {}): boolean {
   const v = value.trim();
   if (v === "") return true;
-  if (/^your[-_]/i.test(v)) return true;
-  if (PLACEHOLDER_WORD.test(v)) return true;
-  if (/^<.*>$/.test(v)) return true;
-  if (v.includes("${") || v.includes("{{") || v.startsWith("$")) return true;
   if (/^(.)\1*$/.test(v)) return true;
+  // S3aR-1: the marker exemptions below apply only when the whole value is a
+  // placeholder. A real token glued to a marker (`YOUR_<token>`,
+  // `example <token>`, `<token>{{ $json.id }}`) is never skipped.
+  const markers =
+    /^your[-_]/i.test(v) ||
+    PLACEHOLDER_WORD.test(v) ||
+    /^<.*>$/.test(v) ||
+    v.includes("${") ||
+    v.includes("{{") ||
+    v.startsWith("$");
+  if (markers && !hasTokenRun(withoutReferences(v))) return true;
   if (options.prefix !== undefined && v.startsWith(options.prefix)) {
     const rest = v.slice(options.prefix.length);
     if (rest.length > 0 && /^(.)\1*$/.test(rest)) return true;
@@ -264,6 +321,51 @@ function isSecretLikeValue(value: string): boolean {
   if (value.length >= 20 && shannonEntropy(value) >= 3.5) return true;
   if (BASE32_VALUE.test(value) && /[2-7]/.test(value)) return true;
   return PROVIDER_VALUE_PATTERNS.some((pattern) => pattern.test(value));
+}
+
+// --- HTTP credential helpers (D-48) ------------------------------------------------
+
+/** Schemes of the database URL rule: URL credentials on these are `db_connection_string`. */
+const DATABASE_SCHEME = /^(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|rediss?|amqps?|mssql|sqlserver)$/i;
+
+/** 20+ characters, at least one digit and one letter, entropy ≥ 3.5. */
+function isTokenLike(value: string): boolean {
+  return value.length >= 20 && /[0-9]/.test(value) && /[A-Za-z]/.test(value) && shannonEntropy(value) >= 3.5;
+}
+
+function matchesProviderPattern(value: string): boolean {
+  return PROVIDER_VALUE_PATTERNS.some((pattern) => pattern.test(value));
+}
+
+/** `Bearer` / `Token` credential: token-like, or a provider key shape. */
+function isBearerCredential(value: string): boolean {
+  return isTokenLike(value) || matchesProviderPattern(value);
+}
+
+/** Secret query value: token-like, base32-shaped, or a provider key shape. */
+function isQuerySecretValue(value: string): boolean {
+  if (isTokenLike(value)) return true;
+  if (BASE32_VALUE.test(value) && /[2-7]/.test(value)) return true;
+  return matchesProviderPattern(value);
+}
+
+/**
+ * `Basic` credential: 12+ characters, base64-shaped with a length that is a
+ * multiple of 4, decoding (runtime-neutral `atob`) to printable ASCII holding
+ * `user:password` (at least one character after the first `:`).
+ */
+function isBasicCredential(value: string): boolean {
+  if (value.length < 12 || value.length % 4 !== 0) return false;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return false;
+  let decoded: string;
+  try {
+    decoded = atob(value);
+  } catch {
+    return false;
+  }
+  if (!/^[\x20-\x7e]+$/.test(decoded)) return false;
+  const colon = decoded.indexOf(":");
+  return colon !== -1 && colon < decoded.length - 1;
 }
 
 function genericCategory(name: string): FindingCategory {
@@ -366,7 +468,7 @@ const DETECTORS: readonly Detector[] = [
   },
   {
     name: "AWS access key id",
-    regexp: /\b((?:AKIA|ASIA)[0-9A-Z]{16})\b/g,
+    regexp: /(?<![A-Za-z0-9])((?:AKIA|ASIA)[0-9A-Z]{16})\b/g,
     build: (m) => {
       const span = spanOf(m, 1);
       return span && { ...span, category: "cloud_credentials", type: "AWS access key id", redact: true, priority: 1 };
@@ -382,7 +484,7 @@ const DETECTORS: readonly Detector[] = [
   },
   {
     name: "GitHub token",
-    regexp: /\b((?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{22,255})\b/g,
+    regexp: /(?<![A-Za-z0-9])((?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{22,255})\b/g,
     build: (m) => {
       const span = spanOf(m, 1);
       return span && { ...span, category: "hardcoded_secret", type: "GitHub token", redact: true, priority: 1 };
@@ -398,7 +500,7 @@ const DETECTORS: readonly Detector[] = [
   },
   {
     name: "Slack token",
-    regexp: /\b(xox[abprs]-[A-Za-z0-9-]{10,})/g,
+    regexp: /(?<![A-Za-z0-9])(xox[abprs]-[A-Za-z0-9-]{10,})/g,
     build: (m) => {
       const span = spanOf(m, 1);
       return span && { ...span, category: "hardcoded_secret", type: "Slack token", redact: true, priority: 1 };
@@ -414,7 +516,7 @@ const DETECTORS: readonly Detector[] = [
   },
   {
     name: "Stripe key",
-    regexp: /\b((?:sk_live|rk_live|sk_test)_[A-Za-z0-9]{10,})/g,
+    regexp: /(?<![A-Za-z0-9])((?:sk_live|rk_live|sk_test)_[A-Za-z0-9]{10,})/g,
     build: (m) => {
       const span = spanOf(m, 1);
       return span && { ...span, category: "hardcoded_secret", type: "Stripe key", redact: true, priority: 1 };
@@ -422,7 +524,7 @@ const DETECTORS: readonly Detector[] = [
   },
   {
     name: "Google API key",
-    regexp: /\b(AIza[0-9A-Za-z_-]{35})(?![0-9A-Za-z_-])/g,
+    regexp: /(?<![A-Za-z0-9])(AIza[0-9A-Za-z_-]{35})(?![0-9A-Za-z_-])/g,
     build: (m) => {
       const span = spanOf(m, 1);
       return span && { ...span, category: "cloud_credentials", type: "Google API key", redact: true, priority: 1 };
@@ -430,7 +532,7 @@ const DETECTORS: readonly Detector[] = [
   },
   {
     name: "JWT",
-    regexp: /\b(eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{10,})/g,
+    regexp: /(?<![A-Za-z0-9])(eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{10,})/g,
     build: (m) => {
       const span = spanOf(m, 1);
       if (span === null) return null;
@@ -463,17 +565,17 @@ const DETECTORS: readonly Detector[] = [
     },
   },
   // --- provider patterns (D-28, security.md section 2) ---------------------------
-  provider("Anthropic key", /\b(sk-ant-[A-Za-z0-9_-]{20,})/g, { prefix: "sk-ant-" }),
-  provider("OpenRouter key", /\b(sk-or-[A-Za-z0-9_-]{32,})/g, { prefix: "sk-or-" }),
-  provider("OpenAI key", /\b(sk-(?!ant-|or-)(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{32,})/g, { prefix: "sk-" }),
-  provider("SendGrid key", /\b(SG\.[A-Za-z0-9_-]{16,32}\.[A-Za-z0-9_-]{30,64})/g, { prefix: "SG." }),
-  provider("npm token", /\b(npm_[A-Za-z0-9]{36})\b/g, { prefix: "npm_" }),
-  provider("GitLab token", /\b(glpat-[A-Za-z0-9_-]{20,})/g, { prefix: "glpat-" }),
-  provider("Supabase service key", /\b(sb_secret_[A-Za-z0-9_-]{20,})/g, { prefix: "sb_secret_" }),
-  provider("Twilio key", /\b(SK[0-9a-fA-F]{32})\b/g, { prefix: "SK" }),
-  provider("Mailgun key", /\b(key-[0-9a-f]{32})\b/g, { prefix: "key-" }),
-  provider("Mailgun key", /\b([0-9a-f]{32}-[0-9a-f]{8}-[0-9a-f]{8})\b/g),
-  provider("Resend key", /\b(re_[A-Za-z0-9]{6,12}_[A-Za-z0-9]{16,40})\b/g, {
+  provider("Anthropic key", /(?<![A-Za-z0-9])(sk-ant-[A-Za-z0-9_-]{20,})/g, { prefix: "sk-ant-" }),
+  provider("OpenRouter key", /(?<![A-Za-z0-9])(sk-or-[A-Za-z0-9_-]{32,})/g, { prefix: "sk-or-" }),
+  provider("OpenAI key", /(?<![A-Za-z0-9])(sk-(?!ant-|or-)(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{32,})/g, { prefix: "sk-" }),
+  provider("SendGrid key", /(?<![A-Za-z0-9])(SG\.[A-Za-z0-9_-]{16,32}\.[A-Za-z0-9_-]{30,64})/g, { prefix: "SG." }),
+  provider("npm token", /(?<![A-Za-z0-9])(npm_[A-Za-z0-9]{36})\b/g, { prefix: "npm_" }),
+  provider("GitLab token", /(?<![A-Za-z0-9])(glpat-[A-Za-z0-9_-]{20,})/g, { prefix: "glpat-" }),
+  provider("Supabase service key", /(?<![A-Za-z0-9])(sb_secret_[A-Za-z0-9_-]{20,})/g, { prefix: "sb_secret_" }),
+  provider("Twilio key", /(?<![A-Za-z0-9])(SK[0-9a-fA-F]{32})\b/g, { prefix: "SK" }),
+  provider("Mailgun key", /(?<![A-Za-z0-9])(key-[0-9a-f]{32})\b/g, { prefix: "key-" }),
+  provider("Mailgun key", /(?<![A-Za-z0-9])([0-9a-f]{32}-[0-9a-f]{8}-[0-9a-f]{8})\b/g),
+  provider("Resend key", /(?<![A-Za-z0-9])(re_[A-Za-z0-9]{6,12}_[A-Za-z0-9]{16,40})\b/g, {
     prefix: "re_",
     extra: (value) => shannonEntropy(value.slice(3)) >= 3.5,
   }),
@@ -486,6 +588,93 @@ const DETECTORS: readonly Detector[] = [
     "Postmark token",
     new RegExp(`X-Postmark-(?:Server|Account)-Token["']?[ \\t]*[:,][ \\t]*["'\`]?(${UUID})`, "gi"),
   ),
+  // --- HTTP credential rules (D-48, S3a-1, security.md section 2) -----------------
+  {
+    // Authorization scheme: `Bearer` / `Token` / `Basic` + spaces + the
+    // credential (the longest run of token characters). The scheme word is a
+    // literal, the gap and the run are single character classes that cannot
+    // overlap, so each candidate ends at its first terminator (linear).
+    name: "Authorization header",
+    regexp: /(?<![A-Za-z0-9])(bearer|token|basic)[ \t]+([A-Za-z0-9._~+/=-]+)/gi,
+    build: (m) => {
+      const scheme = (m[1] ?? "").toLowerCase();
+      const credential = m[2];
+      if (credential === undefined) return null;
+      const accepted = scheme === "basic" ? isBasicCredential(credential) : isBearerCredential(credential);
+      if (!accepted) return null;
+      const start = m.index + m[0].length - credential.length;
+      return {
+        start,
+        end: start + credential.length,
+        value: credential,
+        category: "hardcoded_secret",
+        type: "Authorization header",
+        redact: true,
+        priority: 2,
+      };
+    },
+  },
+  {
+    // URL credentials on any scheme: `scheme://user:password@host` or
+    // `scheme://<token>@host`. The authority is one character class that ends
+    // at its first terminator; the scheme run is bounded (32), so linear.
+    name: "URL credentials",
+    regexp: /([A-Za-z][A-Za-z0-9+.-]{0,31}):\/\/([^/?#\s"'`<>]*)/g,
+    build: (m) => {
+      const scheme = m[1];
+      const authority = m[2];
+      if (scheme === undefined || authority === undefined) return null;
+      const at = authority.lastIndexOf("@");
+      if (at <= 0) return null;
+      const userinfo = authority.slice(0, at);
+      const authorityStart = m.index + scheme.length + 3;
+      const colon = userinfo.indexOf(":");
+      let offset: number;
+      let secret: string;
+      if (colon !== -1) {
+        secret = userinfo.slice(colon + 1);
+        offset = colon + 1;
+        if (secret === "") return null;
+      } else {
+        if (!isTokenLike(userinfo)) return null;
+        secret = userinfo;
+        offset = 0;
+      }
+      const start = authorityStart + offset;
+      return {
+        start,
+        end: start + secret.length,
+        value: secret,
+        category: DATABASE_SCHEME.test(scheme) ? "db_connection_string" : "hardcoded_secret",
+        type: "URL credentials",
+        redact: true,
+        priority: 2,
+      };
+    },
+  },
+  {
+    // Secret query parameter: `?name=value` / `&name=value`. The name run is
+    // bounded (64) and the value is one class ending at its first terminator.
+    name: "URL query secret",
+    regexp: /[?&]([A-Za-z0-9_.-]{1,64})=([^&#\s"'`<>)]*)/g,
+    build: (m) => {
+      const name = m[1];
+      const value = m[2];
+      if (name === undefined || value === undefined || value === "") return null;
+      if (!SECRET_NAME.test(name) && !/^(?:sig|signature)$/i.test(name)) return null;
+      if (!isQuerySecretValue(value)) return null;
+      const start = m.index + m[0].length - value.length;
+      return {
+        start,
+        end: start + value.length,
+        value,
+        category: "hardcoded_secret",
+        type: "URL query secret",
+        redact: true,
+        priority: 2,
+      };
+    },
+  },
   // --- generic assignment rule (D-28) ---------------------------------------------
   {
     // Quoted form, any fetched file. No upper bound on the value (D-33): it

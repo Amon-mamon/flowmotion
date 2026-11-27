@@ -79,18 +79,28 @@ describe("provider patterns: positive (any file, quoted or not)", () => {
 describe("provider patterns: placeholders never match", () => {
   it.each([
     ["Anthropic", "sk-ant-" + "xxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
-    ["OpenRouter", "sk-or-" + "v1-example-" + R(30)],
-    ["OpenAI", "sk-" + "proj-" + "your_key_" + "changeme_" + R(30)],
+    ["OpenRouter", "sk-or-" + "v1-example-" + "key-goes-here-replace-me"],
+    ["OpenAI", "sk-" + "proj-" + "your_key_" + "changeme_" + "replace_with_your_own_key"],
     ["SendGrid", "SG." + "x".repeat(22) + "." + "x".repeat(43)],
     ["npm", "npm_" + "x".repeat(36)],
     // D-33: placeholder words count only as whole words.
-    ["GitLab", "glpat-" + "EXAMPLE-" + R(20)],
-    ["Supabase sb_secret", "sb_secret_" + "xxx-" + R(20)],
+    ["GitLab", "glpat-" + "EXAMPLE-" + "replace-me-now"],
+    ["Supabase sb_secret", "sb_secret_" + "xxx-" + "replace-me-now-ok"],
     ["Twilio", "SK" + "0".repeat(32)],
     ["Mailgun", "key-" + "0".repeat(32)],
     ["Resend low entropy", "re_" + "aaaaaaaa_" + "a".repeat(20)],
     ["Postmark", "POSTMARK_SERVER_TOKEN=${POSTMARK_TOKEN}"],
   ])("%s", (_name, text) => expectNone("src/x.ts", text));
+
+  // S3aR-1: a marker word no longer hides a real token run after it.
+  it.each([
+    ["OpenRouter", "sk-or-" + "v1-example-" + R(30)],
+    ["OpenAI", "sk-" + "proj-" + "your_key_" + "changeme_" + R(30)],
+    ["GitLab", "glpat-" + "EXAMPLE-" + R(20)],
+    ["Supabase sb_secret", "sb_secret_" + "xxx-" + R(20)],
+  ])("%s with a real token after a marker is found", (_name, text) => {
+    expect(scan("src/x.ts", text).findings.length, text).toBeGreaterThan(0);
+  });
 
   it("sb_publishable_ keys and anon JWTs are public", () => {
     expectNone("src/x.ts", `createClient(url, "sb_publishable_${R(30)}")`);
