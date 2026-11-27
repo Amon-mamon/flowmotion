@@ -1,7 +1,8 @@
 import { ANTHROPIC_TIMEOUT_MS } from "@/lib/analysis/model/anthropic";
 import { AI_MAX_ATTEMPTS, runAnalyzeStep, type StepContext, type StepOutcome } from "@/lib/jobs/analyze";
 import { StepError } from "@/lib/jobs/errors";
-import { analyzeStateSchema, type JobRow, type WorkerDeps } from "@/lib/jobs/types";
+import { runGenerateStep, type GenerateOutcome, type GenerateStepContext } from "@/lib/jobs/generate";
+import { analyzeStateSchema, generateStateSchema, type JobRow, type WorkerDeps } from "@/lib/jobs/types";
 import type { JobErrorCode } from "@/schemas/api";
 
 /**
@@ -119,10 +120,7 @@ export async function runOnce(deps: WorkerDeps): Promise<RunResult> {
   const log = deps.log;
   log?.("job.claimed", { jobId: job.id, step: job.step, attempts: job.attempts });
 
-  if (job.kind !== "analyze") {
-    // Generation jobs arrive in Phase 3.
-    return endJob(deps, job, null, "failed", "INTERNAL");
-  }
+  if (job.kind === "generate") return runGenerate(deps, job);
 
   const analysis = await deps.db.getAnalysis(job.ref_id);
   if (analysis === null) return endJob(deps, job, null, "failed", "INTERNAL");
@@ -201,6 +199,126 @@ export async function runOnce(deps: WorkerDeps): Promise<RunResult> {
     state: outcome.state,
     attempts: 0,
     // "Due now", with a small margin for clock skew against the database.
+    run_after: new Date(deps.now().getTime() - DUE_NOW_SKEW_MS).toISOString(),
+    locked_at: null,
+    locked_by: null,
+    last_error_code: null,
+  });
+  log?.("job.advanced", { jobId: job.id, from: job.step, to: outcome.step });
+  return result(held ? "advanced" : "lock_lost", job);
+}
+
+// --- generation jobs (Phase 3b, contract section 4, D-40) -------------------------
+
+/**
+ * Ends a generation job (state cleared). The flow is marked `failed` first,
+ * and only while it is still `generating`, so a lost job write re-runs safely
+ * and an expired flow is never touched.
+ */
+async function endGenerateJob(
+  deps: WorkerDeps,
+  job: JobRow,
+  code: JobErrorCode,
+  touchFlow: boolean,
+): Promise<RunResult> {
+  if (touchFlow) await deps.db.updateGeneratingFlow(job.ref_id, { status: "failed", error_code: code });
+  const held = await deps.db.updateJob(job.id, deps.workerId, {
+    status: "failed",
+    state: {},
+    last_error_code: code,
+    locked_at: null,
+    locked_by: null,
+  });
+  deps.log?.("job.failed", { jobId: job.id, step: job.step, code });
+  return result(held ? "failed" : "lock_lost", job);
+}
+
+async function runGenerate(deps: WorkerDeps, job: JobRow): Promise<RunResult> {
+  const log = deps.log;
+  const flow = await deps.db.getFlow(job.ref_id);
+  if (flow === null) return endGenerateJob(deps, job, "INTERNAL", false);
+  // A flow that is no longer generating (for example expired) is left alone.
+  if (flow.status !== "generating") return endGenerateJob(deps, job, "INTERNAL", false);
+  if (job.attempts > job.max_attempts) return endGenerateJob(deps, job, "INTERNAL", true);
+  // R2-1: never start a third try of `ai` after a crash.
+  if (job.step === "ai" && job.attempts > AI_MAX_ATTEMPTS) return endGenerateJob(deps, job, "INTERNAL", true);
+
+  const recommendation = await deps.db.getRecommendation(flow.recommendation_id);
+  if (recommendation === null) return endGenerateJob(deps, job, "INTERNAL", true);
+  const analysis = await deps.db.getAnalysisContext(recommendation.analysis_id);
+  if (analysis === null) return endGenerateJob(deps, job, "INTERNAL", true);
+  const project = await deps.db.getProject(analysis.project_id);
+  if (project === null) return endGenerateJob(deps, job, "INTERNAL", true);
+  if (
+    recommendation.user_id !== flow.user_id ||
+    analysis.user_id !== flow.user_id ||
+    project.user_id !== flow.user_id ||
+    job.user_id !== flow.user_id
+  ) {
+    return endGenerateJob(deps, job, "INTERNAL", true);
+  }
+
+  const parsedState = generateStateSchema.safeParse(job.state ?? {});
+  if (!parsedState.success) return endGenerateJob(deps, job, "INTERNAL", true);
+
+  const controller = new AbortController();
+  const aiBudget = aiStepBudgetMs(deps);
+  const ctx: GenerateStepContext = {
+    deps,
+    jobId: job.id,
+    attempts: job.attempts,
+    flow,
+    recommendation,
+    analysis,
+    project,
+    state: parsedState.data,
+    signal: controller.signal,
+    aiCallTimeoutMs: aiCallTimeoutMs(aiBudget),
+  };
+  const budget = job.step === "ai" ? aiBudget : (deps.stepTimeoutMs ?? STEP_TIMEOUT_MS);
+
+  let outcome: GenerateOutcome;
+  try {
+    outcome = await withTimeout(budget, controller, () => runGenerateStep(ctx, job.step));
+  } catch (error) {
+    const stepError =
+      error instanceof StepError
+        ? error
+        : new StepError("INTERNAL", true, error instanceof Error ? error.name : "unknown");
+    const aiExhausted = job.step === "ai" && job.attempts >= AI_MAX_ATTEMPTS;
+    if (!stepError.retryable || aiExhausted || job.attempts >= job.max_attempts) {
+      return endGenerateJob(deps, job, stepError.code, true);
+    }
+    const held = await deps.db.updateJob(job.id, deps.workerId, {
+      status: "queued",
+      last_error_code: stepError.code,
+      run_after: new Date(deps.now().getTime() + backoffMs(job.attempts)).toISOString(),
+      locked_at: null,
+      locked_by: null,
+    });
+    log?.("job.retry", { jobId: job.id, step: job.step, attempts: job.attempts, code: stepError.code });
+    return result(held ? "retry" : "lock_lost", job);
+  }
+
+  if (outcome.kind === "end") return endGenerateJob(deps, job, outcome.errorCode, outcome.touchFlow ?? true);
+
+  if (outcome.kind === "done") {
+    const held = await deps.db.updateJob(job.id, deps.workerId, {
+      status: "done",
+      state: {},
+      last_error_code: null,
+      locked_at: null,
+      locked_by: null,
+    });
+    log?.("job.done", { jobId: job.id });
+    return result(held ? "done" : "lock_lost", job);
+  }
+
+  const held = await deps.db.updateJob(job.id, deps.workerId, {
+    status: "queued",
+    step: outcome.step,
+    state: outcome.state,
+    attempts: 0,
     run_after: new Date(deps.now().getTime() - DUE_NOW_SKEW_MS).toISOString(),
     locked_at: null,
     locked_by: null,

@@ -12,6 +12,8 @@ import {
   type ValidationResult,
 } from "@/schemas/analysis";
 import type { JobErrorCode } from "@/schemas/api";
+import { jsonValueSchema, setupChecklistSchema, type FlowStatus, type JsonValue, type SetupChecklist } from "@/schemas/flow";
+import { flowSpecSchema, type FlowSpec } from "@/schemas/flowspec";
 import { MAX_DRAFTS, recommendationDraftSchema } from "@/schemas/recommendation";
 
 /**
@@ -43,7 +45,7 @@ export type JobRow = z.infer<typeof jobRowSchema>;
 export interface JobPatch {
   status?: JobRow["status"];
   step?: string;
-  state?: AnalyzeState | Record<string, never>;
+  state?: AnalyzeState | GenerateState | Record<string, never>;
   attempts?: number;
   run_after?: string;
   locked_at?: string | null;
@@ -98,6 +100,65 @@ export const analyzeStateSchema = z.object({
   drafts: z.array(recommendationDraftSchema).max(MAX_DRAFTS).optional(),
 });
 export type AnalyzeState = z.infer<typeof analyzeStateSchema>;
+
+// --- generate job state (Phase 3b, contract section 4 `GenerateState`, D-59) --------
+
+export const GENERATE_MAX_SNIPPETS = 12;
+export const GENERATE_SNIPPET_CHARS = 20_000;
+export const GENERATE_SNIPPETS_TOTAL_CHARS = 60_000;
+export const GENERATE_MAX_SIGNALS = 100;
+/** Hard cost cap: at most 3 model calls are started per flow (D-40). */
+export const GENERATE_MAX_MODEL_CALLS = 3;
+export const GENERATE_MAX_FEEDBACK = 20;
+
+/**
+ * Feedback rule ids, all produced by our code (never model text): FlowSpec
+ * rules F1..F12, validator rules V1..V10, `assertExportSafe` rules, and the
+ * parse failures before `checkFlowSpec` can run (OQ-33).
+ */
+export const FEEDBACK_RULES = [
+  "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+  "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10",
+  "EXPORT_SHAPE", "EXPORT_SIZE", "EXPORT_SECRET", "EXPORT_CREDENTIALS", "EXPORT_TYPE",
+  "EMPTY", "NO_JSON", "SCHEMA",
+] as const;
+export const feedbackRuleSchema = z.enum(FEEDBACK_RULES);
+export type FeedbackRule = z.infer<typeof feedbackRuleSchema>;
+
+export const feedbackEntrySchema = z.strictObject({
+  rule: feedbackRuleSchema,
+  /** A FlowSpec node key (already matched against the key pattern). */
+  nodeKey: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/).optional(),
+});
+export type FeedbackEntry = z.infer<typeof feedbackEntrySchema>;
+
+const snippetSchema = z.strictObject({
+  path: z.string().min(1).max(1024),
+  /** Redacted text (secret scanner ran in the `context` step before any state write). */
+  text: z.string().max(GENERATE_SNIPPET_CHARS),
+});
+
+/** Worker-only, strict, parsed on every read. Defaults let the empty insert state `{}` parse. */
+export const generateStateSchema = z.strictObject({
+  snippets: z
+    .array(snippetSchema)
+    .max(GENERATE_MAX_SNIPPETS)
+    .refine((items) => items.reduce((sum, item) => sum + item.text.length, 0) <= GENERATE_SNIPPETS_TOTAL_CHARS, {
+      message: "Snippets exceed the total cap",
+    })
+    .default([]),
+  signals: z.array(signalSchema).max(GENERATE_MAX_SIGNALS).default([]),
+  modelCalls: z.number().int().min(0).max(GENERATE_MAX_MODEL_CALLS).default(0),
+  /** The last started call ended in a provider failure (or never answered). */
+  lastProviderFailure: z.boolean().default(false),
+  feedback: z.array(feedbackEntrySchema).max(GENERATE_MAX_FEEDBACK).default([]),
+  /** The draft after checkFlowSpec. */
+  spec: flowSpecSchema.optional(),
+  /** Both from compile. */
+  n8nJson: jsonValueSchema.optional(),
+  checklist: setupChecklistSchema.optional(),
+});
+export type GenerateState = z.infer<typeof generateStateSchema>;
 
 // --- database rows the worker touches -----------------------------------------------
 
@@ -156,6 +217,47 @@ export interface RecommendationInsert {
   estimated_tokens: number;
 }
 
+export interface FlowRef {
+  id: string;
+  user_id: string;
+  recommendation_id: string;
+  status: FlowStatus;
+}
+
+/** The recommendation fields the generation job uses (contract section 4 "Generation input"). */
+export interface RecommendationRef {
+  id: string;
+  analysis_id: string;
+  user_id: string;
+  title: string;
+  description: string;
+  trigger_kind: "webhook" | "schedule" | "manual";
+  node_types: string[];
+  required_credentials: string[];
+  rationale: string;
+  source_files: string[];
+}
+
+export interface AnalysisContextRef {
+  id: string;
+  project_id: string;
+  user_id: string;
+  commit_sha: string | null;
+  /** Raw jsonb; each item is parsed with signalSchema by the reader. */
+  signals: unknown[];
+}
+
+export interface FlowPatch {
+  status?: FlowStatus;
+  error_code?: JobErrorCode | null;
+  name?: string;
+  flow_spec?: FlowSpec;
+  n8n_json?: JsonValue;
+  setup_checklist?: SetupChecklist;
+  catalog_version?: string;
+  n8n_version?: string;
+}
+
 export interface UsageEventInsert {
   userId: string;
   kind: "analysis" | "generation";
@@ -188,6 +290,12 @@ export interface WorkerDb {
     rows: readonly RecommendationInsert[],
   ): Promise<void>;
   insertUsageEvent(event: UsageEventInsert): Promise<void>;
+  // --- generation (Phase 3b) ---
+  getFlow(id: string): Promise<FlowRef | null>;
+  getRecommendation(id: string): Promise<RecommendationRef | null>;
+  getAnalysisContext(id: string): Promise<AnalysisContextRef | null>;
+  /** Updates the flow only while it is still `generating`; false when it is not (or gone). */
+  updateGeneratingFlow(id: string, patch: FlowPatch): Promise<boolean>;
 }
 
 export interface TreeBlobEntry {

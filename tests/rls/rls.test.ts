@@ -323,6 +323,33 @@ describe.skipIf(!configured)("RLS (skipped: no local Supabase)", () => {
     expect(second.error?.code).toBe("23505");
   });
 
+  describe("Phase 3b flows (D-41, 20261126000000_phase3_flows.sql)", () => {
+    it("user B cannot read user A's flow, including its spec and export columns", async () => {
+      const { data } = await b.client
+        .from("flows")
+        .select("id, flow_spec, n8n_json, setup_checklist")
+        .eq("id", a.ids.flows);
+      expect(data ?? []).toEqual([]);
+    });
+
+    it("the partial unique index rejects a second generating or ready flow; failed attempts are allowed", async () => {
+      const row = (status: string) => ({
+        user_id: a.userId,
+        recommendation_id: a.ids.recommendations,
+        name: `rls-${status}`,
+        status,
+      });
+      // The seeded flow is generating.
+      const generating = await admin.from("flows").insert(row("generating"));
+      expect(generating.error?.code).toBe("23505");
+      const ready = await admin.from("flows").insert(row("ready"));
+      expect(ready.error?.code).toBe("23505");
+      const failed = await admin.from("flows").insert(row("failed")).select("id").single();
+      expect(failed.error).toBeNull();
+      if (failed.data !== null) await admin.from("flows").delete().eq("id", (failed.data as { id: string }).id);
+    });
+  });
+
   it("concurrent link_github_installations calls of a user with no rows are serialised (S11-7 advisory lock)", async () => {
     const e = await seedUser("e");
     try {

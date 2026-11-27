@@ -5,8 +5,12 @@
  */
 import { GitHubApiError } from "@/lib/github/errors";
 import type {
+  AnalysisContextRef,
   AnalysisPatch,
   AnalysisRef,
+  FlowPatch,
+  FlowRef,
+  RecommendationRef,
   JobPatch,
   JobRow,
   ProjectPatch,
@@ -27,6 +31,9 @@ export const INSTALL_ROW = "11111111-1111-4111-8111-111111111111";
 export const GITHUB_INSTALLATION_ID = 777;
 export const HEAD = "c".repeat(40);
 export const REPO_ID = 4242;
+export const FLOW = "66666666-6666-4666-8666-666666666666";
+export const RECOMMENDATION = "77777777-7777-4777-8777-777777777777";
+export const GEN_JOB = "88888888-8888-4888-8888-888888888888";
 
 export type AnalysisRecord = AnalysisRef & Record<string, unknown>;
 
@@ -46,6 +53,10 @@ export class FakeWorkerDb implements WorkerDb {
   findings: (MaskedFinding & { analysis_id: string; user_id: string })[] = [];
   recommendations: (RecommendationInsert & { analysis_id: string; user_id: string })[] = [];
   usage: UsageEventInsert[] = [];
+  flows = new Map<string, FlowRef & Record<string, unknown>>();
+  recommendationRefs = new Map<string, RecommendationRef>();
+  /** Extra analysis fields for generation (commit_sha, signals). */
+  analysisContext = new Map<string, { commit_sha: string | null; signals: unknown[] }>();
   /** Every state written to a job, serialised (to prove no raw text reaches it). */
   stateWrites: string[] = [];
   progressHistory: number[] = [];
@@ -184,6 +195,117 @@ export class FakeWorkerDb implements WorkerDb {
 
   async insertUsageEvent(event: UsageEventInsert): Promise<void> {
     this.usage.push(event);
+  }
+
+  /**
+   * Seeds a generation: project + done analysis (commit HEAD), one
+   * recommendation, one `generating` flow, and its `generate` job at `context`.
+   */
+  seedGeneration(
+    options: {
+      sourceFiles?: string[];
+      triggerKind?: "webhook" | "schedule" | "manual";
+      signals?: unknown[];
+      commitSha?: string | null;
+      repoId?: number | null;
+      installationRowId?: string | null;
+      step?: string;
+      state?: Record<string, unknown>;
+    } = {},
+  ) {
+    this.seed({
+      ...(options.repoId !== undefined ? { repoId: options.repoId } : {}),
+      ...(options.installationRowId !== undefined ? { installationRowId: options.installationRowId } : {}),
+    });
+    // The analysis job from seed() is replaced by the generate job.
+    this.jobs = [];
+    const analysis = this.analysis;
+    analysis.status = "done";
+    analysis.progress = 100;
+    this.analysisContext.set(ANALYSIS, {
+      commit_sha: options.commitSha === undefined ? HEAD : options.commitSha,
+      signals: options.signals ?? [],
+    });
+    this.recommendationRefs.set(RECOMMENDATION, {
+      id: RECOMMENDATION,
+      analysis_id: ANALYSIS,
+      user_id: USER,
+      title: "Alert Slack on orders",
+      description: "Post a short message to Slack when an order webhook arrives.",
+      trigger_kind: options.triggerKind ?? "webhook",
+      node_types: ["n8n-nodes-base.webhook", "n8n-nodes-base.slack"],
+      required_credentials: ["Slack"],
+      rationale: "The repository receives order webhooks.",
+      source_files: options.sourceFiles ?? [],
+    });
+    this.flows.set(FLOW, {
+      id: FLOW,
+      user_id: USER,
+      recommendation_id: RECOMMENDATION,
+      status: "generating",
+      name: "Alert Slack on orders",
+      error_code: null,
+    });
+    const iso = this.clock.now().toISOString();
+    this.jobs.push({
+      id: GEN_JOB,
+      user_id: USER,
+      kind: "generate",
+      ref_id: FLOW,
+      status: "queued",
+      step: options.step ?? "context",
+      state: options.state ?? {},
+      attempts: 0,
+      max_attempts: 5,
+      run_after: iso,
+      locked_at: null,
+      locked_by: null,
+      last_error_code: null,
+      created_at: iso,
+      updated_at: iso,
+    });
+  }
+
+  get flow(): FlowRef & Record<string, unknown> {
+    const row = this.flows.get(FLOW);
+    if (row === undefined) throw new Error("no flow");
+    return row;
+  }
+
+  async getFlow(id: string): Promise<FlowRef | null> {
+    const row = this.flows.get(id);
+    return row === undefined
+      ? null
+      : { id: row.id, user_id: row.user_id, recommendation_id: row.recommendation_id, status: row.status };
+  }
+
+  async getRecommendation(id: string): Promise<RecommendationRef | null> {
+    const row = this.recommendationRefs.get(id);
+    return row === undefined ? null : structuredClone(row);
+  }
+
+  async getAnalysisContext(id: string): Promise<AnalysisContextRef | null> {
+    const row = this.analyses.get(id);
+    const extra = this.analysisContext.get(id);
+    if (row === undefined) return null;
+    return {
+      id: row.id,
+      project_id: row.project_id,
+      user_id: row.user_id,
+      commit_sha: extra?.commit_sha ?? null,
+      signals: structuredClone(extra?.signals ?? []),
+    };
+  }
+
+  /** Every flow patch, in order. */
+  flowUpdates: FlowPatch[] = [];
+
+  async updateGeneratingFlow(id: string, patch: FlowPatch): Promise<boolean> {
+    const row = this.flows.get(id);
+    if (row === undefined || row.status !== "generating") return false;
+    this.flowUpdates.push(structuredClone(patch));
+    Object.assign(row, structuredClone(patch));
+    return true;
   }
 }
 

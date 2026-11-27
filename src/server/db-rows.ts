@@ -258,7 +258,25 @@ export const recommendationRowSchema = z.object({
 });
 export type RecommendationRow = z.infer<typeof recommendationRowSchema>;
 
-export function toRecommendationDto(row: RecommendationRow): Recommendation {
+/** The newest flow of a recommendation (by created_at), for the derived status (D-41). */
+export interface NewestFlow {
+  id: string;
+  status: "generating" | "ready" | "failed";
+}
+
+/**
+ * Recommendation.status and flowId are derived from the newest flow (D-41):
+ * none → new / null; generating → selected; ready → generated; failed → new
+ * with that flow's id. The `recommendations.status` column is not read.
+ */
+export function deriveRecommendationStatus(newest: NewestFlow | undefined): Pick<Recommendation, "status" | "flowId"> {
+  if (newest === undefined) return { status: "new", flowId: null };
+  if (newest.status === "generating") return { status: "selected", flowId: newest.id };
+  if (newest.status === "ready") return { status: "generated", flowId: newest.id };
+  return { status: "new", flowId: newest.id };
+}
+
+export function toRecommendationDto(row: RecommendationRow, newest?: NewestFlow): Recommendation {
   return {
     id: row.id,
     analysisId: row.analysis_id,
@@ -272,8 +290,6 @@ export function toRecommendationDto(row: RecommendationRow): Recommendation {
     nodeTypes: row.node_types,
     rationale: row.rationale,
     estimatedTokens: row.estimated_tokens,
-    status: row.status,
-    // Phase 3 links generated flows.
-    flowId: null,
+    ...deriveRecommendationStatus(newest),
   };
 }

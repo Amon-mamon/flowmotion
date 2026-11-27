@@ -190,6 +190,7 @@ function seed(options: { syncedAt?: string | null; repos?: { repo_id: number; re
       recommendation("e0000000-0000-4000-8000-000000000003", "Top", 0.9),
     ],
     jobs: [],
+    flows: [],
   };
 }
 

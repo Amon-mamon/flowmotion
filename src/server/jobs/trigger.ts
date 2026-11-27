@@ -107,20 +107,24 @@ export function isJobExpired(job: PollJobRow, nowMs: number): boolean {
 export type PollKickResult = "none" | "kicked" | "expired";
 
 /**
- * Reads the analysis's job (owner's session; the `state` column is never
+ * Reads the analysis's (or, Phase 3b, the flow's) job (owner's session; the `state` column is never
  * selected or granted). An active job idle for 1 hour is expired through
  * `expire_stale_jobs()` (the caller then re-reads the analysis); a stalled
  * job gets one worker trigger for this user.
  */
-export async function pollKick(userId: string, analysisId: string): Promise<PollKickResult> {
+export async function pollKick(
+  userId: string,
+  refId: string,
+  kind: "analyze" | "generate" = "analyze",
+): Promise<PollKickResult> {
   try {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("jobs")
       .select("status, run_after, updated_at, locked_at")
       .eq("user_id", userId)
-      .eq("kind", "analyze")
-      .eq("ref_id", analysisId)
+      .eq("kind", kind)
+      .eq("ref_id", refId)
       .limit(1)
       .maybeSingle();
     if (error !== null || data === null) return "none";

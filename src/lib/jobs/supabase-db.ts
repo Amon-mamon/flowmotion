@@ -3,7 +3,11 @@ import { z } from "zod";
 
 import {
   jobRowSchema,
+  type AnalysisContextRef,
   type AnalysisPatch,
+  type FlowPatch,
+  type FlowRef,
+  type RecommendationRef,
   type AnalysisRef,
   type JobPatch,
   type JobRow,
@@ -15,6 +19,7 @@ import {
 } from "@/lib/jobs/types";
 import type { MaskedFinding } from "@/lib/security/secret-scanner";
 import { analysisStatusSchema } from "@/schemas/analysis";
+import { flowStatusSchema } from "@/schemas/flow";
 
 /**
  * WorkerDb over a service-role Supabase client. Runtime-neutral (used by the
@@ -37,6 +42,34 @@ const projectRefSchema = z.object({
   repo_full_name: z.string().min(1),
   repo_id: z.number().int().positive().nullable(),
   installation_id: z.uuid().nullable(),
+});
+
+const flowRefSchema = z.object({
+  id: z.uuid(),
+  user_id: z.uuid(),
+  recommendation_id: z.uuid(),
+  status: flowStatusSchema,
+});
+
+const recommendationRefSchema = z.object({
+  id: z.uuid(),
+  analysis_id: z.uuid(),
+  user_id: z.uuid(),
+  title: z.string(),
+  description: z.string(),
+  trigger_kind: z.enum(["webhook", "schedule", "manual"]),
+  node_types: z.array(z.string()),
+  required_credentials: z.array(z.string()),
+  rationale: z.string(),
+  source_files: z.array(z.string()),
+});
+
+const analysisContextSchema = z.object({
+  id: z.uuid(),
+  project_id: z.uuid(),
+  user_id: z.uuid(),
+  commit_sha: z.string().nullable(),
+  signals: z.array(z.unknown()).catch([]),
 });
 
 function fail(what: string, error: { code?: string } | null): never {
@@ -148,6 +181,49 @@ export function createSupabaseWorkerDb(client: SupabaseClient): WorkerDb {
         ref_id: event.refId,
       });
       if (error !== null) fail("usage_events insert", error);
+    },
+
+    async getFlow(id: string): Promise<FlowRef | null> {
+      const { data, error } = await client
+        .from("flows")
+        .select("id, user_id, recommendation_id, status")
+        .eq("id", id)
+        .maybeSingle();
+      if (error !== null) fail("flows select", error);
+      return data === null ? null : flowRefSchema.parse(data);
+    },
+
+    async getRecommendation(id: string): Promise<RecommendationRef | null> {
+      const { data, error } = await client
+        .from("recommendations")
+        .select(
+          "id, analysis_id, user_id, title, description, trigger_kind, node_types, required_credentials, rationale, source_files",
+        )
+        .eq("id", id)
+        .maybeSingle();
+      if (error !== null) fail("recommendations select", error);
+      return data === null ? null : recommendationRefSchema.parse(data);
+    },
+
+    async getAnalysisContext(id: string): Promise<AnalysisContextRef | null> {
+      const { data, error } = await client
+        .from("analyses")
+        .select("id, project_id, user_id, commit_sha, signals")
+        .eq("id", id)
+        .maybeSingle();
+      if (error !== null) fail("analyses select", error);
+      return data === null ? null : analysisContextSchema.parse(data);
+    },
+
+    async updateGeneratingFlow(id: string, patch: FlowPatch): Promise<boolean> {
+      const { data, error } = await client
+        .from("flows")
+        .update(patch)
+        .eq("id", id)
+        .eq("status", "generating")
+        .select("id");
+      if (error !== null) fail("flows update", error);
+      return Array.isArray(data) && data.length === 1;
     },
   };
 }
