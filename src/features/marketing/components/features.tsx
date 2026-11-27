@@ -4,9 +4,10 @@ import { FEATURES } from "@/features/marketing/copy";
 import {
   ComingSoonTag,
   containerClass,
+  h3Class,
   sectionClass,
-  SectionIntro,
 } from "@/features/marketing/components/primitives";
+import { SectionIntro } from "@/features/marketing/components/section-intro";
 import { Reveal } from "@/features/marketing/components/reveal";
 import { NodeGraphPreview } from "@/features/marketing/previews/node-graph-preview";
 import {
@@ -38,7 +39,7 @@ function FeatureCard({
 }) {
   const live = isFlowGenerationLive();
   return (
-    <Reveal className={cn("h-full", className)} delay={delay}>
+    <Reveal className={cn("h-full min-w-0", className)} delay={delay}>
       <article
         className={cn(
           "flex h-full flex-col gap-8 overflow-hidden rounded-xl border border-border bg-card p-6 transition-colors hover:border-border-hover md:p-8",
@@ -47,7 +48,7 @@ function FeatureCard({
       >
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-3">
-            <h3 className="text-xl leading-7 font-semibold text-foreground">{copy.title}</h3>
+            <h3 className={h3Class}>{copy.title}</h3>
             {copy.comingSoon && !live ? <ComingSoonTag /> : null}
           </div>
           <p className="max-w-[65ch] text-base leading-[26px] text-muted-foreground">{copy.body}</p>
@@ -69,7 +70,7 @@ export function Features() {
     <section id="features" aria-labelledby="features-heading" className={sectionClass}>
       <div className={containerClass}>
         <SectionIntro id="features" eyebrow={FEATURES.eyebrow} heading={FEATURES.heading} lead={FEATURES.lead} />
-        <div className="mt-16 grid gap-4 md:grid-cols-2 lg:grid-cols-12 lg:grid-rows-[auto_auto]">
+        <div className="mt-16 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-12 lg:grid-rows-[auto_auto]">
           <FeatureCard
             copy={FEATURES.graphs}
             previewName="feature-graph"

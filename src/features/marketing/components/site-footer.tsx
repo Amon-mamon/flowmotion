@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { Wordmark } from "@/components/shared/wordmark";
+import { MarketingWordmark } from "@/features/marketing/components/marketing-wordmark";
 import { FOOTER } from "@/features/marketing/copy";
 
 /** Marketing footer (design.md "Landing page" item 10). */
@@ -9,7 +9,7 @@ export function SiteFooter() {
     <footer className="border-t border-border bg-background">
       <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-8 px-4 py-12 sm:px-8 md:flex-row md:items-start md:justify-between">
         <div className="flex flex-col gap-3">
-          <Wordmark />
+          <MarketingWordmark />
           <p className="text-sm text-muted-foreground">{FOOTER.tagline}</p>
         </div>
         <div className="flex flex-col gap-3 md:items-end">

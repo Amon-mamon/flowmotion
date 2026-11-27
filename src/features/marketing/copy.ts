@@ -4,8 +4,6 @@
  * architect. Mono labels are written in source case and uppercased by CSS.
  */
 
-export { PLANS_BODY, PLANS_HEADING } from "@/features/marketing/components/plans-coming-soon";
-
 export const COMING_SOON = "Coming soon";
 
 export const HEADER = {
@@ -191,4 +189,21 @@ export const FOOTER = {
 export const LANDING_META = {
   description:
     "Connect a GitHub repository with read-only access. Flow Motion reads only safe files, masks secrets, and recommends n8n automations with the files behind each one.",
+} as const;
+
+/** The marketing wordmark: "Flow", the joining line, "Motion" (design.md item 6). */
+export const BRAND = { name: "Flow Motion", first: "Flow", second: "Motion" } as const;
+
+/** Screen-reader prefix before each step title ("Step 1: Connect a repository"). */
+export const STEP_PREFIX = "Step";
+
+/** Interface labels inside the decorative product previews (sample app chrome). */
+export const PREVIEW_LABELS = {
+  analysis: "Analysis",
+  branch: "Branch",
+  at: "at",
+  findings: "Security findings",
+  recommendations: "Recommendations",
+  /** Path label suffix of each how-it-works frame after the repository name. */
+  stepFrame: { scan: "scan", recommend: "recommendations", generate: "flow" },
 } as const;

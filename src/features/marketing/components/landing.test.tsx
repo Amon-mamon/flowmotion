@@ -35,10 +35,9 @@ import {
   HEADER,
   HERO,
   HOW_IT_WORKS,
-  PLANS_BODY,
-  PLANS_HEADING,
   SECURITY,
 } from "@/features/marketing/copy";
+import { PLANS_BODY, PLANS_HEADING } from "@/features/marketing/components/plans-coming-soon";
 import { LandingPage } from "@/features/marketing/components/landing-page";
 import { SiteFooter } from "@/features/marketing/components/site-footer";
 import { SiteHeader } from "@/features/marketing/components/site-header";

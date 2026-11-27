@@ -22,9 +22,6 @@ export const secondaryButtonClass = cn(
   focusRing,
 );
 
-/** Small header variants (same styles, 36 px tall). */
-export const primaryButtonSmClass = cn(primaryButtonClass, "h-9 px-3.5 text-sm");
-
 /** Quiet link: text plus a small arrow that moves 2 px right on hover (transform only). */
 export function QuietLink({
   href,
@@ -90,11 +87,6 @@ export function ComingSoonTag({ className }: { className?: string }) {
   );
 }
 
-/** Mono eyebrow above a section heading (on the page background). */
-export function Eyebrow({ children }: { children: ReactNode }) {
-  return <p className="fm-mono-label text-primary">{children}</p>;
-}
-
 /** Shared content width and gutters: 1200 px, 16 px on phones, 32 px from 640 px. */
 export const containerClass = "mx-auto w-full max-w-[1200px] px-4 sm:px-8";
 
@@ -113,28 +105,3 @@ export const bodyClass = "max-w-[65ch] text-base leading-[26px] text-muted-foreg
 
 /** Section padding (128 px desktop, 80 px under 768 px), hairline divider, anchor offset. */
 export const sectionClass = "scroll-mt-20 border-t border-grid py-20 md:py-32";
-
-/** Section intro block: eyebrow, H2 (focus target for anchors), lead. */
-export function SectionIntro({
-  id,
-  eyebrow,
-  heading,
-  lead,
-  className,
-}: {
-  id: string;
-  eyebrow?: string;
-  heading: string;
-  lead?: string;
-  className?: string;
-}) {
-  return (
-    <div className={cn("flex max-w-[640px] flex-col gap-4", className)}>
-      {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-      <h2 id={`${id}-heading`} tabIndex={-1} className={h2Class}>
-        {heading}
-      </h2>
-      {lead ? <p className={leadClass}>{lead}</p> : null}
-    </div>
-  );
-}

@@ -6,13 +6,16 @@ import {
   KeyRoundIcon,
   LockIcon,
 } from "lucide-react";
+import type { MotionValue } from "motion/react";
 
 import { Badge } from "@/components/ui/badge";
 import { RiskBadge } from "@/features/analysis/components/risk-badge";
 import { SeverityBadge } from "@/features/analysis/components/severity-badge";
 import { NodeIcon } from "@/features/flows/components/node-icon";
+import { PREVIEW_LABELS, SECURITY } from "@/features/marketing/copy";
 import {
   PREVIEW_BRANCH,
+  PREVIEW_COMMIT,
   PREVIEW_FILE_STATE_LABEL,
   PREVIEW_FILES_SUMMARY,
   PREVIEW_FINDING,
@@ -22,6 +25,7 @@ import {
   PREVIEW_TREE,
   type PreviewRecommendation,
 } from "@/features/marketing/preview-data";
+import { ProgressFade, ProgressFadeBlock, ScannerBar } from "@/features/marketing/previews/progress";
 import { cn } from "@/lib/utils";
 
 /**
@@ -43,8 +47,8 @@ export function FindingRowPreview({ example = false, compact = false }: { exampl
     <div className={cn("flex flex-col rounded-xl border border-border bg-background", compact ? "gap-1.5 p-3" : "gap-2.5 p-4")}>
       <div className="flex flex-wrap items-center gap-2">
         {example ? (
-          <span className="fm-mono-label inline-flex h-5 items-center rounded-full border border-border px-2 text-[10px] text-muted-foreground">
-            Example
+          <span className="fm-mono-label inline-flex h-6 items-center rounded-full border border-border px-2.5 text-muted-foreground">
+            {SECURITY.exampleTag}
           </span>
         ) : null}
         <SeverityBadge severity={PREVIEW_FINDING.severity} />
@@ -108,8 +112,20 @@ export function RecommendationsPreview({ count = 3 }: { count?: number }) {
   );
 }
 
-/** Repository file tree with the branch; in `scan` mode each file shows Read or Blocked for safety. */
-export function RepoTreePreview({ mode }: { mode: "tree" | "scan" }) {
+/**
+ * Repository file tree with the branch; in `scan` mode each file shows Read or
+ * Blocked for safety. With `scanProgress` (desktop story) a scanner bar
+ * passes over the tree and each row's status, then the masked finding, fade
+ * in as the bar reaches them.
+ */
+export function RepoTreePreview({
+  mode,
+  scanProgress,
+}: {
+  mode: "tree" | "scan";
+  scanProgress?: MotionValue<number>;
+}) {
+  const rows = PREVIEW_TREE.length;
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
@@ -119,39 +135,58 @@ export function RepoTreePreview({ mode }: { mode: "tree" | "scan" }) {
           {PREVIEW_BRANCH}
         </span>
       </div>
-      <ul className="flex flex-col rounded-xl border border-border bg-background py-1.5">
-        {PREVIEW_TREE.map((file) => {
-          const blocked = file.state === "blocked";
-          const Icon = file.kind === "dir" ? FolderIcon : blocked ? LockIcon : file.path.endsWith(".md") ? FileTextIcon : FileIcon;
-          return (
-            <li
-              key={`${file.depth}-${file.path}`}
-              className="flex h-[26px] items-center gap-2 px-3 font-mono text-xs"
-              style={{ paddingLeft: `${12 + file.depth * 18}px` }}
-            >
-              <Icon
-                aria-hidden="true"
-                strokeWidth={ICON_STROKE}
-                className={cn("size-3.5 shrink-0", mode === "scan" && blocked ? "text-primary" : "text-muted-foreground")}
-              />
-              <span className={cn("min-w-0 flex-1 truncate", file.kind === "dir" ? "text-muted-foreground" : "text-foreground")}>
-                {file.path}
-              </span>
-              {mode === "scan" && file.state ? (
+      <div className="relative">
+        <ul className="flex flex-col rounded-xl border border-border bg-background py-1.5">
+          {PREVIEW_TREE.map((file, row) => {
+            const blocked = file.state === "blocked";
+            const Icon = file.kind === "dir" ? FolderIcon : blocked ? LockIcon : file.path.endsWith(".md") ? FileTextIcon : FileIcon;
+            const status =
+              mode === "scan" && file.state ? (
                 <span
                   className={cn(
-                    "shrink-0 rounded-full border px-1.5 text-[10px] leading-4",
+                    "block shrink-0 rounded-full border px-1.5 text-[10px] leading-4",
                     blocked ? "border-primary text-primary" : "border-border text-muted-foreground",
                   )}
                 >
                   {PREVIEW_FILE_STATE_LABEL[file.state]}
                 </span>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-      {mode === "scan" ? <FindingRowPreview compact /> : null}
+              ) : null;
+            return (
+              <li
+                key={`${file.depth}-${file.path}`}
+                className="flex h-[26px] items-center gap-2 px-3 font-mono text-xs"
+                style={{ paddingLeft: `${12 + file.depth * 18}px` }}
+              >
+                <Icon
+                  aria-hidden="true"
+                  strokeWidth={ICON_STROKE}
+                  className={cn("size-3.5 shrink-0", mode === "scan" && blocked ? "text-primary" : "text-muted-foreground")}
+                />
+                <span className={cn("min-w-0 flex-1 truncate", file.kind === "dir" ? "text-muted-foreground" : "text-foreground")}>
+                  {file.path}
+                </span>
+                {status !== null && scanProgress !== undefined ? (
+                  <ProgressFade progress={scanProgress} at={0.25 + (0.15 * (row + 0.5)) / rows} className="shrink-0">
+                    {status}
+                  </ProgressFade>
+                ) : (
+                  status
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {mode === "scan" && scanProgress !== undefined ? <ScannerBar progress={scanProgress} /> : null}
+      </div>
+      {mode === "scan" ? (
+        scanProgress !== undefined ? (
+          <ProgressFadeBlock progress={scanProgress} at={0.4}>
+            <FindingRowPreview compact />
+          </ProgressFadeBlock>
+        ) : (
+          <FindingRowPreview compact />
+        )
+      ) : null}
     </div>
   );
 }
@@ -159,7 +194,7 @@ export function RepoTreePreview({ mode }: { mode: "tree" | "scan" }) {
 /** Short n8n JSON excerpt with a placeholder value. */
 export function JsonSnippetPreview() {
   return (
-    <pre className="overflow-hidden rounded-xl border border-border bg-background p-4 font-mono text-xs leading-5 text-muted-foreground">
+    <pre className="max-w-full overflow-hidden rounded-xl border border-border bg-background p-4 font-mono text-xs leading-5 text-muted-foreground">
       {PREVIEW_JSON_LINES.map((line) => (
         <span key={line} className="block whitespace-pre">
           {highlightJsonLine(line)}
@@ -198,9 +233,9 @@ export function AnalysisPreview() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border pb-4 text-sm">
-        <span className="font-medium text-foreground">Analysis</span>
+        <span className="font-medium text-foreground">{PREVIEW_LABELS.analysis}</span>
         <span className="font-mono text-xs text-muted-foreground">
-          Branch {PREVIEW_BRANCH} at 4f2c9e1
+          {PREVIEW_LABELS.branch} {PREVIEW_BRANCH} {PREVIEW_LABELS.at} {PREVIEW_COMMIT}
         </span>
         <span className="ml-auto inline-flex items-center gap-2 font-mono text-xs text-muted-foreground">
           <span className="text-foreground">{PREVIEW_FILES_SUMMARY.read}</span>
@@ -208,13 +243,13 @@ export function AnalysisPreview() {
           <span>{PREVIEW_FILES_SUMMARY.skipped}</span>
         </span>
       </div>
-      <div className="grid gap-4 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <div className="flex flex-col gap-2.5">
-          <p className="text-xs font-medium text-muted-foreground">Security findings</p>
+          <p className="text-xs font-medium text-muted-foreground">{PREVIEW_LABELS.findings}</p>
           <FindingRowPreview />
         </div>
         <div className="flex flex-col gap-2.5">
-          <p className="text-xs font-medium text-muted-foreground">Recommendations</p>
+          <p className="text-xs font-medium text-muted-foreground">{PREVIEW_LABELS.recommendations}</p>
           <RecommendationsPreview count={2} />
         </div>
       </div>

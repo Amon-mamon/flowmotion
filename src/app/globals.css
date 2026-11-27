@@ -201,10 +201,12 @@
 }
 
 /*
- * Landing page (docs/design.md "Landing page", D-55).
+ * Landing page (docs/design.md "Landing page", D-55). Declared as Tailwind
+ * utilities (RL-5) so they sit in the utilities layer and a `text-*`,
+ * `leading-*`, or `tracking-*` utility next to them can still override them.
  */
 /* Faint 1 px background grid, 64 px cells (hero and security only). */
-.fm-grid-bg {
+@utility fm-grid-bg {
   background-image:
     linear-gradient(to right, var(--fm-grid) 1px, transparent 1px),
     linear-gradient(to bottom, var(--fm-grid) 1px, transparent 1px);
@@ -212,7 +214,7 @@
   background-position: center top;
 }
 /* The one glow: accent at 8% behind the hero product frame. */
-.fm-hero-glow {
+@utility fm-hero-glow {
   background: radial-gradient(
     closest-side,
     color-mix(in srgb, var(--fm-accent) 8%, transparent),
@@ -220,7 +222,7 @@
   );
 }
 /* Mono label: 12/16 Geist Mono, uppercase by CSS only, tracking 0.08em. */
-.fm-mono-label {
+@utility fm-mono-label {
   font-family: var(--font-mono);
   font-size: 0.75rem;
   line-height: 1rem;

@@ -6,20 +6,21 @@ import { vi } from "vitest";
  * the matching `change` listeners, like a real MediaQueryList.
  */
 
-export type MediaState = { reduced: boolean; finePointer: boolean; desktop: boolean };
+export type MediaState = { reduced: boolean; finePointer: boolean; desktop: boolean; wide: boolean };
 
 const listeners = new Map<string, Set<() => void>>();
-let state: MediaState = { reduced: false, finePointer: false, desktop: false };
+let state: MediaState = { reduced: false, finePointer: false, desktop: false, wide: false };
 
 function matches(query: string): boolean {
   if (query.includes("prefers-reduced-motion")) return state.reduced;
   if (query.includes("pointer: fine")) return state.finePointer;
   if (query.includes("min-width: 768px")) return state.desktop;
+  if (query.includes("min-width: 1280px")) return state.wide;
   return false;
 }
 
 export function installMatchMedia(initial: Partial<MediaState> = {}) {
-  state = { reduced: false, finePointer: false, desktop: false, ...initial };
+  state = { reduced: false, finePointer: false, desktop: false, wide: false, ...initial };
   listeners.clear();
   vi.stubGlobal(
     "matchMedia",

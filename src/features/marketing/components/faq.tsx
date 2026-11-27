@@ -1,7 +1,8 @@
 import { ChevronDownIcon } from "lucide-react";
 
 import { FAQ } from "@/features/marketing/copy";
-import { containerClass, sectionClass, SectionIntro } from "@/features/marketing/components/primitives";
+import { containerClass, sectionClass } from "@/features/marketing/components/primitives";
+import { SectionIntro } from "@/features/marketing/components/section-intro";
 import { cn } from "@/lib/utils";
 
 /** FAQ (design.md item 8): native details/summary rows, two columns from 1024 px. */

@@ -4,6 +4,8 @@ import Lenis from "lenis";
 import "lenis/dist/lenis.css";
 import { useEffect } from "react";
 
+import { FINE_POINTER_QUERY } from "@/features/marketing/hooks";
+
 /**
  * Lenis smooth wheel scrolling for the landing page only (D-56, contract
  * section 11, Landing redesign F11). Rendered by LandingPage, never by a
@@ -19,7 +21,7 @@ import { useEffect } from "react";
  */
 
 export const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
-export const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
+export { FINE_POINTER_QUERY };
 /** Sticky header (64 px) plus 16 px, same as `scroll-margin-top`. */
 export const ANCHOR_OFFSET = -80;
 

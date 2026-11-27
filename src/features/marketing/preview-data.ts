@@ -45,6 +45,9 @@ export const PREVIEW_FILES_SUMMARY = {
   skipped: "6 blocked for safety",
 } as const;
 
+/** Short commit SHA in the hero analysis header (sample, not key-shaped). */
+export const PREVIEW_COMMIT = "4f2c9e1";
+
 export const PREVIEW_FINDING = {
   severity: "high" satisfies Severity,
   category: "Hardcoded secret",
@@ -141,16 +144,16 @@ export const PREVIEW_LAYOUT_LANDSCAPE: PreviewGraphLayout = {
 };
 
 export const PREVIEW_LAYOUT_PORTRAIT: PreviewGraphLayout = {
-  width: 300,
-  height: 400,
+  width: 320,
+  height: 460,
   nodeWidth: 140,
   nodeHeight: 56,
   direction: "down",
   positions: {
-    webhook: { x: 80, y: 12 },
-    if: { x: 80, y: 172 },
-    slack: { x: 0, y: 340 },
-    respond: { x: 160, y: 340 },
+    webhook: { x: 90, y: 12 },
+    if: { x: 90, y: 140 },
+    slack: { x: 0, y: 268 },
+    respond: { x: 90, y: 396 },
   },
 };
 
@@ -158,6 +161,8 @@ export const PREVIEW_EDGES: readonly PreviewEdge[] = [
   { from: "webhook", to: "if" },
   { from: "if", to: "slack", label: "true" },
   { from: "if", to: "respond", label: "false" },
+  // Both branches answer the webhook caller (RL-9): Slack, then the reply.
+  { from: "slack", to: "respond" },
 ];
 
 /** Short n8n JSON excerpt for the export card; placeholder, never a value. */

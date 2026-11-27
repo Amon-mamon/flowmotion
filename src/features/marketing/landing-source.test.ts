@@ -128,3 +128,91 @@ describe("Landing bundle rule (F10)", () => {
     expect(seen.size).toBeGreaterThan(10);
   });
 });
+
+describe("Landing motion identity: no new dependency (M10 h)", () => {
+  it("package.json dependency names are unchanged from the start of the motion identity work", () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    expect(Object.keys(pkg.dependencies).sort()).toEqual(
+      [
+        "@base-ui/react",
+        "@hookform/resolvers",
+        "@supabase/ssr",
+        "@supabase/supabase-js",
+        "@tanstack/react-query",
+        "@xyflow/react",
+        "class-variance-authority",
+        "cn",
+        "lenis",
+        "lucide-react",
+        "motion",
+        "next",
+        "react",
+        "react-dom",
+        "react-hook-form",
+        "server-only",
+        "shadcn",
+        "tw-animate-css",
+        "zod",
+        "zustand",
+      ].sort(),
+    );
+    expect(Object.keys(pkg.devDependencies).sort()).toEqual(
+      [
+        "@tailwindcss/turbopack",
+        "@testing-library/dom",
+        "@testing-library/jest-dom",
+        "@testing-library/react",
+        "@types/node",
+        "@types/react",
+        "@types/react-dom",
+        "@vitejs/plugin-react",
+        "eslint",
+        "eslint-config-next",
+        "happy-dom",
+        "supabase",
+        "tailwindcss",
+        "typescript",
+        "vite",
+        "vitest",
+      ].sort(),
+    );
+  });
+
+  it("marketing files import only local modules, react, next, motion/react, lucide-react (and lenis in smooth-scroll)", () => {
+    const files = SOURCE_FILES.filter((f) => {
+      const p = rel(f);
+      return p.startsWith("src/features/marketing/") || p.startsWith("src/app/(marketing)/");
+    });
+    const allowed = (spec: string, file: string) =>
+      spec.startsWith(".") ||
+      spec.startsWith("@/") ||
+      spec === "react" ||
+      spec === "react-dom" ||
+      spec.startsWith("next/") ||
+      spec === "next" ||
+      spec === "motion/react" ||
+      spec === "lucide-react" ||
+      (rel(file).endsWith("components/smooth-scroll.tsx") && (spec === "lenis" || spec === "lenis/dist/lenis.css")) ||
+      // Test-only helper (never imported by the page).
+      (rel(file).endsWith("marketing/test-media.ts") && spec === "vitest");
+    for (const file of files) {
+      for (const spec of importsOf(file)) {
+        expect(allowed(spec, file), `${rel(file)} imports ${spec}`).toBe(true);
+        expect(/^(three|framer-motion|gsap|@react-three\/|@xyflow\/react)/.test(spec), `${rel(file)} imports ${spec}`).toBe(false);
+      }
+    }
+  });
+
+  it("the shared app wordmark is untouched by the marketing wordmark", () => {
+    const shared = readFileSync(join(SRC, "components/shared/wordmark.tsx"), "utf8");
+    expect(shared).not.toMatch(/motion|svg/);
+    for (const file of ["site-header.tsx", "site-footer.tsx"]) {
+      const text = readFileSync(join(SRC, "features/marketing/components", file), "utf8");
+      expect(text, file).toContain("MarketingWordmark");
+      expect(text, file).not.toContain("@/components/shared/wordmark");
+    }
+  });
+});

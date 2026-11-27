@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { Providers } from "@/app/providers";
+import { LANDING_META } from "@/features/marketing/copy";
 import { cn } from "@/lib/utils";
 
 import "./globals.css";
@@ -12,8 +13,8 @@ const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono"
 
 export const metadata: Metadata = {
   title: { default: "Flow Motion", template: "%s · Flow Motion" },
-  description:
-    "Connect a GitHub repository, find automations, generate n8n workflows from an allowed set of nodes, simulate them with mock data, and export the JSON.",
+  // True for the product as built today (RL-12): no simulation claim.
+  description: LANDING_META.description,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

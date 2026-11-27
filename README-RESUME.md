@@ -40,7 +40,7 @@ The code reviewer accepted every backend deviation listed in `docs/requests.md` 
 
 **Build order (D-46, 2026-11-27):** Phase 3a review fixes → Phase 3b → Phase 2e own AI key. Everything deferred or not built is listed in `BACKLOG.md`.
 
-## Brand identity and landing interactivity (owner, 2026-11-27) — START HERE TOMORROW
+## Brand identity and landing interactivity (owner, 2026-11-27) — BUILT 2026-11-28 (owner browser check pending)
 
 **What the owner wants:** visitors must *feel* the brand name **Flow Motion** — motion and flow — while scrolling. The first landing build (vercel.com look, Flow Motion colours, Lenis smooth scrolling, Motion scroll animations) was judged "just scroll to the bottom, not that interactive". The owner approved this concept:
 

@@ -34,6 +34,10 @@ export function useMediaQuery(query: string): boolean {
 }
 
 export const DESKTOP_QUERY = "(min-width: 768px)";
+/** Fine hovering pointer (same query as Lenis, D-56): parallax and the magnetic button need it. */
+export const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
+/** 1280 px and up: the hero node chips need the side space beside the headline. */
+export const WIDE_QUERY = "(min-width: 1280px)";
 
 /**
  * True only on the client when motion is allowed. Server render and

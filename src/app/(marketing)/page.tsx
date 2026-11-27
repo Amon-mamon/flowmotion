@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default function Home() {
   return (
     <>
-      <SiteHeader />
+      <SiteHeader drawWordmark />
       <main id="main" className="flex-1">
         <LandingPage />
       </main>

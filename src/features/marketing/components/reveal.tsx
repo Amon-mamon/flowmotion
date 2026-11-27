@@ -3,12 +3,14 @@
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
 
-import { EASE_OUT, useMotionAllowed } from "@/features/marketing/hooks";
+import { useEntrance } from "@/features/marketing/entrance";
+import { useMotionAllowed } from "@/features/marketing/hooks";
 
 /**
  * Features card entrance (design.md Motion): rises 24 px and loses a 6°
  * rotateX tilt once as it enters. Server render, hydration, and reduced
- * motion get a plain element with no transform.
+ * motion get no inline style; cards already on screen when motion starts
+ * stay as they are (RL-2).
  */
 export function Reveal({
   children,
@@ -20,23 +22,13 @@ export function Reveal({
   delay?: number;
 }) {
   const motionAllowed = useMotionAllowed();
-  if (!motionAllowed) {
-    return (
-      <div className={className} data-reveal="static">
-        {children}
-      </div>
-    );
-  }
+  const { ref, style } = useEntrance<HTMLDivElement>(motionAllowed, { y: 24, rotateX: 6 }, {
+    delay,
+    duration: 0.6,
+    amount: 0.1,
+  });
   return (
-    <motion.div
-      className={className}
-      data-reveal="motion"
-      style={{ transformPerspective: 1200, transformOrigin: "50% 100%" }}
-      initial={{ opacity: 0, y: 24, rotateX: 6 }}
-      whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
-      viewport={{ once: true, margin: "0px 0px -10% 0px" }}
-      transition={{ duration: 0.6, delay, ease: EASE_OUT }}
-    >
+    <motion.div ref={ref} className={className} data-reveal={motionAllowed ? "motion" : "static"} style={style}>
       {children}
     </motion.div>
   );

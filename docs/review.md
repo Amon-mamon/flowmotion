@@ -645,6 +645,7 @@ Scope: uncommitted working tree vs `a03bc29` (marketing route and layout, `globa
   - (a) Give the server and stacked render the same block heights from 768 px, using CSS only: `md:min-h-[70vh]` per step row plus the same visual height, so the switch does not change the section height.
   - (b) After the layout first changes to `sticky`, if `location.hash` names a section below `#how-it-works`, re-align that section once with `scrollIntoView({ block: "start" })` (or `lenis.scrollTo(target, { immediate: true, offset: -80 })`). Do this only on that first change.
   - Add a test that renders with `desktop: true` and a hash, then asserts the re-align call. Also add the case to the owner check in Safari.
+- Status (2026-11-28): Fixed. The layout is chosen in CSS (`md:motion-safe:`). The server HTML holds both the stacked visuals and the sticky column, and the hidden one is dropped after mount. Headless Chrome on the production build: every section offset and `scrollHeight` are identical with JS off and on at 1440×900, 1024×768, and 390×844. `/#faq` and `/#security` land with the section at 80 px. Tests: `motion-identity.test.tsx` "RL-1" and `landing-premount.test.tsx`.
 
 ### RL-2: Content that is already visible goes blank, then fades in, after hydration
 - File: `src/features/marketing/components/how-it-works.tsx:164-178` (`AnimatedPanel`), `src/features/marketing/components/reveal.tsx:30-41`
@@ -652,6 +653,7 @@ Scope: uncommitted working tree vs `a03bc29` (marketing route and layout, `globa
 - Owner: frontend
 - Problem: when motion is allowed, the static `<li>` and `<div>` are replaced by Motion elements with `initial={{ opacity: 0, y: … }}`. A panel or feature card that is already on screen when hydration finishes (for example on a phone scrolled into the story, or after a deep link) flips from visible to invisible, then fades back in. That reads as a flicker, not an entrance.
 - Fix: use `initial={false}` for elements that are already in view at mount. For example, check `useInView` before the first animation, or measure once in a layout effect and skip the entrance animation for those elements. Elements below the fold keep the entrance animation.
+- Status (2026-11-28): Fixed. `entrance.ts` `useEntrance` reads the box once and leaves elements that are already on screen as they were rendered. Only elements below the fold start hidden. Tested ("RL-2" x2).
 
 ### RL-3: The hero frame tilts away from the reader right after load
 - File: `src/features/marketing/components/hero.tsx:85-93`
@@ -659,6 +661,7 @@ Scope: uncommitted working tree vs `a03bc29` (marketing route and layout, `globa
 - Owner: frontend (direction: architect)
 - Problem: the server render is flat, as it must be. `intro` then animates from 0 to 1, so 600 ms after hydration the frame rotates back to 14° and shrinks to 0.94, and only flattens again on scroll. The first motion the visitor sees is the hero image leaning away, which is the reverse of the "settles into place" feel the spec describes.
 - Fix: consider making the scroll-linked flatten the only motion. Start TiltingFrame already flat at scroll 0 (no intro), or apply the tilt only once the user has scrolled. If the owner prefers the current behaviour, the architect records it in design.md "Motion".
+- Status (2026-11-28): Changed, but not as suggested, and still open for the architect. The frame stays flat when it is on screen at load, and the tilt is armed only when the frame starts below the fold. That makes the tilt dead on any normal desktop. See RM-3.
 
 ### RL-4: The security example frame cannot stick
 - File: `src/features/marketing/components/security.tsx:17` (`overflow-hidden` on the section), `:42` (`lg:sticky lg:top-24`)
@@ -666,6 +669,7 @@ Scope: uncommitted working tree vs `a03bc29` (marketing route and layout, `globa
 - Owner: frontend
 - Problem: `overflow: hidden` on the section makes it the scroll container for the sticky child, and the section never scrolls, so `lg:sticky` has no effect. The class either does nothing or is a feature that silently fails.
 - Fix: use `overflow-clip` (which clips without creating a scroll container) on the section. Otherwise, remove `lg:sticky lg:top-24`.
+- Status (2026-11-28): Fixed (`overflow-clip`).
 
 ### RL-5: Unlayered `.fm-*` classes override Tailwind utilities
 - File: `src/app/globals.css:203-230` (`.fm-grid-bg`, `.fm-hero-glow`, `.fm-mono-label` outside any `@layer`), `src/features/marketing/previews/parts.tsx:46`
@@ -673,6 +677,7 @@ Scope: uncommitted working tree vs `a03bc29` (marketing route and layout, `globa
 - Owner: frontend
 - Problem: unlayered CSS beats every rule in `@layer utilities`. As a result, `text-[10px]` on the "Example" pill is ignored and it renders at 12 px, and any future `text-*`, `leading-*`, or `tracking-*` utility next to `fm-mono-label` will also fail silently.
 - Fix: declare these with Tailwind v4 `@utility fm-mono-label { … }` (or wrap them in `@layer components`), so utilities can override them. Then check the "Example" pill size.
+- Status (2026-11-28): Fixed (`@utility fm-grid-bg / fm-hero-glow / fm-mono-label`).
 
 ### RL-6: Preview copy is hard-coded instead of coming from `copy.ts`
 - File: `src/features/marketing/previews/parts.tsx:47` ("Example"), `:201-217` ("Analysis", "Branch … at", "Security findings", "Recommendations"); `src/features/marketing/copy.ts:131` (`SECURITY.exampleTag` is defined but never used)
@@ -680,6 +685,7 @@ Scope: uncommitted working tree vs `a03bc29` (marketing route and layout, `globa
 - Owner: frontend
 - Problem: F1 says components read every landing string from `copy.ts`. The design-mandated "Example" tag is typed in again in the preview, so the exact-copy test checks the constant, not what is rendered.
 - Fix: render `SECURITY.exampleTag`. Move the four preview labels into `preview-data.ts` or `copy.ts`.
+- Status (2026-11-28): Fixed (`SECURITY.exampleTag`, `PREVIEW_LABELS`, `PREVIEW_COMMIT`).
 
 ### RL-7: Import cycle between `copy.ts`, `plans-coming-soon.tsx`, and `primitives.tsx`
 - File: `src/features/marketing/copy.ts:7`
@@ -687,6 +693,7 @@ Scope: uncommitted working tree vs `a03bc29` (marketing route and layout, `globa
 - Owner: frontend
 - Problem: `copy.ts` re-exports `PLANS_*` from `plans-coming-soon.tsx`, which imports `primitives.tsx`, which imports `COMING_SOON` from `copy.ts`. It works today only because `COMING_SOON` is read at render time. It also makes the plain data module pull in `next/link` and `lucide-react`.
 - Fix: drop the re-export. The tests can import `PLANS_*` from `plans-coming-soon.tsx`, where F1 requires them to stay. If you keep it, import `COMING_SOON` in `primitives.tsx` from a leaf module.
+- Status (2026-11-28): Fixed. The re-export is removed, and the tests import `PLANS_*` from `plans-coming-soon.tsx`.
 
 ### RL-8: Two type scale and button size deviations
 - File: `src/features/marketing/components/features.tsx:50` (feature card titles are a fixed `text-xl leading-7`), `src/features/marketing/components/primitives.tsx:26` with `site-header.tsx:31` (header primary button is 36 px)
@@ -694,6 +701,7 @@ Scope: uncommitted working tree vs `a03bc29` (marketing route and layout, `globa
 - Owner: frontend
 - Problem: design.md gives card titles the H3 step (24/32 on desktop, 20/28 on mobile). They are 20/28 at every width. The primary button spec is 44 px tall; the header button is 36 px. The header size is a reasonable choice, but it is not in the spec.
 - Fix: use `h3Class` for feature card titles, or have the architect record that bento titles stay at 20 px. Ask the architect to add a "small primary (header) 36 px" variant to design.md, or make the header button 44 px.
+- Status (2026-11-28): Fixed. Feature titles use `h3Class`, and the header "Get started" is the 44 px primary, so it now matches the spec and needs no new variant. For 320 px, see RM-5.
 
 ### RL-9: The sample graph shows a webhook flow that does not reply on the "true" path
 - File: `src/features/marketing/preview-data.ts:116-161`
@@ -701,6 +709,7 @@ Scope: uncommitted working tree vs `a03bc29` (marketing route and layout, `globa
 - Owner: frontend
 - Problem: Webhook goes to IF. On true it goes to Slack; on false it goes to Respond to Webhook. On the true path the webhook caller never gets a response, which is a broken pattern under `respond: "respondNode"`. This preview is shown as an example of Flow Motion's output, and node-catalog.md pairs `webhook` with `respondToWebhook`.
 - Fix: add an edge from `slack` to `respond`, so both branches reply. Alternatively, put a `noOp` on the false branch and drop Respond to Webhook. Update both layouts.
+- Status (2026-11-28): Fixed. A `slack → respond` edge is in both layouts, with a vertical same-column edge in landscape. Tested in `flow-geometry.test.ts`.
 
 ### RL-10: "32" appears three times in copy, but no test links it to the allow list
 - File: `src/features/marketing/copy.ts:35,69,164`, `src/features/marketing/components/landing.test.tsx`
@@ -708,6 +717,7 @@ Scope: uncommitted working tree vs `a03bc29` (marketing route and layout, `globa
 - Owner: frontend
 - Problem: if `TIER1_NODE_NAMES` or `TIER2_NODE_NAMES` ever change, the fact strip, step 04, and the FAQ would make a false claim and nothing would fail.
 - Fix: add a test that imports `ALLOWED_NODE_TYPES` from `@/lib/n8n-catalog/allowlist` (import it only in the test, not in the landing bundle) and asserts that the number in the three strings equals `ALLOWED_NODE_TYPES.length`.
+- Status (2026-11-28): Fixed (test in `flow-geometry.test.ts:164` against `ALLOWED_NODE_TYPES.length`).
 
 ### RL-11: Two shipped strings and the sample values are not in design.md
 - File: `src/features/marketing/copy.ts:191-194` (`LANDING_META.description`), `src/features/marketing/preview-data.ts:43-46` and `parts.tsx:203` ("42 files read", "6 blocked for safety", `4f2c9e1`)
@@ -715,6 +725,7 @@ Scope: uncommitted working tree vs `a03bc29` (marketing route and layout, `globa
 - Owner: architect
 - Problem: the rule is that every landing string is fixed in design.md. The meta description and the hero sample values are honest, but nobody has signed them off.
 - Fix: the architect adds the meta description and the hero sample values (counts, short SHA, recommendation titles, and confidences) to design.md "Landing page".
+- Status (2026-11-28): Open (architect). The meta description and sample values are still not in design.md.
 
 ### RL-12: The root metadata still says flows are simulated
 - File: `src/app/layout.tsx:15-16` (existed before this change)
@@ -722,5 +733,131 @@ Scope: uncommitted working tree vs `a03bc29` (marketing route and layout, `globa
 - Owner: frontend (copy: architect)
 - Problem: "…simulate them with mock data, and export the JSON." is the description for every route that does not override it, including `/login` and `/signup`, which are public. Phase 4 is not built, so this breaks the honesty rule that D-55 enforces on `/`.
 - Fix: use the `LANDING_META` sentence, or a neutral sentence approved by the architect, as the root description.
+- Status (2026-11-28): Fixed. The root description is now `LANDING_META.description`, which is itself still waiting for architect sign-off under RL-11.
 
 Open: high 0 · medium 1 (RL-1 frontend) · low 11 (RL-2..RL-10, RL-12 frontend; RL-3 and RL-8 also need architect sign-off; RL-11 architect). After RL-1 is fixed, the landing redesign can be committed. The lows can follow later.
+
+## Landing motion identity (code review 2026-11-28)
+
+Scope: the uncommitted working tree compared with `e621949`, plus untracked files. That covers `src/features/marketing/**` (new: flow-line, flow-wrapper, flow-store, flow-geometry, dot-loop, entrance, word-reveal, section-intro, hero-nodes, magnetic, marketing-wordmark, previews/progress; rewritten: hero, how-it-works), `src/app/(marketing)/page.tsx`, `src/app/layout.tsx`, `globals.css`, and the tests.
+
+Checks:
+- `npm run typecheck` pass, `npm run lint` pass.
+- `npx vitest run` pass (1672 passed, 90 skipped).
+- `npm run build` pass, and `/` is still `○` static.
+- Extra: I served the prerendered `/` from `.next` and drove headless Chrome over CDP at 1440×900, 1024×768, 390×844, and 320/360/375 phone sizes, with motion on, reduced motion, and JS off. `next start` cannot be used here because the server needs env values.
+
+**Confirmed OK:**
+- **RL fixes:** see the status lines added above. RL-1 is verified in a real browser: identical offsets with and without JS, and deep links land at 80 px. RL-11 is still open (architect). RL-3 is a deviation (RM-3).
+- **M1 gates:** `FINE_POINTER_QUERY` and `WIDE_QUERY` are in `hooks.ts`, and `smooth-scroll.tsx` re-exports the shared constant without any change in behaviour.
+- **M2 flow line:**
+  - It is rendered only after mount and is `aria-hidden`, `pointer-events-none`, and `-z-10` inside the `isolate` wrapper.
+  - Measurement uses one measure function, a `ResizeObserver` on the wrapper, sections, and `details`, plus `document.fonts.ready` and resize, batched into one rAF.
+  - Measured at 1440: the route is `M 720 977 C 720 1041, 136 1041, 136 1105 L 136 8062`. The rail is at x 136, the middle of the 32 px gutter, and the curve starts at the frame's output handle and runs through the hero's bottom padding.
+  - The drawn length follows `scrollY + 0.6·vh` via `pathLength`, so Motion writes `stroke-dasharray`/`stroke-dashoffset`. It undraws on scroll up.
+  - Under reduced motion it is `static` with every node lit.
+- **M3 nodes and pulse:** there are six nodes on the rail, outside the section DOM, so `#plans` is untouched. Lighting follows the drawn end. A pulse plays only when exactly one node lights, and the first pass is quiet (unit-tested in `updateLit` and in rendering). In the browser, `how-it-works` lit at scroll 1400 and `features` at 4000.
+- **M4 dots:** 4 dots at r 2 and 160 px/s on desktop, 2 at r 1.5 and 120 px/s on phones. They run only on the visible drawn part, with 24 px fades and the 120 px minimum. They come from a lookup table and set only transform and opacity.
+- **M4 dot loop:** it stops when nothing is visible, while the tab is hidden, and on unmount. It restarts on scroll, on geometry change, and when the tab becomes visible (`dot-loop.ts`, tested). It is the only endless loop.
+- **M5 word reveal:**
+  - The words are plain `inline-block` spans with real spaces and no ARIA. They are not used on the H1 or Plans.
+  - The stagger is 40 ms, capped at the eighth word. The eyebrow fades in with the first word, and the lead starts 120 ms after it. Each intro reveals once, triggered by its node, with an `inView` fallback at the same 60% tip line.
+  - Accessible names are tested before and after the split.
+  - In the browser, the words go from opacity 0 to 1 when their node lights.
+- **M6 hero assembly:**
+  - The chips render only at 1280 px and up, after mount. At 1440 the scattered chips sat at (66,163), (153,460), (1248,253), (1333,488), clear of the headline. At scroll 700 they formed one row 48 px above the frame.
+  - The ease, the 0→0.25 assembly window, and the 0.15→0.30 edge draw match the spec.
+  - Parallax is 12 px × depth × (1 − assembly), with the specified spring, and needs `motionAllowed && finePointer`. Its listeners are attached only while the hero is in view, and the box is cached and invalidated on scroll or resize.
+  - Under reduced motion the chips show the static assembled row.
+- **M7 wordmark:** the line draws only in the header on `/` (`drawWordmark`). The footer, the legal pages, and the pre-mount render show it static. The shared `Wordmark` is unchanged (source test). The link's name and `textContent` are "Flow Motion".
+- **M8 story:**
+  - It uses `useScroll` over the list with `["start center","end center"]`, crossfading over ±0.04 around 0.25, 0.5, and 0.75.
+  - The scanner bar moves over 0.25→0.40. Rows leave and cards enter over 0.44→0.56, 0.02 apart. Cards shrink and graph nodes grow over 0.69→0.81, and the edges draw over 0.78→0.90. All of it is reversible.
+  - The data attributes are kept. The stacked and reduced variants are unchanged.
+- **M9 magnetic button:** only the two large "Get started" buttons. Pull 0.25, cap 6 px, 24 px zone, specified spring. The transform is on a wrapper span, so the focus ring moves with the button and focus order does not change. It needs motion and a fine pointer, and only `mouse`/`pen` pointer types count. Listeners are attached only while the button is in view, and the box is cached.
+- **M10 tests:** a–i are present (f is covered by the dot-loop unit test, and h by the source test).
+- **Performance:**
+  - Only transform, opacity, and `pathLength` are animated.
+  - Layout is read only in measure functions, plus one cached box read per pointer session or scroll and one on-screen check at mount. Scroll and frame callbacks use only cached numbers.
+  - Every listener and observer is removed on cleanup.
+  - No `package.json` change. The import allow list is enforced by the source test.
+  - `@xyflow/react`, TanStack Query, and Supabase are still unreachable from `/`.
+- **Accessibility:**
+  - Reduced motion was checked in the browser: `static` line, 0 dots, 0 word spans, magnets `off`, stacked story.
+  - Decorative layers are `aria-hidden`, hold nothing focusable, and take no pointer events (tested).
+  - The server HTML has no decorative layer, no `opacity:0`, and no `rotateX` (tested and confirmed with JS off).
+- **Ownership:** only frontend paths and `docs/status.md` changed. No backend, `package.json`, or `src/components/shared/**` change. Nothing from `subscription.md` or `n8n.md` was built, and `#plans` has the same copy and no motion.
+
+**Deviations judged:**
+1. **Hero frame stays flat when on screen at load:** this removes the tilt in practice (RM-3).
+2. **Intros already on screen at load stay put:** accepted. The spec says "above the tip line", and the build uses "anywhere in the viewport", which is stricter in favour of never blanking visible text and agrees with RL-2. The architect should note it in design.md item 4.
+3. **Output handle on the hero frame:** accepted. It is an 8 px circle with a 1.5 px accent ring, sits on `data-flow-handle`, renders after mount, and is `aria-hidden`.
+4. **Header button 44 px and phone padding:** 44 px matches the primary spec. At 320 px, "Log in" wraps (RM-5).
+5. **Three happy-dom stubs:** they are confined to `motion-identity.test.tsx` and restored (`animate` in `afterAll`, globals in `afterEach`), so they do not leak into other files. Removing `Element.prototype.animate` forces Motion's JS frame loop, which hides nothing I could find: real Chrome showed the same results. The always-in-view IntersectionObserver does hide the "only while in view" rules (RM-6).
+6. **Hero parallax not positively tested:** worse than untested. The touch-only chip assertion cannot fail (RM-2).
+
+### RM-1: Phones scroll sideways because the bento grid is 430 px wide (existed before this work)
+- File: `src/features/marketing/components/features.tsx:73` (`grid gap-4 md:grid-cols-2 …`, no phone column template), `src/features/marketing/previews/parts.tsx:197` (`<pre>` with `whitespace-pre` lines)
+- Severity: medium
+- Owner: frontend
+- Problem: at 375 px the document is 446 px wide, with JS on and off. The same happens at 320 and 360. Below `md`, the grid has one implicit `auto` column, and grid items keep `min-width: auto`. The export card's JSON excerpt lines force a min-content of about 430 px, so every feature card overflows the viewport. Mobile browsers then zoom the whole landing page out or let it scroll sideways, and the flow rail (8 px from the edge), the header, and the hero all shift with it. The lines involved are unchanged since `e621949`, so this was missed in the RL review, but it breaks the phone version that this phase's owner check asks for.
+- Fix: add `grid-cols-1` to the grid (in Tailwind v4 that is `minmax(0,1fr)`), or add `min-w-0` to the `Reveal` wrappers. Also give the `<pre>` `max-w-full overflow-x-auto`, or let the lines clip inside the card's `overflow-hidden`. Then check that `document.documentElement.scrollWidth === innerWidth` at 320, 375, and 390.
+
+### RM-2: The touch-only parallax test cannot fail, and parallax has no positive test
+- File: `src/features/marketing/components/motion-identity.test.tsx:157-180` (M10 b), and the comment at `:190-191`
+- Severity: medium
+- Owner: frontend
+- Problem: in happy-dom the hero scroll progress is complete, so `assembly = 1` and the parallax term `× (1 − assembly)` is always 0. "Chips unchanged after `pointermove`" therefore passes whether parallax is gated on `finePointer` or not. Contract M10 b requires this check, and the test does not check it. The code gate in `hero.tsx:57` (`parallax={motionAllowed && finePointer}`) is correct as written, but no test protects it.
+- Fix: mock `useScroll` from `motion/react` in this file (keep the rest of the module) so the hero's `scrollYProgress` is `motionValue(0)`. Then add:
+  - (a) a positive control: fine pointer, wide, and motion on, and a `pointermove` over the hero changes at least one chip's transform;
+  - (b) the touch-only case, which now really asserts that nothing changes;
+  - optionally, a spy on `hero.addEventListener` asserting that no `pointermove` listener is added without a fine pointer.
+
+### RM-3: The hero tilt never runs on a normal desktop, and design.md still describes it
+- File: `src/features/marketing/components/hero.tsx:115-137` (the `armed` check at `:121`, `will-change-transform` at `:133`); `docs/design.md` "Landing page" → "Motion" (hero tilt 14° → flat)
+- Severity: low
+- Owner: architect (direction), frontend (build)
+- Problem:
+  - The frame's top is at about 656 px, so the tilt is armed only on windows shorter than about 656 px. At 1440×900 and 1280×720, `[data-hero-frame]` has `transform: none` throughout. This fixes the "tilts away after load" problem, but it also quietly removes the 3D effect the owner asked for, and the spec and the code now disagree.
+  - The frame keeps `will-change: transform` and so stays a promoted layer even though it never moves.
+- Fix:
+  - Keep "flat at scroll 0" and make the tilt happen only while the user scrolls past. For example, `rotateX` 0 → 10° and `scale` 1 → 0.96 with `transformOrigin: "50% 100%"` over hero scroll progress 0.35 → 1, so the frame leans back as it leaves under the header. That is fully reversible and starts flat at load, so nothing moves without user input.
+  - Alternatively, tie a small 0 → 6° lean to the same 0 → 0.25 range as the chip assembly. That also starts flat, and it makes "the frame settles back as the flow assembles" read as one motion.
+  - Either way, drop the `armed` read, apply `will-change` only while the progress is between 0 and 1 (or remove it), and have the architect update design.md "Motion".
+
+### RM-4: Two coral vertical lines run 16 px apart beside the desktop story
+- File: `src/features/marketing/components/how-it-works.tsx:187-194` (the step's grid line and accent line at the left edge of each `li`), and `src/features/marketing/flow-geometry.ts:48-51` (rail)
+- Severity: low
+- Owner: architect (direction), frontend
+- Problem: at 1440 the flow rail is at x 136, and the story's step line is at x 152, where the active step is accent too. In the screenshots this reads as a doubled line, against item 1's "one coral line". No spec was broken: the two specs conflict.
+- Fix: in the sticky variant, drop the step's accent line and either keep the `--fm-grid` hairline or drop both. The flow line and the white active text already show progress. The architect records the choice in design.md item 7.
+
+### RM-5: At 320 px "Log in" wraps to two lines in the header
+- File: `src/features/marketing/components/site-header.tsx:8` (`navLinkClass`), `:34-41`
+- Severity: low
+- Owner: frontend
+- Problem: measured at 320 px, the "Log in" link is 56 px tall (two lines), and "Get started" ends at x 304 with no room left. At 360 px it fits.
+- Fix: add `whitespace-nowrap` to `navLinkClass` and to the header button. Under 360 px, tighten the gaps (`gap-0.5`, login `px-2`). Recheck at 320.
+
+### RM-6: The IntersectionObserver stub hides the "only while in view" rules
+- File: `src/features/marketing/components/motion-identity.test.tsx:40-55`
+- Severity: low
+- Owner: frontend
+- Problem: every target is always intersecting, so the in-view gating of the hero parallax listeners and the magnet listeners (design.md "Pausing") never runs in the off-screen case. The stub itself is confined and restored correctly.
+- Fix: make the stub controllable (a module-level `intersecting` flag). Add one test: with the magnet out of view, a window `pointermove` leaves `[data-magnetic]` untransformed. Then show that it does react after the observer reports it in view.
+
+### RM-7: The wordmark line has uneven space on its two sides
+- File: `src/features/marketing/components/marketing-wordmark.tsx:37,52`
+- Severity: low
+- Owner: frontend
+- Problem: the SVG has `mx-1` (4 px each side) and a literal space follows it, so the right gap is about 8 px against 4 px on the left. design.md item 6 asks for 4 px on each side.
+- Fix: use `ml-1` on the SVG and keep the space, which gives about 4 px. That keeps `textContent` as "Flow Motion".
+
+### RM-8: The hero measure can run after unmount
+- File: `src/features/marketing/components/hero-nodes.tsx:76`
+- Severity: low
+- Owner: frontend
+- Problem: `document.fonts.ready.then(schedule)` has no cancelled guard. `flow-line.tsx:100` has one. If the hero unmounts (`wide` turns false, or the user navigates away) before fonts resolve, it schedules a frame that reads layout and calls `setGeometry` on an unmounted component.
+- Fix: add `let cancelled = false` as in `flow-line.tsx`, and check it in `schedule` and `read`.
+
+Open: high 0 · medium 2 (RM-1, RM-2 frontend) · low 6 (RM-3, RM-4 architect plus frontend; RM-5..RM-8 frontend), plus RL-11 (architect). Commit once RM-1 and RM-2 are fixed. Both are small: one CSS change and one test change. RM-1 existed before this work, so the coordinator may instead accept it and commit now with RM-1 tracked. The lows can follow, but RM-3 needs an owner or architect decision on the hero tilt before the owner browser check.
