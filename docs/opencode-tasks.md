@@ -18,7 +18,26 @@ Shared between **Claude Code (coordinator)** and **OpenCode (worker)**. OpenCode
 
 ## Tasks
 
-_No task assigned yet._
+### OC-1 · Silence the Next.js smooth-scroll warning · status: assigned
+**Goal:** Next.js logs "Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior="smooth"` to your `<html>` element." Add that attribute so route transitions don't smooth-scroll and the warning stops.
+**Read first:** `AGENTS.md`; `src/app/layout.tsx`; `src/app/globals.css` (the `html { scroll-behavior: smooth; }` rule and the `html.lenis` / reduced-motion overrides, which must stay as they are).
+**Files you may change:**
+- `src/app/layout.tsx`
+- `src/app/layout.test.ts` (new)
+- `docs/opencode-tasks.md` (only the Report and status of OC-1)
+**Do:**
+1. In `src/app/layout.tsx`, add the attribute `data-scroll-behavior="smooth"` to the `<html>` element. Change nothing else in the file.
+2. Create `src/app/layout.test.ts` (Vitest) that reads `src/app/layout.tsx` as text and asserts the `<html` element includes `data-scroll-behavior="smooth"`, and that `globals.css` still contains `scroll-behavior: smooth` and the `html.lenis` rule. Follow the style of existing source tests such as `src/features/marketing/landing-source.test.ts`.
+3. Do not edit `globals.css` or any other file.
+**Acceptance checks:**
+- The attribute is present on `<html>`; nothing else in `layout.tsx` changed.
+- The new test passes, and fails if the attribute is removed.
+- `npm run typecheck`, `npm run lint`, `npx vitest run`, `npm run build` pass.
+**Report (OpenCode fills in):**
+- Changed:
+- Files touched:
+- Checks:
+- Questions:
 
 <!--
 Template (the coordinator copies this for each task):
