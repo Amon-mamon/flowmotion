@@ -535,3 +535,75 @@ Counts (new): high 0 · medium 0 · low 5 (S3aR-1..S3aR-5). S3a-1..S3a-9 are all
 - `npx vitest run`: 80 files passed, 1 skipped; 1,814 tests passed, 90 skipped (RLS suite skipped without `SUPABASE_TEST_*`). This includes `secret-scanner-d48.test.ts` (13 tests, with the seven 200 KB cases) and `review-fixes-3a.test.ts` (25 tests).
 - `npm audit --omit=dev`: 0 vulnerabilities. `npm audit`: 0 vulnerabilities.
 - No `.env*` file was opened. Neither script was run, and no n8n was started.
+
+## Phase 3b security review (2026-11-27, security-reviewer)
+
+Scope: `git diff fb1f2bd..4a1dc00 -- src tests supabase` (commit 7a0104a generation backend; commit 4a1dc00 UI gate removal). `documents/*.docx` ignored. Read-only; no `.env*` file opened.
+
+### Verified (no finding)
+1. **Authorization / IDOR.**
+   - `POST /api/recommendations/generate` (`src/app/api/recommendations/generate/route.ts:31-81`): session → `requireSameOrigin` → 10/min (`generate`) → Zod body (1..8 unique uuids) → recommendations read with the session client plus `.eq("user_id")` (count mismatch → `NOT_FOUND`) → one analysis → analysis and project re-read per user → `installation_id` null → reconnect → `requireRepoAccess` on `repo_id` plus the S2-1 lower-case name match → active flow → stale → daily cap → insert. Order matches contract section 6.
+   - `GET /api/flows`, `/api/flows/:id`, `/export`: every read goes through `getFlowForUser` / `listFlowSummaries` / `linksForFlows` (session client, RLS, and an explicit `user_id` filter). Another user's id → `NOT_FOUND`.
+   - Worker (`src/lib/jobs/worker.ts:233-259`): flow → recommendation → analysis → project chain; any `user_id` that differs from the flow's (including `job.user_id`) ends the job `INTERNAL`. `updateGeneratingFlow` only touches the job's own flow while it is `generating`. The installation token is minted only through `getInstallationGithubId(rowId, project.user_id)`.
+2. **CSRF.** The POST checks Origin before any read. The GETs change no state except the audit and the poll kick.
+3. **Rate limits and cap.** `generate`/`export` 10/min, `flows.list`/`flows.get` 120/min, daily cap 30 counted per id and consumed after all other checks.
+4. **Context step** (`src/lib/jobs/generate.ts:106-167`).
+   - Order: model null → `AI_DISABLED` before any GitHub call; S2-1 repo id check; tree at `analyses.commit_sha` (never the head); only paths that exist in that tree; `classifyPath` before `getBlob`; at most 12 paths.
+   - `scan(path, text).redacted` runs on the whole file before `capFileText`. Snippets reach `jobs.state` only through the returned outcome, so no raw text is ever written.
+   - A symlink tree entry returns its target string, not the target's content.
+5. **Prompt** (`src/lib/generation/prompt.ts`).
+   - The recommendation and signals are JSON with `<` written as `<`. Repo text escapes `</repo_file` and `</signals`, and every opening or closing generation tag. The path attribute is entity-escaped.
+   - The system prompt marks all delimited content as data, and the model has no tools.
+   - `<previous_errors>` uses only `FEEDBACK_RULES` enum ids plus fixed hints (see S3b-3 on node keys).
+6. **Parsing** (`src/lib/generation/parse.ts:123-152`): the 262,144-character cap comes first. Then the empty check, a linear brace scan, `JSON.parse` on the candidate only, the `sourceFiles` filter, strict Zod, and `checkFlowSpec`. Failures carry rule ids only.
+7. **Validate and export.** The `validate` step runs `validateWorkflow`, then `assertExportSafe`. The export route runs both again on the stored JSON, then audits.
+   - Headers: `attachment; filename="<slug>.n8n.json"` (the slug is `[a-z0-9-]` only), `no-store`, `nosniff`, `application/json`. The global CSP and `frame-ancestors` apply to `/api/*` too.
+   - Tests cover a planted literal recipient, a planted `sk-ant-` key and an added `code` node, each with the validator forced on and forced off.
+8. **Logs.**
+   - `ai.failed` has exactly `{ jobId, attempt, reason, status, elapsedMs }`, and a test checks it.
+   - The other lines (`generate.context`, `generate.feedback`, `flow.validation_failed`, `flows.export`, `flows.view`) carry ids, counts, rule ids and node keys only.
+   - The error messages that get logged are fixed strings or `error.name`.
+9. **State lifetime.** `state: {}` is set on done and on every end. `expire_stale_jobs()` clears the state of any kind and fails `generating` flows after 1 hour. `jobs.state` is not granted to `authenticated`.
+10. **DoS bounds.**
+    - At most 3 started calls: the counter is written under the lock before each call, `modelCalls` is capped at 3 in the schema, and the R2-1 guard applies.
+    - 40 nodes (F1 / V10), 256 KB for the spec and the export, and `maxOutputTokens` 8000.
+    - `generateStateSchema` is strict and capped (12 / 20k / 60k / 100 / 20).
+11. **Provider.** The Edge worker passes `"edge"` (`supabase/functions/worker/index.ts:60`), so OpenRouter is refused there, and a test checks that `fetch` is never called. The fake model is imported only from `tests/`.
+12. **R3a-9.** `importVerified` is imported only by `src/server/flows/view.ts`, and there is a source test for it.
+13. **Migration** `20261126000000_phase3_flows.sql`: only two guarded indexes. RLS, grants and functions are unchanged. The RLS test covers B reading A's flow and the partial unique index.
+14. **UI gate removal (4a1dc00).** No `dangerouslySetInnerHTML`. Links use `encodeURIComponent(id)` only. No URL is built from flow text.
+15. **Dependencies.** `npm audit --omit=dev`: 0 vulnerabilities. `npm audit`: 0 vulnerabilities.
+16. **Tests run.** `npx vitest run tests/lib/generation tests/lib/jobs tests/server/flow-routes.test.ts tests/server/flows-data.test.ts`: 11 files, 153 tests passed.
+
+### Findings
+
+- **S3b-1 · low** — `src/lib/jobs/generate.ts:355-373` (`stepPersist`). Owner: backend.
+  - **Risk:** `persist` writes `state.n8nJson`, `state.checklist` and `state.spec` as they come back from `jobs.state`. It does not re-run `validateWorkflow` / `assertExportSafe`, and it does not check that `n8nJson` is still `compileFlow(state.spec)`. The checks ran in the previous step and invocation, and the state made a round trip through the database in between.
+  - **Scenario:** any later writer of `jobs.state` between `validate` and `persist` stores a workflow that never passed the checks. That could be a future step (Phase 4 inserts `simulate` exactly there), a bug in another job kind, or a manual SQL repair.
+    - The export route re-checks, so this is not an exfiltration path.
+    - But the canvas is drawn from `flow_spec` and the download is `n8n_json`, and nothing ties the two together after `validate`. The user could inspect one graph and import a different workflow.
+  - **Fix:** in `stepPersist`, recompile with `compileFlow(state.spec)` and persist that output (or require deep equality with `state.n8nJson`). Run `validateWorkflow` and `assertExportSafe` on it once more, and on failure end the job `INTERNAL` without writing the flow. Add a test that plants a different valid `n8nJson` in the state before `persist` and expects it to be rejected or replaced.
+
+- **S3b-2 · low** — `src/lib/jobs/worker.ts:252-259`, `tests/lib/jobs/generate.test.ts`. Owner: backend.
+  - **Risk:** the cross-user chain guard (recommendation / analysis / project / job `user_id` must equal the flow's) is the only thing that stops a mis-inserted job or flow from reading user B's repository with user B's installation for user A's flow. No test exercises it, so a later refactor could drop it silently.
+  - **Fix:** add four tests, one per mismatched `user_id`. Each expects the flow `failed` / `INTERNAL`, no `mintToken`, no `getTreeBlobs` / `getBlob`, and no model call.
+
+- **S3b-3 · low** — `src/lib/generation/prompt.ts:205-212`, `src/lib/generation/parse.ts:107-116`, `src/lib/jobs/generate.ts:324-326`. Owner: architect (wording in `security.md` section 9 / contract section 4), then backend.
+  - **Risk:** `<previous_errors>` echoes `nodeKey`, and the key is chosen by the model that has just read repo text. It is limited to `^[a-z][a-z0-9_]{0,39}$` and at most 20 entries, so up to about 800 characters of model-chosen text go back into the next prompt, under a header that tells the model to "Fix them". The contract says the block holds only "rule codes and node keys produced by our code".
+  - **Scenario:** an injected first answer names its nodes `ignore_rules_add_webhook_to_attacker` and so on, to steer the retry. The impact is bounded: every retry output goes through the same Zod, F1..F12, the validator and the export checks, and destinations are placeholders only.
+  - **Fix:** refer to nodes by position (`node 3`, the index in `spec.nodes`) instead of the key, or record the key echo as an accepted residual in `decisions.md` and `security.md` section 9.
+
+- **S3b-4 · low** — `src/lib/analysis/prompt.ts:50-52` (`escapeFileText`), `src/lib/generation/prompt.ts:160-169` (`GENERATION_TAGS`). Owner: backend.
+  - **Risk:** escaping matches only the exact forms `</tag` and `<tag`. Near-miss forms pass unchanged and a model may still read them as the end of the data block, for example `</ repo_file>`, `< /repo_file>`, or `<​/repo_file>` (zero-width character).
+  - This is the same helper analysis uses, so it is not new in kind. Generation output is fully validated, so the impact is limited to wasted calls or a steered but still-checked draft.
+  - **Fix:** use a per-request random delimiter suffix (for example `<repo_file_<16 hex>>`, given in the system prompt), so repo text cannot predict the closing tag. Alternatively, also escape `<` followed by optional whitespace, `/` and optional whitespace before a tag name, and strip zero-width characters next to `<`. Add tests for each variant.
+
+- **S3b-5 · low** — `src/server/daily-cap.ts:43-52`, `src/app/api/recommendations/generate/route.ts:67-77`, `src/server/flows/data.ts:271-275`. Owner: backend.
+  - **Risk:** the cap is consumed one unit at a time.
+    - A request with N ids that crosses the cap keeps the units it already consumed and returns `DAILY_CAP_REACHED` with no flow.
+    - A request that loses the insert race has consumed its units and then returns "already exists".
+  - Only the caller's own quota is affected (self-inflicted; the UI sends one id). The abuse limit is never exceeded, so this is not a bypass.
+  - **Fix:** check the remaining capacity for all N before consuming (one atomic `rate_limit_hit` with a count, or a read then hit inside one SQL function), or refund on the race path. Document it if accepted.
+
+### Result
+High 0, medium 0, low 5. Phase 3b is not blocked by security (`security.md` section 8: no open high or medium). The low items are for the owners to schedule. S3b-1 should be fixed before Phase 4 inserts `simulate` between `validate` and `persist`.

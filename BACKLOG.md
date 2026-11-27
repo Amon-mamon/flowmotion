@@ -2,12 +2,12 @@
 
 Single list for "what is still not built?". Update it whenever something is deferred or finished. Phase plans live in `docs/contract.md` section 11; progress in `docs/status.md`; open owner questions in `docs/open-questions.md`.
 
-Last updated: 2026-11-27 (after Phase 1.2).
+Last updated: 2026-11-27 (after Phase 3b).
 
 ## Planned and approved (build order)
 1. ~~Phase 1.2: GitHub account isolation~~ done 2026-11-27 (D-43..D-45). Owner and teammate must each click "Refresh repository access" once.
 2. ~~Phase 3a review fixes~~ done 2026-11-28; Phase 3a complete, 3b security gate passed. Open low: R3aR-3 (architect records the backend deviations in security.md / testing.md).
-3. **Phase 3b: flow generation** — UI OC-4..OC-7 done (`300d032`, behind the gate). Next: Claude backend items 1-9 (migration `20261126000000_phase3_flows.sql`, owner applies it), then OC-8 (open the gate), then the owner's first real-browser check. OC-9 (remove landing "Coming soon") on the owner's word.
+3. ~~Phase 3b: flow generation~~ done 2026-11-27 (`7a0104a` backend, `4a1dc00` OC-8 gate open; owner applied the migration and saw nodes generate in the browser). Code and security reviews: 0 high, 0 medium. 12 lows carried (see Small known items). OC-9 (remove landing "Coming soon") on the owner's word.
 4. **Phase 2e: own AI key** — UI preview being built 2026-11-27 (D-54); the working backend waits for the owner's go-ahead. (Integrations page, OpenRouter + Anthropic, any model, free and paid). Approved 2026-11-27; moved after 3b by D-46 (generation reuses the same provider switch, so per-user keys change one place for both). Details in `FEATURE-PROPOSAL.md`.
 5. **Phase 4: simulation** (mock-data test runs).
 6. **Phase 5: hardening** (full security review, rate limits, audit log, MFA, accessibility).
@@ -36,6 +36,7 @@ Last updated: 2026-11-27 (after Phase 1.2).
 - Before real users: no `ANALYSIS_PROVIDER=openrouter` or `OPENROUTER_API_KEY` on Vercel or worker secrets (system key).
 
 ## Small known items
+- **Phase 3b lows (next backend round; S3b-1 before Phase 4):** S3b-1 persist re-check that state n8nJson equals compileFlow(spec); S3b-2 test for the worker same-user chain check; S3b-3 retry prompt echoes model node keys (refer by position or accept); S3b-4 random per-request prompt delimiter (shared with analysis); S3b-5 / R3b-1 cap units not refunded on lost race or partial failure; R3b-2 + OQ-33 + OQ-34 architect records defaults in contract; R3b-3 stale gate comment in dashboard-view.tsx:35; R3b-5 "any mix" test should assert the final error code; R3b-6 run check:worker-deno with Deno before redeploying the worker; R3b-7 job ends INTERNAL if the final write after persist loses its lock although the flow is ready. R3b-4: OC-8 also edited sections.test.tsx and analysis-view.test.tsx with owner approval.
 - Phase 2e-ui lows carried to the full Phase 2e (owner's go needed): R2eu-3 three model validation messages not yet in design.md; R2eu-5 pin the `keyHint` format in the contract.
 - Phase 3a carried lows (D-53): R3a-4 catalog generator ignores per-version display rules (documented in node-catalog.md); a test near the R3a-6 size limit; pinned integrity hash for the n8n package and a pinned Docker image for the import test (rest of S3a-9); informational: forbid `toString`/`valueOf` names, cap node input/output counts at 16, every-minute schedules.
 - Owner may override two Phase 3a defaults: D-52 generated flows cannot send computed data back to the webhook caller (literal replies only); D-51 custom HTTP header names cannot contain hyphens (so no `Content-Type`).
