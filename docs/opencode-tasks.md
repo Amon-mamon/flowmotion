@@ -100,6 +100,21 @@ Shared between **Claude Code (coordinator)** and **OpenCode (worker)**. OpenCode
 
 **Coordinator review (2026-11-28):** accepted. Diff touched only listed files; fixtures untouched and never mutated; the response type has only `setting`, so the copy loses nothing; D-54 safety tests still pass; the new test fails with the old view; typecheck, lint, build pass; 1681 tests pass. Model: `opencode/deepseek-v4.1-flash-free`.
 
+### OC-4 · Phase 3b: generate errors inside the card · status: assigned
+- *Goal:* when `POST /api/recommendations/generate` fails, the card shows the `design.md` "Card action area" error copy instead of always "Could not start generation. Try again."
+- *Read first:* `design.md` "Card action area" and "Refresh repository access"; `src/features/analysis/components/analyze-error-notice.tsx` (pattern to follow); `src/features/github/components/refresh-access-notice.tsx`; `src/features/api/client.ts` (`ApiError`).
+- *Files you may change:* `src/features/flows/copy.ts`, `src/features/flows/copy.test.ts`, `src/features/flows/components/generate-error-notice.tsx` (new), `src/features/flows/components/generate-error-notice.test.tsx` (new), `src/features/flows/components/recommendation-action.tsx`, `src/features/flows/components/recommendation-action.test.tsx`.
+- *Do:* (1) add `dailyCapGenerations: "Daily limit reached (30 flows per day). It resets at 00:00 UTC."` to `FLOW_COPY`. (2) `GenerateErrorNotice({ error })`, a plain `Alert` like `AnalyzeErrorNotice`: `ApiError` `VALIDATION_ERROR` with a non-empty message → the server message as plain text; `DAILY_CAP_REACHED` → `dailyCapGenerations`; `GITHUB_REFRESH_REQUIRED` → `<RefreshAccessNotice />`; `RATE_LIMITED` → `FLOW_COPY.rateLimited`; anything else (any other code, `NETWORK`, a non-`ApiError`) → `FLOW_COPY.generateFailed`. Each variant has a distinct `data-notice` value. (3) In `RecommendationAction` replace the `generateFailed` paragraph (ready branch only) with `<GenerateErrorNotice error={generate.error} />`; the gated branch is unchanged.
+- *Tests:* each code renders its exact string; a message containing `<b>x</b>` renders literally; with the gate mocked `true` and `fetch` returning each error envelope (HTTP status per section 6), clicking "Generate flow" shows the matching notice inside that card and does not navigate; with the gate `false` no `fetch` happens and no notice renders.
+**Rules (contract section 11, Phase 3b frontend):** read `AGENTS.md`; never change `src/features/flows/components/flow-node-card-body.tsx` or `src/features/flows/node-type.ts`, anything under `src/schemas/`, `src/lib/`, `src/server/`, `src/app/api/`, `supabase/`, `src/features/github/` (import only), or `src/features/marketing/`; every string comes from `docs/design.md` exactly; server and repo text renders as React text (never `dangerouslySetInnerHTML`); app code keeps `isGenerateApiReady()` returning `false`, and tests that need the live path mock it (`vi.mock("@/features/flows/readiness", …)` as in `recommendation-action.test.tsx`) and stub `fetch` with contract section 6 envelopes.
+**Acceptance checks:** only the listed files changed (plus this task's Report and status in `docs/opencode-tasks.md`); `npm run typecheck`, `npm run lint`, `npx vitest run`, `npm run build` pass.
+**Report (OpenCode fills in):**
+- Changed:
+- Files touched:
+- Checks:
+- Questions:
+
+
 <!--
 Template (the coordinator copies this for each task):
 
