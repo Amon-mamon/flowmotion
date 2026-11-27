@@ -74,7 +74,7 @@ Shared between **Claude Code (coordinator)** and **OpenCode (worker)**. OpenCode
 
 **Coordinator review (2026-11-28):** accepted. Diff touched only listed files; selectNode sets (never toggles), and canvas node id equals node key, so button and wrapper clicks select the same node once; the wrapper test fails when onNodeClick is removed; typecheck, lint, build pass; 1680 tests pass. Real-browser click check still due at the first live Phase 3b flow (happy-dom cannot prove CSS hit-testing). Model: `opencode/deepseek-v4.1-flash-free`.
 
-### OC-3 · Integrations preview: keep "Tested …" fresh (R2eu-4) · status: assigned
+### OC-3 · Integrations preview: keep "Tested …" fresh (R2eu-4) · status: accepted
 **Goal:** On the Integrations preview page (`/integrations`), the "Tested <relative date>" line uses a fixed sample date (2026-11-27), so it reads "Tested 3 days ago", then "2 months ago", and so on. Make the preview show a fresh time: when a preview state with a test result is shown, use `testedAt = now - 5 minutes` (so it reads like "Tested 5 minutes ago").
 **Read first:** `AGENTS.md`; `docs/review.md` section "R2eu-4"; `docs/decisions.md` D-54 (preview safety rules — they must keep holding); `src/features/integrations/components/integrations-view.tsx`; `src/features/integrations/fixtures.ts`; `src/features/integrations/model.ts` (`formatRelativeDate`); `src/features/integrations/components/test-result-line.tsx`; `src/features/integrations/integrations.test.tsx`.
 **Files you may change:**
@@ -92,10 +92,13 @@ Shared between **Claude Code (coordinator)** and **OpenCode (worker)**. OpenCode
 - All existing integrations tests still pass, including the marker-key safety test and `source.test.ts`.
 - `npm run typecheck`, `npm run lint`, `npx vitest run`, `npm run build` pass.
 **Report (OpenCode fills in):**
-- Changed:
-- Files touched:
-- Checks:
-- Questions:
+- Changed: `IntegrationsView` now renders `AiProviderCardBody` with `withFreshTestTime(PREVIEW_STATES[stateId].response)`. When the selected state has a `lastTest`, that helper returns a copy of the response whose `lastTest.testedAt` is `new Date(Date.now() - 5 * 60_000).toISOString()`; states without a test result pass through unchanged. The shared `PREVIEW_STATES` fixtures are never mutated (spread copies only), so the static dates stay for the schema test. Every D-54 rule still holds: no storage, no network, no logging, and the typed key is still never read or kept (this change only touches the sample response object).
+- Files touched: `src/features/integrations/components/integrations-view.tsx`, `src/features/integrations/integrations.test.tsx`, `docs/opencode-tasks.md` (this report and status only). `src/features/integrations/fixtures.ts` is unchanged.
+- Tests: added "shows a fresh test time of five minutes ago, not the fixed fixture date (R2eu-4)" in `integrations.test.tsx`. It calls `vi.setSystemTime(new Date("2026-12-01T12:00:00.000Z"))`, picks the `working` state, and expects the exact text "Tested 5 minutes ago"; with the old fixed date (2026-11-27T09:05Z) the same test would render "Tested 4 days ago" and fail. Added `vi.useRealTimers()` to the file's `afterEach` so the frozen clock never leaks into other tests. All existing integrations tests (including the marker-key safety test and `source.test.ts`) still pass unchanged.
+- Checks: `npm run typecheck` pass; `npm run lint` pass; `npx vitest run` pass (75 files passed, 1 skipped; 1681 tests passed, 90 skipped); `npm run build` pass (Next.js 16.4.6, 20/20 static pages generated).
+- Questions: none.
+
+**Coordinator review (2026-11-28):** accepted. Diff touched only listed files; fixtures untouched and never mutated; the response type has only `setting`, so the copy loses nothing; D-54 safety tests still pass; the new test fails with the old view; typecheck, lint, build pass; 1681 tests pass. Model: `opencode/deepseek-v4.1-flash-free`.
 
 <!--
 Template (the coordinator copies this for each task):

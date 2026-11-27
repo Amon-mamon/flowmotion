@@ -12,6 +12,7 @@ import type { AiTestResult } from "@/features/integrations/types";
  */
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -178,6 +179,14 @@ describe("Integrations page: saved state (d, e)", () => {
     expect(within(line).getByText(TEST_RESULT_COPY[result].sentence)).toBeInTheDocument();
     expect(within(line).getByText(/^Tested /)).toBeInTheDocument();
     expect(screen.queryByText("Not tested yet")).not.toBeInTheDocument();
+  });
+
+  it("shows a fresh test time of five minutes ago, not the fixed fixture date (R2eu-4)", () => {
+    vi.setSystemTime(new Date("2026-12-01T12:00:00.000Z"));
+    renderPage();
+    choosePreviewState("working");
+    expect(screen.getByText("Tested 5 minutes ago")).toBeInTheDocument();
+    vi.useRealTimers();
   });
 
   it("uses the exact design.md copy for each result", () => {

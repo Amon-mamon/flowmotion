@@ -10,9 +10,28 @@ import { AiProviderCardBody } from "@/features/integrations/components/ai-provid
 import { INTEGRATIONS_COPY } from "@/features/integrations/copy";
 import { PREVIEW_STATE_IDS, PREVIEW_STATES, type PreviewStateId } from "@/features/integrations/fixtures";
 import { isAiProviderApiReady } from "@/features/integrations/readiness";
+import type { AiProviderResponse } from "@/features/integrations/types";
 
 function isPreviewStateId(value: string): value is PreviewStateId {
   return (PREVIEW_STATE_IDS as readonly string[]).includes(value);
+}
+
+const TESTED_AT_OFFSET_MS = 5 * 60_000;
+
+/**
+ * Copy of a preview response whose test time is 5 minutes ago (R2eu-4), so the
+ * "Tested …" line stays fresh. The shared fixtures are never mutated; the static
+ * dates stay for the schema test.
+ */
+function withFreshTestTime(response: AiProviderResponse): AiProviderResponse {
+  const setting = response.setting;
+  if (!setting?.lastTest) return response;
+  return {
+    setting: {
+      ...setting,
+      lastTest: { ...setting.lastTest, testedAt: new Date(Date.now() - TESTED_AT_OFFSET_MS).toISOString() },
+    },
+  };
 }
 
 /**
@@ -74,7 +93,11 @@ export function IntegrationsView() {
 
           <p className="text-sm text-muted-foreground">{INTEGRATIONS_COPY.explanation}</p>
 
-          <AiProviderCardBody key={stateId} response={PREVIEW_STATES[stateId].response} preview={preview} />
+          <AiProviderCardBody
+            key={stateId}
+            response={withFreshTestTime(PREVIEW_STATES[stateId].response)}
+            preview={preview}
+          />
         </CardContent>
       </Card>
     </>
