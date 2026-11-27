@@ -100,7 +100,7 @@ Shared between **Claude Code (coordinator)** and **OpenCode (worker)**. OpenCode
 
 **Coordinator review (2026-11-28):** accepted. Diff touched only listed files; fixtures untouched and never mutated; the response type has only `setting`, so the copy loses nothing; D-54 safety tests still pass; the new test fails with the old view; typecheck, lint, build pass; 1681 tests pass. Model: `opencode/deepseek-v4.1-flash-free`.
 
-### OC-4 · Phase 3b: generate errors inside the card · status: assigned
+### OC-4 · Phase 3b: generate errors inside the card · status: reassigned to Claude frontend (OpenCode free usage limit reached 2026-11-28; OC-5..OC-7 also go to Claude)
 - *Goal:* when `POST /api/recommendations/generate` fails, the card shows the `design.md` "Card action area" error copy instead of always "Could not start generation. Try again."
 - *Read first:* `design.md` "Card action area" and "Refresh repository access"; `src/features/analysis/components/analyze-error-notice.tsx` (pattern to follow); `src/features/github/components/refresh-access-notice.tsx`; `src/features/api/client.ts` (`ApiError`).
 - *Files you may change:* `src/features/flows/copy.ts`, `src/features/flows/copy.test.ts`, `src/features/flows/components/generate-error-notice.tsx` (new), `src/features/flows/components/generate-error-notice.test.tsx` (new), `src/features/flows/components/recommendation-action.tsx`, `src/features/flows/components/recommendation-action.test.tsx`.
