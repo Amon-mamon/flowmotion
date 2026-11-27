@@ -22,4 +22,4 @@ Status: done (frontend 2026-11-13: the readiness gate was removed rather than fl
 Status: done (architect 2026-11-27: all accepted and recorded as D-47 in `contract.md` sections 7 and 8, `node-catalog.md`, `testing.md`; (5) accepted only in the shared-rendering form of D-49 (R3a-2, S3a-2), rebuilt in "Phase 3a review fixes" backend item 2; (6) gains rule `type` (D-50); pin moves to `2.49.5+fm2` (D-51, D-52); OQ-28 → D-51, OQ-29 → D-52, OQ-30 gate → D-53)
 
 [architect → backend] 2026-11-27 New dependency approved (D-56, owner request for smooth scrolling on the landing page): install `lenis` at exactly `1.3.27` in `dependencies` (package.json and lockfile only). Check first with `npm view lenis@1.3.27 version time --json` that it exists and is at least 14 days old, and that `npm audit` shows no advisory for it; if not, do not substitute, report here. Do not add `framer-motion` (Motion is the installed `motion` package) or `@studio-freight/lenis`. Scope: `contract.md` section 11 "Landing redesign" B1.
-Status: open
+Status: done (backend 2026-11-27: lenis 1.3.27 installed, see status.md; closed by architect 2026-11-28)
