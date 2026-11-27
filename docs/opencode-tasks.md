@@ -74,6 +74,29 @@ Shared between **Claude Code (coordinator)** and **OpenCode (worker)**. OpenCode
 
 **Coordinator review (2026-11-28):** accepted. Diff touched only listed files; selectNode sets (never toggles), and canvas node id equals node key, so button and wrapper clicks select the same node once; the wrapper test fails when onNodeClick is removed; typecheck, lint, build pass; 1680 tests pass. Real-browser click check still due at the first live Phase 3b flow (happy-dom cannot prove CSS hit-testing). Model: `opencode/deepseek-v4.1-flash-free`.
 
+### OC-3 · Integrations preview: keep "Tested …" fresh (R2eu-4) · status: assigned
+**Goal:** On the Integrations preview page (`/integrations`), the "Tested <relative date>" line uses a fixed sample date (2026-11-27), so it reads "Tested 3 days ago", then "2 months ago", and so on. Make the preview show a fresh time: when a preview state with a test result is shown, use `testedAt = now - 5 minutes` (so it reads like "Tested 5 minutes ago").
+**Read first:** `AGENTS.md`; `docs/review.md` section "R2eu-4"; `docs/decisions.md` D-54 (preview safety rules — they must keep holding); `src/features/integrations/components/integrations-view.tsx`; `src/features/integrations/fixtures.ts`; `src/features/integrations/model.ts` (`formatRelativeDate`); `src/features/integrations/components/test-result-line.tsx`; `src/features/integrations/integrations.test.tsx`.
+**Files you may change:**
+- `src/features/integrations/components/integrations-view.tsx`
+- `src/features/integrations/integrations.test.tsx`
+- `docs/opencode-tasks.md` (only the Report and status of OC-3)
+**Do not change:** `src/features/integrations/fixtures.ts` (the static fixtures stay for the schema test), `types.ts`, `copy.ts`, `model.ts`, `source.test.ts`, or any other file.
+**Do:**
+1. In `integrations-view.tsx`, when the selected preview state includes a test result, pass a copy of the sample setting whose test time is 5 minutes before the current time (computed when the state is picked or rendered; do not mutate the shared fixture object).
+2. Keep every D-54 rule: no storage, no network, no logging, the typed key is never read or kept.
+3. Add a test in `integrations.test.tsx` that freezes the clock (Vitest fake timers or `vi.setSystemTime`), picks a state with a test result, and expects the exact text "Tested 5 minutes ago" (check the exact wording `formatRelativeDate` produces and use that). Restore real timers after the test.
+**Acceptance checks:**
+- Only the files listed above changed; `fixtures.ts` unchanged.
+- The new test passes, and would fail with the old fixed date.
+- All existing integrations tests still pass, including the marker-key safety test and `source.test.ts`.
+- `npm run typecheck`, `npm run lint`, `npx vitest run`, `npm run build` pass.
+**Report (OpenCode fills in):**
+- Changed:
+- Files touched:
+- Checks:
+- Questions:
+
 <!--
 Template (the coordinator copies this for each task):
 
