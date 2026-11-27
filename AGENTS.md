@@ -20,6 +20,7 @@ Each agent edits only the paths it owns.
 | frontend | `src/app/**` except `api/`, `src/components/**`, `src/features/**`, `src/hooks/**`, `src/stores/**`, `src/styles/**`, `public/**`, tests for these | `src/app/api/**`, `src/server/**`, `src/lib/**`, `supabase/**`, `package.json` |
 | security-reviewer | nothing (read-only) | all files except `docs/security-review.md` |
 | code-reviewer | nothing (read-only) | all files except `docs/review.md` |
+| opencode (external worker, OpenCode CLI) | only the files listed in its current task in `docs/opencode-tasks.md` (UI code and tests), plus that task's report | everything else; never commits, pushes, installs packages, or opens `.env*`. Permissions are enforced in `opencode.jsonc` |
 
 Shared Zod schemas live in `src/schemas/` and are owned by backend. Frontend imports them and asks for changes through `docs/requests.md`.
 
@@ -43,6 +44,9 @@ Allowed now: logging token usage to `usage_events` (no limits, no charging), a "
 12. When you finish, append one line to `docs/status.md`: `[role] [date] done / next / blockers`.
 13. Keep changes small. Do not refactor or reformat code you were not asked to touch.
 14. Never run destructive git commands. Do not push.
+
+## OpenCode worker
+OpenCode works only on the task marked `assigned` in `docs/opencode-tasks.md`, and only in the files that task lists. It runs typecheck, lint, tests and build, writes its report in the task, and stops. The coordinator (Claude Code) reviews, re-runs checks, sends the work to the reviewers, and commits. While a task is assigned, no Claude agent edits its files.
 
 ## Workflow
 Work happens in phases defined in `docs/contract.md`. In each phase: architect confirms the contract, then backend and frontend work in parallel on their own paths, then code-reviewer (and security-reviewer for phases 2 to 5) review, then owners fix findings. Details in `CLAUDE.md`.

@@ -1,0 +1,74 @@
+{
+  // OpenCode project settings for Flow Motion.
+  // Role: OpenCode is a worker. Claude Code (the coordinator) assigns one task at a
+  // time in docs/opencode-tasks.md; OpenCode edits only that task's files, never
+  // commits or pushes, and writes its report back to the task board.
+  // Rules are read top to bottom and the LAST matching rule wins.
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["docs/opencode-tasks.md"],
+  "permissions": [
+    // Base: allow reading and searching the project, deny everything else by default.
+    { "action": "*", "resource": "*", "effect": "deny" },
+    { "action": "read", "resource": "*", "effect": "allow" },
+    { "action": "glob", "resource": "*", "effect": "allow" },
+    { "action": "grep", "resource": "*", "effect": "allow" },
+    { "action": "skill", "resource": "*", "effect": "allow" },
+
+    // Secrets: never read env files or keys (only .env.example is allowed).
+    { "action": "read", "resource": "*.env", "effect": "deny" },
+    { "action": "read", "resource": "*.env.*", "effect": "deny" },
+    { "action": "read", "resource": "*.env.example", "effect": "allow" },
+    { "action": "read", "resource": "*.pem", "effect": "deny" },
+    { "action": "read", "resource": "*.key", "effect": "deny" },
+    { "action": "read", "resource": "*.p12", "effect": "deny" },
+
+    // Edits: only UI code, tests and the task board.
+    { "action": "edit", "resource": "*src/features/*", "effect": "allow" },
+    { "action": "edit", "resource": "*src/components/*", "effect": "allow" },
+    { "action": "edit", "resource": "*src/app/*", "effect": "allow" },
+    { "action": "edit", "resource": "*src/hooks/*", "effect": "allow" },
+    { "action": "edit", "resource": "*src/stores/*", "effect": "allow" },
+    { "action": "edit", "resource": "*src/styles/*", "effect": "allow" },
+    { "action": "edit", "resource": "*public/*", "effect": "allow" },
+    { "action": "edit", "resource": "*tests/*", "effect": "allow" },
+    { "action": "edit", "resource": "*docs/opencode-tasks.md", "effect": "allow" },
+
+    // Never edit: server and API code, security, AI and worker code, database,
+    // scripts, dependencies, project rules, settings and secrets.
+    { "action": "edit", "resource": "*src/app/api/*", "effect": "deny" },
+    { "action": "edit", "resource": "*src/server/*", "effect": "deny" },
+    { "action": "edit", "resource": "*src/lib/*", "effect": "deny" },
+    { "action": "edit", "resource": "*src/schemas/*", "effect": "deny" },
+    { "action": "edit", "resource": "*src/proxy.ts", "effect": "deny" },
+    { "action": "edit", "resource": "*src/middleware.ts", "effect": "deny" },
+    { "action": "edit", "resource": "*src/instrumentation.ts", "effect": "deny" },
+    { "action": "edit", "resource": "*supabase/*", "effect": "deny" },
+    { "action": "edit", "resource": "*scripts/*", "effect": "deny" },
+    { "action": "edit", "resource": "*tests/rls/*", "effect": "deny" },
+    { "action": "edit", "resource": "*tests/server/*", "effect": "deny" },
+    { "action": "edit", "resource": "*package.json", "effect": "deny" },
+    { "action": "edit", "resource": "*package-lock.json", "effect": "deny" },
+    { "action": "edit", "resource": "*.env*", "effect": "deny" },
+    { "action": "edit", "resource": "*AGENTS.md", "effect": "deny" },
+    { "action": "edit", "resource": "*CLAUDE.md", "effect": "deny" },
+    { "action": "edit", "resource": "*opencode.json*", "effect": "deny" },
+    { "action": "edit", "resource": "*.opencode/*", "effect": "deny" },
+    { "action": "edit", "resource": "*.claude/*", "effect": "deny" },
+    { "action": "edit", "resource": "*next.config.*", "effect": "deny" },
+
+    // Shell: only the project checks and read-only git. Everything else stays denied.
+    { "action": "shell", "resource": "npm run typecheck *", "effect": "allow" },
+    { "action": "shell", "resource": "npm run lint *", "effect": "allow" },
+    { "action": "shell", "resource": "npm run test *", "effect": "allow" },
+    { "action": "shell", "resource": "npm run build *", "effect": "allow" },
+    { "action": "shell", "resource": "npx vitest run *", "effect": "allow" },
+    { "action": "shell", "resource": "npx tsc --noEmit *", "effect": "allow" },
+    { "action": "shell", "resource": "git status *", "effect": "allow" },
+    { "action": "shell", "resource": "git diff *", "effect": "allow" },
+    { "action": "shell", "resource": "git log *", "effect": "allow" },
+    { "action": "shell", "resource": "git show *", "effect": "allow" },
+    { "action": "shell", "resource": "ls *", "effect": "allow" },
+    { "action": "shell", "resource": "cat .env*", "effect": "deny" },
+    { "action": "shell", "resource": "* .env*", "effect": "deny" }
+  ]
+}
