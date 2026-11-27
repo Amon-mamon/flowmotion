@@ -8,6 +8,7 @@ import { useMemo } from "react";
 import { FlowNodeCard } from "@/features/flows/components/flow-node-card";
 import { toCanvasEdges, toCanvasNodes } from "@/features/flows/graph";
 import type { FlowDetail } from "@/features/flows/schemas";
+import { useFlowCanvasStore } from "@/stores/flow-canvas";
 
 const nodeTypes: NodeTypes = { flowNode: FlowNodeCard };
 
@@ -20,6 +21,7 @@ const FIT_VIEW = { padding: 0.2, maxZoom: 1 } as const;
 export function FlowCanvas({ flow }: { flow: Pick<FlowDetail, "nodes" | "edges"> }) {
   const nodes = useMemo(() => toCanvasNodes(flow), [flow]);
   const edges = useMemo(() => toCanvasEdges(flow), [flow]);
+  const selectNode = useFlowCanvasStore((state) => state.selectNode);
 
   return (
     <section
@@ -32,6 +34,8 @@ export function FlowCanvas({ flow }: { flow: Pick<FlowDetail, "nodes" | "edges">
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        // React Flow only enables pointer events on node wrappers when a node handler exists.
+        onNodeClick={(_event, node) => selectNode(node.id)}
         defaultMarkerColor="var(--primary)"
         fitView
         fitViewOptions={FIT_VIEW}

@@ -215,6 +215,21 @@ describe("FlowView: ready", () => {
     expect(useFlowCanvasStore.getState().selectedNodeKey).toBeNull();
   });
 
+  it("the node wrapper accepts pointer events and a wrapper click opens the inspector once", async () => {
+    serve(readyFlow);
+    view(readyFlow);
+    await screen.findByRole("region", { name: "Flow canvas" });
+    const wrapper = document.querySelector('.react-flow__node[data-id="notify_team"]') as HTMLElement;
+    expect(wrapper).not.toBeNull();
+    // R3a-1: without onNodeClick React Flow puts pointer-events: none on the wrapper.
+    expect(wrapper.style.pointerEvents).not.toBe("none");
+
+    fireEvent.click(wrapper);
+    expect(await screen.findByRole("dialog", { name: "Notify team" })).toBeInTheDocument();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(useFlowCanvasStore.getState().selectedNodeKey).toBe("notify_team");
+  });
+
   it.each([
     ["Enter", "Enter"],
     ["Space", " "],
@@ -329,6 +344,25 @@ describe("FlowView: export panel", () => {
         "In n8n, choose Import from File and select this file. Flow Motion does not run flows for you.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("omits the used-by part for entries with no nodes", async () => {
+    const flow: FlowDetail = {
+      ...readyFlow,
+      checklist: {
+        credentials: [{ name: "Postgres", usedBy: [] }],
+        // A token that appears only in the flow name (R3a-7).
+        placeholders: [{ name: "YOUR_FLOW_NAME", usedBy: [] }],
+        warnings: [...ALL_WARNINGS],
+      },
+    };
+    serve(flow);
+    view(flow);
+    await screen.findByRole("heading", { level: 2, name: "Export to n8n" });
+
+    expect(section("credentials").getByText("Postgres").closest("li")).toHaveTextContent(/^Postgres$/);
+    expect(section("placeholders").getByText("YOUR_FLOW_NAME").closest("li")).toHaveTextContent(/^YOUR_FLOW_NAME$/);
+    expect(screen.queryByText(/used by/)).not.toBeInTheDocument();
   });
 
   it("empty checklist sections use the exact empty texts", async () => {

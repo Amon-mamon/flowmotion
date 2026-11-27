@@ -50,7 +50,7 @@ export function FlowNodeCard({ data }: NodeProps<FlowCanvasNode>) {
           }
         }}
         className={cn(
-          "flex size-full cursor-pointer items-center gap-3 rounded-xl border bg-card px-3 text-left text-card-foreground transition-colors hover:bg-secondary",
+          "nodrag nopan flex size-full cursor-pointer items-center gap-3 rounded-xl border bg-card px-3 text-left text-card-foreground transition-colors hover:bg-secondary",
           selected ? "border-primary" : "border-border",
         )}
       >

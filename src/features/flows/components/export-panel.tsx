@@ -54,11 +54,15 @@ export function ExportPanel({
           <p className="text-sm text-muted-foreground">{FLOW_COPY.noCredentials}</p>
         ) : (
           <ul aria-labelledby="export-credentials" className="flex flex-col gap-1.5 text-sm">
-            {checklist.credentials.map((credential) => (
-              <li key={credential.name}>
-                {credential.name}, {usedByText(credential.usedBy)}
-              </li>
-            ))}
+            {checklist.credentials.map((credential) => {
+              const usedBy = usedByText(credential.usedBy);
+              return (
+                <li key={credential.name}>
+                  {credential.name}
+                  {usedBy === null ? null : `, ${usedBy}`}
+                </li>
+              );
+            })}
           </ul>
         )}
       </Group>
@@ -68,12 +72,20 @@ export function ExportPanel({
           <p className="text-sm text-muted-foreground">{FLOW_COPY.noPlaceholders}</p>
         ) : (
           <ul aria-labelledby="export-placeholders" className="flex flex-col gap-1.5 text-sm">
-            {checklist.placeholders.map((placeholder) => (
-              <li key={placeholder.name}>
-                <span className="font-mono text-xs break-all">{placeholder.name}</span>{" "}
-                <span className="text-muted-foreground">{usedByText(placeholder.usedBy)}</span>
-              </li>
-            ))}
+            {checklist.placeholders.map((placeholder) => {
+              const usedBy = usedByText(placeholder.usedBy);
+              return (
+                <li key={placeholder.name}>
+                  <span className="font-mono text-xs break-all">{placeholder.name}</span>
+                  {usedBy === null ? null : (
+                    <>
+                      {" "}
+                      <span className="text-muted-foreground">{usedBy}</span>
+                    </>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </Group>

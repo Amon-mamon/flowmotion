@@ -84,6 +84,7 @@ describe("flow copy (design.md exact strings)", () => {
     expect(credentialText("Slack")).toBe("Needs a Slack credential in n8n");
     expect(credentialText(null)).toBe("No credential needed");
     expect(usedByText(["Notify team", "Log order"])).toBe("used by Notify team, Log order");
+    expect(usedByText([])).toBeNull();
     expect(downloadErrorText("EXPORT_NOT_VALID")).toBe(
       "This flow cannot be exported. Generate it again from the recommendation.",
     );

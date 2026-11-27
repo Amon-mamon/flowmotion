@@ -41,7 +41,7 @@ Shared between **Claude Code (coordinator)** and **OpenCode (worker)**. OpenCode
 
 **Coordinator review (2026-11-28):** accepted. Diff touched only the listed files; the new test fails when the attribute is removed; typecheck, lint, build pass; 1678 tests pass. Model: `opencode/deepseek-v4.1-flash-free`.
 
-### OC-2 · Phase 3a fixes: canvas node clicks and empty "used by" · status: assigned
+### OC-2 · Phase 3a fixes: canvas node clicks and empty "used by" · status: accepted
 **Goal:** Phase 3a review fixes, frontend items 1-3 (`docs/contract.md` section 11, "Phase 3a review fixes", **Frontend**). (1) R3a-1, high: clicking a node card on the flow canvas with the mouse must open the node inspector in a real browser. Today React Flow puts `pointer-events: none` on read-only node wrappers because there is no `onNodeClick`, so mouse clicks never reach the card. (2) R3a-7: placeholder and credential entries with an empty `usedBy` list must render without the "used by" part. (3) Confirm the OQ-27 fallback copy matches `docs/design.md`.
 **Read first:** `AGENTS.md`; `docs/contract.md` section 11 "Phase 3a review fixes" (Frontend items 1-3, read them in full); `docs/design.md` (flow page, node inspector, export panel copy); `docs/review.md` sections R3a-1 and R3a-7; the files below.
 **Files you may change:**
@@ -66,10 +66,13 @@ Shared between **Claude Code (coordinator)** and **OpenCode (worker)**. OpenCode
 - Existing flow tests still pass unchanged, except where a test must be updated for the new behaviour (explain each in the report).
 - `npm run typecheck`, `npm run lint`, `npx vitest run`, `npm run build` pass.
 **Report (OpenCode fills in):**
-- Changed:
-- Files touched:
-- Checks:
-- Questions:
+- Changed: **R3a-1** — `FlowCanvas` now passes `onNodeClick={(_event, node) => selectNode(node.id)}` to `ReactFlow`, so React Flow gives the `.react-flow__node` wrapper `pointer-events: all`; `elementsSelectable={false}` and `nodesDraggable={false}` are unchanged. The card `<button>` keeps its click and Enter/Space handlers (both paths set the same `selectedNodeKey`, so a click opens the inspector once and never toggles it closed), and its classes now include `nodrag nopan`. **R3a-7** — `usedByText` returns `null` for an empty list; the export panel then renders a credential as `<name>` alone and a placeholder as just the mono token, with no comma, "used by", or trailing space. **OQ-27** — the fallback copy already matches `docs/design.md`: `importNotVerifiedText(null)` is exactly "Import into n8n not yet verified"; no change.
+- Files touched: `src/features/flows/components/flow-canvas.tsx`, `src/features/flows/components/flow-node-card.tsx`, `src/features/flows/components/export-panel.tsx`, `src/features/flows/copy.ts`, `src/features/flows/components/flow-view.test.tsx`, `src/features/flows/copy.test.ts`, `docs/opencode-tasks.md` (this report and status only). `src/features/flows/fixtures.ts` was not needed and is unchanged; no new `flow-canvas.test.tsx` was needed.
+- Tests: added a wrapper test (inline `pointer-events` is not `none`, a wrapper click opens exactly one dialog for the node, store key set), an empty-`usedBy` export test (credential with `usedBy: []` renders exactly "Postgres"; a flow-name-only token renders exactly "YOUR_FLOW_NAME"; no "used by" text), and `usedByText([])` → `null`. Existing flow tests are unchanged and still pass. Verified the wrapper test fails with `onNodeClick` removed (wrapper `pointer-events` was `none`).
+- Checks: `npm run typecheck` pass; `npm run lint` pass; `npx vitest run` pass (75 files passed, 1 skipped; 1680 tests passed, 90 skipped); `npm run build` pass (Next.js 16.4.6, 20/20 static pages generated).
+- Questions: none.
+
+**Coordinator review (2026-11-28):** accepted. Diff touched only listed files; selectNode sets (never toggles), and canvas node id equals node key, so button and wrapper clicks select the same node once; the wrapper test fails when onNodeClick is removed; typecheck, lint, build pass; 1680 tests pass. Real-browser click check still due at the first live Phase 3b flow (happy-dom cannot prove CSS hit-testing). Model: `opencode/deepseek-v4.1-flash-free`.
 
 <!--
 Template (the coordinator copies this for each task):

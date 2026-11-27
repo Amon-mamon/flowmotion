@@ -100,9 +100,9 @@ export function credentialText(credential: string | null): string {
   return credential === null ? FLOW_COPY.noCredential : `Needs a ${credential} credential in n8n`;
 }
 
-/** exact (design.md): "<name>, used by <node labels>" / "used by <node labels>". */
-export function usedByText(labels: readonly string[]): string {
-  return `used by ${labels.join(", ")}`;
+/** exact (design.md): "used by <node labels>"; null when the list is empty. */
+export function usedByText(labels: readonly string[]): string | null {
+  return labels.length === 0 ? null : `used by ${labels.join(", ")}`;
 }
 
 /** exact (design.md): download error by API code. */
